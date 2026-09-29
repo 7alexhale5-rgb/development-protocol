@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "development-protocol",
+  "description": "The development-protocol stack: 19 skills and a 17-row evidence checklist for AI software development.",
+  "owner": {
+    "name": "Alex Hale"
+  },
+  "plugins": [
+    {
+      "name": "development-protocol",
+      "description": "19 skills that take software work from idea to shipped, with an evidence-checked 17-row checklist.",
+      "version": "2.0.0",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

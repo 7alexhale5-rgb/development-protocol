@@ -1,0 +1,77 @@
+"""Tests for skills/development-protocol/scripts/_shared.py redact().
+
+R2-5: output_tail is stored (after redaction) in a git-trackable .devproto/*.json
+file, but the pattern set had gaps: connection-string credentials, common env-var
+key/token/secret/password dumps, JWTs, Stripe live/test keys and Google API keys
+all survived redact() unchanged. Run: python3 -m unittest discover tests
+"""
+
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "skills/development-protocol/scripts"))
+import _shared  # noqa: E402
+
+
+class RedactTest(unittest.TestCase):
+    def assert_redacted(self, secret, text=None):
+        text = text if text is not None else f"failure output: {secret}\n"
+        out = _shared.redact(text)
+        self.assertNotIn(secret, out, f"{secret!r} survived redact()")
+        self.assertIn("[REDACTED]", out)
+
+    def test_connection_string_credentials_are_redacted(self):
+        self.assert_redacted(
+            "postgres://app:hunter2@db.internal:5432/prod",
+            "DATABASE_URL=postgres://app:hunter2@db.internal:5432/prod\n",
+        )
+
+    def test_jwt_is_redacted(self):
+        jwt = (
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0."
+            "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        )
+        self.assert_redacted(jwt)
+
+    def test_stripe_live_key_is_redacted(self):
+        self.assert_redacted("sk_live_" + "a1B2c3D4e5F6g7H8")
+
+    def test_stripe_test_key_is_redacted(self):
+        self.assert_redacted("sk_test_" + "a1B2c3D4e5F6g7H8")
+
+    def test_google_api_key_is_redacted(self):
+        self.assert_redacted("AIza" + "S" * 35)
+
+    def test_generic_key_env_var_is_redacted(self):
+        self.assert_redacted(
+            "abc123def456",
+            "SUPABASE_SERVICE_ROLE_KEY=abc123def456\n",
+        )
+
+    def test_generic_token_env_var_is_redacted(self):
+        self.assert_redacted("t0k3n-value-xyz", "AUTH_TOKEN=t0k3n-value-xyz\n")
+
+    def test_still_catches_existing_shapes(self):
+        # Guard against a rewrite of REDACT_PATTERNS dropping prior coverage.
+        self.assert_redacted("sk-ant-" + "a" * 20)
+        self.assert_redacted("AKIA" + "B" * 16)
+
+
+class RunBashTest(unittest.TestCase):
+    """R2-6: run_bash's docstring promises it never raises for a caller. A
+    command that writes invalid UTF-8 (e.g. a non-UTF-8 filename echoed by
+    `rg --files`) raised UnicodeDecodeError out of the strict decode in
+    subprocess.run(text=True), which no caller catches."""
+
+    def test_invalid_utf8_output_does_not_raise(self):
+        code, out, err = _shared.run_bash(r"printf '\xff\n'")
+        self.assertEqual(code, 0)
+        self.assertIsInstance(out, str)
+        self.assertIsInstance(err, str)
+
+
+if __name__ == "__main__":
+    unittest.main()

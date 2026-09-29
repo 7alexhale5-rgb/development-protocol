@@ -1,0 +1,64 @@
+#!/bin/sh
+# audit-setup:lighthouse-baseline v1 - capture or refresh the Lighthouse baseline.
+#
+# Standalone: needs node (for `npx lighthouse`), python3 and Chrome or Chromium.
+# Committed to the repo, so CI, a cron job or a person can rerun it.
+# Override with env vars: LH_TARGET_URL, LH_ROUTES ("/ /about"), LH_RUNS, CHROME_PATH.
+#
+# Each route runs LH_RUNS times (default 3) and the median run is kept. Single
+# runs swing by about 3 points on a cold start; the median of 3 removes most of it.
+
+set -eu
+
+# The target URL and routes defaults below are substituted by audit_kit.py with
+# shlex.quote() into these bare (unquoted-in-template) assignments, never into an
+# already-quoted string. That is what keeps a hostile URL or route (embedded quotes,
+# semicolons, command substitution) inert data instead of executable shell source.
+# (This comment intentionally spells the placeholder tokens out in words: the
+# substitution below is a single regex pass over the whole file, so a literal
+# occurrence of the tokens themselves would otherwise be rewritten here too.)
+TARGET_URL="${LH_TARGET_URL:-}"
+if [ -z "$TARGET_URL" ]; then TARGET_URL=__TARGET_URL__; fi
+ROUTES="${LH_ROUTES:-}"
+if [ -z "$ROUTES" ]; then ROUTES=__ROUTES__; fi
+RUNS="${LH_RUNS:-__RUNS__}"
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE/../.."
+
+if [ -z "${CHROME_PATH:-}" ]; then
+  if [ -d "/Applications/Google Chrome.app" ]; then
+    CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  elif command -v google-chrome >/dev/null 2>&1; then
+    CHROME_PATH="$(command -v google-chrome)"
+  elif command -v chromium >/dev/null 2>&1; then
+    CHROME_PATH="$(command -v chromium)"
+  elif command -v chromium-browser >/dev/null 2>&1; then
+    CHROME_PATH="$(command -v chromium-browser)"
+  fi
+  if [ -n "${CHROME_PATH:-}" ]; then export CHROME_PATH; fi
+fi
+
+OUT_DIR="ops/lighthouse/baseline"
+RAW_DIR="$OUT_DIR/.raw"
+mkdir -p "$RAW_DIR"
+# Stale raw runs from an earlier capture would leak into the median.
+rm -f "$RAW_DIR"/*.json
+
+for route in $ROUTES; do
+  slug="$(printf '%s' "$route" | sed 's|^/||; s|/|-|g')"
+  if [ -z "$slug" ]; then slug="home"; fi
+  echo "[$slug] $route ($RUNS runs)"
+  i=1
+  while [ "$i" -le "$RUNS" ]; do
+    npx --no-install lighthouse "${TARGET_URL}${route}" \
+      --output=json --output-path="$RAW_DIR/$slug.$i.json" \
+      --chrome-flags="--headless=new --no-sandbox" --quiet \
+      --only-categories=performance,accessibility,best-practices,seo \
+      >/dev/null 2>&1 || echo "  run $i failed"
+    i=$((i + 1))
+  done
+done
+
+python3 "$HERE/lh_baseline.py" summarize --raw-dir "$RAW_DIR" --out-dir "$OUT_DIR"
+echo "baseline refreshed at $OUT_DIR/"

@@ -1,0 +1,48 @@
+#!/bin/sh
+# audit-setup:lh-bless v1 - scripted baseline refresh.
+#
+# Reruns the Lighthouse baseline against production, then regenerates
+# .lighthouserc.json from the new numbers. Never commits: it leaves the changes
+# staged so you review the diff before opening a PR.
+#
+# Usage: sh .github/ci/lh-bless.sh
+#
+# Needs ops/lighthouse/run-baseline.sh in its env-aware form (reads LH_TARGET_URL,
+# LH_ROUTES, LH_RUNS) and ops/lighthouse/lh_baseline.py. If either is missing or
+# is an older hand-written version, recapture with: /audit-setup --lighthouse-only --force
+
+set -eu
+
+PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$PROJECT_DIR"
+
+echo "=== lh-bless: rerunning baseline against production ==="
+if [ ! -f ops/lighthouse/run-baseline.sh ]; then
+  echo "!!! ops/lighthouse/run-baseline.sh missing. Run: /audit-setup --lighthouse-only --force"
+  exit 1
+fi
+# A legacy rerun script hardcodes the URL and ignores LH_TARGET_URL. Refuse it loudly.
+if ! grep -q 'LH_TARGET_URL' ops/lighthouse/run-baseline.sh; then
+  echo "!!! ops/lighthouse/run-baseline.sh is legacy (no env-var support)."
+  echo "    Run: /audit-setup --lighthouse-only --force"
+  exit 1
+fi
+if [ ! -f ops/lighthouse/lh_baseline.py ]; then
+  echo "!!! ops/lighthouse/lh_baseline.py missing. Run: /audit-setup --lighthouse-only --force"
+  exit 1
+fi
+
+# Override the target with LH_TARGET_URL; otherwise the URL the script was seeded with is used.
+sh ops/lighthouse/run-baseline.sh
+
+echo ""
+echo "=== lh-bless: regenerating .lighthouserc.json from the new baseline ==="
+python3 ops/lighthouse/lh_baseline.py assertions --baseline-dir ops/lighthouse/baseline --out .lighthouserc.json
+
+echo ""
+echo "=== lh-bless: staging changes ==="
+git add ops/lighthouse/baseline/ .lighthouserc.json
+
+echo ""
+echo "Done. Review the diff: git diff --staged"
+echo "Then commit and open a PR, for example: git commit -m 'chore: refresh Lighthouse baseline'"

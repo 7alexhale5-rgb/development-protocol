@@ -1,0 +1,95 @@
+---
+name: commit
+description: Creates one clean, well-messaged git commit from the current changes. Reviews the diff, matches the repo's commit style, stages specific files only, refuses to stage secrets, shows the files and message for a yes/no/edit confirmation before committing, and never pushes. Use when someone says "commit this", "make a commit", "commit my changes", "write a commit message", types /commit with an optional message hint, or after /simplify reports clean in the development protocol.
+---
+
+# Commit: stage and commit changes
+
+Create a clean, well-messaged git commit. Commit locally only. Pushing is `/ship`'s job.
+
+## Checklist row
+
+This skill satisfies the `commit` row of the development-protocol checklist. After the commit
+lands (step 8), save the commit as evidence and record the row with a verifier that only reads:
+
+```text
+git log -1 --format='%H %s' > .devproto/evidence/commit.txt
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
+  --id <work-id> --step commit --result pass --evidence .devproto/evidence/commit.txt \
+  --verify 'test "$(git rev-parse HEAD)" = "$(cut -d" " -f1 .devproto/evidence/commit.txt)"'
+```
+
+The verifier fails if anything moves HEAD after the commit, which is what you want: a new commit
+means this row must be recorded again.
+
+The checklist's own files under `.devproto/` change after every step. Leave them out of the change
+commit. If the team keeps the checklist in git, commit those files separately, after the row is
+recorded.
+
+## Steps
+
+1. **Check git status:**
+
+   ```bash
+   git status
+   ```
+
+   If there are no changes to commit (ignoring `.devproto/`), tell the user and stop.
+
+2. **Review the diff**, both staged and unstaged:
+
+   ```bash
+   git diff
+   git diff --cached
+   ```
+
+3. **Check recent commit style** for consistency:
+
+   ```bash
+   git log --oneline -10
+   ```
+
+4. **Draft a commit message:**
+   - Summarize the nature of the changes (new feature, bug fix, refactor, docs, and so on).
+   - Keep the first line under 72 characters.
+   - Add a body paragraph if the changes are non-trivial.
+   - Match the style of recent commits in the repo (prefixes like `feat:` or `fix:`, tense,
+     capitalization).
+   - If the user gave a message hint as the argument, work it in.
+   - If the team adds a co-author trailer for agent-written commits, end with it.
+
+5. **Stage the changes:**
+   - Stage specific files (`git add <file>`), never everything at once.
+   - Never stage files that look like secrets: `.env` files, credentials, private keys, API keys
+     or tokens.
+   - If you are unsure about a file, ask the user.
+
+6. **Present the commit for confirmation.** Show the user:
+   - the files being committed
+   - the proposed commit message
+   - then ask: "Commit this? (yes/no/edit)"
+
+7. **Handle the answer** before running `git commit`:
+   - **yes**: run `git commit`.
+   - **no**: stop without committing.
+   - **edit**: ask what to change, revise the message, and present it again (back to step 6).
+
+8. **After committing**, show the result:
+   ```bash
+   git log --oneline -1
+   git status
+   ```
+   Then record the checklist row (above).
+
+## Important
+
+- NEVER commit without the user's confirmation.
+- NEVER stage `.env`, credential or secret files.
+- NEVER use `git add -A` or `git add .`. Stage specific files.
+- NEVER amend earlier commits unless explicitly asked.
+- NEVER push. Only commit locally.
+
+## Next
+
+In the development protocol, `/ship` comes next: sync with the base branch, run the tests, push,
+open the pull request, and wait for checks on the exact commit.

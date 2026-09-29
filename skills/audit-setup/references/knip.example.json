@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "next.config.{ts,js,mjs}",
+    "src/app/**/{page,layout,route,loading,error,not-found}.{ts,tsx}",
+    "src/app/**/opengraph-image.{ts,tsx}",
+    "src/app/**/icon.{ts,tsx}",
+    "src/app/**/sitemap.{ts,js}",
+    "src/app/**/robots.{ts,js}",
+    "src/app/**/manifest.{ts,js}",
+    "src/middleware.{ts,js}",
+    "instrumentation.{ts,js}",
+    "tests/**/*.{spec,test}.{ts,tsx}",
+    "ops/scripts/**/*.{ts,js,mjs}"
+  ],
+  "project": ["src/**/*.{ts,tsx,js,jsx}"],
+  "ignore": [
+    "**/*.d.ts",
+    "public/**",
+    "ops/lighthouse/baseline/**",
+    "**/node_modules/**"
+  ],
+  "ignoreDependencies": []
+}

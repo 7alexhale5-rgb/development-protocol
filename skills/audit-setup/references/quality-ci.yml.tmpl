@@ -1,0 +1,48 @@
+name: CI
+# audit-setup:quality-ci v1 - scaffolded by /audit-setup --ci. Edit freely; the
+# sentinel above is what lets `--ci --uninstall` tell this file from a hand-written one.
+#
+# The one PR-time gate. It runs with no agent present, on every pull request and
+# every push to the default branch, so the proof does not expire when a session
+# ends. A check that only runs while an agent is watching is not a gate.
+#
+# - pull_request is UNFILTERED: a required check that never reports blocks the
+#   merge forever as "pending".
+# - no `|| true`, no continue-on-error. A step that cannot fail is not a gate.
+on:
+  pull_request:
+  push:
+    branches: [__DEFAULT_BRANCH__]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: __WORKDIR__
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false # nothing here pushes
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "__NODE__"
+          cache: "__PM__"
+          cache-dependency-path: __LOCKFILE__
+      - run: __INSTALL__
+__TYPECHECK_STEP__
+      - name: Tests
+        run: __TEST_CMD__
+__BUILD_STEP__
+      - name: Undeclared dependencies
+        # Narrow on purpose: the knip class that breaks builds when a transitive
+        # dependency moves. A gate nobody can pass is a gate everyone ignores.
+        run: npx knip --include unlisted --no-progress
+      - name: Dependency audit
+        run: __AUDIT_CMD__

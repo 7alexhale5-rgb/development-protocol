@@ -1,0 +1,13 @@
+# Generic leak patterns, one regex per line, case-insensitive. Safe to publish.
+# Maintainers add private names (clients, colleagues, internal tools) in a file kept OUTSIDE this
+# repo and point DEVPROTO_PRIVATE_PATTERNS at it; the scan then applies both lists.
+/Users/[^/\s]+
+/home/[a-z][a-z0-9_-]*/
+C:\\\\Users\\\\
+~/Projects/
+~/\.claude/(scripts|references|rules|projects|logs|hooks|sweeps)/
+~/\.codex/
+[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|ai|io|net|org|co)\b
+sk-[A-Za-z0-9_-]{16,}|sk-ant-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[bpa]-|AKIA[0-9A-Z]{16}
+-----BEGIN [A-Z ]*PRIVATE KEY-----
+—

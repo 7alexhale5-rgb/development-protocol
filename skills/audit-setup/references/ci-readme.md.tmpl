@@ -1,0 +1,111 @@
+# Lighthouse CI
+
+<!-- audit-setup:lighthouse-ci v1 -->
+
+Scaffolded by `/audit-setup --ci-only`. Runs Lighthouse against every preview deploy and upserts
+one PR comment with score deltas against the captured baseline.
+
+The PR comment is posted by an `actions/github-script` step that reads
+`.lighthouseci/manifest.json` and upserts through a hidden marker (`<!-- lhci-scaffold:comment -->`).
+No Lighthouse CI GitHub App is needed. Deltas are diffed against
+`ops/lighthouse/baseline/*.report.json`.
+
+## Before you scaffold (run-once checklist)
+
+- **Scaffold from a clean checkout of your base branch (for example `main`)**, not from a feature
+  branch. The scaffolder writes `.github/workflows/lighthouse-ci.yml`, `.lighthouserc.json`,
+  `ops/lighthouse/baseline/*`, and changes `package.json` and the lockfile. Scaffolded from a
+  feature branch, the PR diff carries unrelated work in progress, and a cherry-pick onto a clean
+  base conflicts on `package.json`.
+- **Check `git branch --show-current` before and after the commit.** Pre-commit hooks that stash
+  and replay around a commit have been seen landing the commit on a different branch than the one
+  you started on. After `git commit`, run `git branch --show-current && git log -1 --oneline`.
+- **If the repository name ends in punctuation** (for example `owner/NAME.`), `gh pr create` may
+  need explicit `--head` and `--base` flags; its repo-name parser can fail on it.
+
+## Default behavior: warn-only
+
+On first install every assertion is `"warn"`. Regressions show in the PR comment but never fail
+the build. Watch the numbers settle before you gate merges on them.
+
+## Flip to enforcing
+
+**One-field edit.** In `.lighthouserc.json`, each assertion is a `[level, options]` pair such as
+`["warn", { "minScore": 0.84 }]`. Change `"warn"` to `"error"` for each assertion you want to gate
+on, then redeploy. Regressions now fail the workflow.
+
+**Scripted.** `python3 ops/lighthouse/lh_baseline.py enforce --config .lighthouserc.json` flips
+every assertion at once (`/audit-setup --ci-only --enforce` runs the same thing).
+
+## Baseline refresh (after a real improvement)
+
+When a performance win lifts your scores above the baseline and you want the new numbers to
+become the reference:
+
+```bash
+{{PM_RUN_LH_BLESS}}
+```
+
+This reruns the baseline against production, regenerates `.lighthouserc.json` from the new
+numbers, and stages the changes. Review `git diff --staged`, then commit and open a PR.
+
+## Uninstall
+
+```bash
+/audit-setup --ci-only --uninstall
+```
+
+Removes this README, `.github/workflows/lighthouse-ci.yml`, `.github/ci/lh-bless.sh`,
+`.lighthouserc.json`, and the `lhci` and `lh:bless` scripts from `package.json`. It refuses when
+the workflow has been hand-edited (the sentinel comment is missing).
+
+## Files this workflow owns
+
+| Path                                    | Purpose                                                          |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| `.github/workflows/lighthouse-ci.yml`   | Workflow definition (deployment_status trigger)                  |
+| `.lighthouserc.json`                    | LHCI config and assertMatrix (warn-only by default)              |
+| `.github/ci/lh-bless.sh`                | Baseline refresh script                                          |
+| `.github/ci/README.md`                  | This file                                                        |
+| `ops/lighthouse/baseline/*.report.json` | Reference scores (owned by `/audit-setup --lighthouse-only`)     |
+| `ops/lighthouse/lh_baseline.py`         | Baseline summarizer and assertion generator (Python 3, stdlib)   |
+
+## Preview protection (SSO or password on previews)
+
+The workflow's `Verify preview is publicly accessible` step checks the preview URL with `curl`
+first. On HTTP 401 or 403 it fails fast with a clear error.
+
+This guards against a silent false pass. When a preview sits behind a login, Lighthouse follows
+the redirect and audits the login page. The login path matches no `assertMatrix` pattern, so
+**every assertion is skipped and the run reports success, including `"error"`-level ones**.
+
+If the guard fails, there are two ways through:
+
+1. **Turn off protection on preview deploys** in your host's dashboard. Easiest; previews lose
+   their privacy.
+2. **Use the host's automation bypass token.** On Vercel: Settings > Deployment Protection >
+   Protection Bypass for Automation. Store it as a repository secret and append it to each URL
+   in the `Build route list from baseline` step (or send it as a header from a custom runner
+   config).
+
+## Off-ramp: trended history across PRs
+
+This setup uses LHCI `temporary-public-storage` (reports expire after about 7 days). For trended
+scores across every PR:
+
+1. Stand up an LHCI server.
+2. Add an `LHCI_GITHUB_APP_TOKEN` secret.
+3. Change the `Run Lighthouse CI` step's upload target to `lhci` and set `serverBaseUrl`.
+
+No other file changes are needed. The PR comment step keeps working alongside.
+
+## Limitations
+
+- `deployment_status` events do not fire for PRs from forks. External contributors get no
+  Lighthouse comment.
+- The preset (mobile or desktop) must match the captured baseline. If you change the preset in
+  `.lighthouserc.json`, recapture with `/audit-setup --lighthouse-only --force`.
+- Scores on GitHub-hosted runners (2 cores) run lower than on a fast laptop or a CDN. A baseline
+  captured locally can show a steady 30 to 50 point performance gap with no code change. Capture
+  the baseline against the same surface CI audits (for example the production CDN) so deltas mean
+  something.

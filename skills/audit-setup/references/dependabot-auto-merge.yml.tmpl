@@ -1,0 +1,61 @@
+name: Dependabot auto-merge
+# audit-setup:quality-ci v1 - scaffolded by /audit-setup --ci.
+# Patch and minor bumps merge themselves once the `ci` check passes on the PR's
+# head SHA. Majors and Actions bumps wait for a human. No PR code is checked
+# out, so pull_request_target is safe: metadata read + merge only.
+on: pull_request_target # zizmor: ignore[dangerous-triggers] no checkout of PR code; metadata read + merge only
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Resolve scope
+        id: scope
+        if: >-
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          files="$(gh pr view "$PR_URL" --json files --jq '[.files[].path] | join("\n")')"
+          if printf '%s\n' "$files" | grep -qE '^__WORKDIR_RE__package(-lock)?\.json$|^__WORKDIR_RE__(pnpm-lock\.yaml|yarn\.lock|bun\.lock)$' && ! printf '%s\n' "$files" | grep -qvE '^__WORKDIR_RE__(package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock)$'; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "Not a manifest-only patch/minor update; leaving for manual review."
+          fi
+      - name: Wait for the ci check on this head SHA
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # Reads check-runs by SHA, never `gh pr checks --watch` (it can reprint a
+        # previous commit's results; measured 2026-08-15).
+        run: |
+          for attempt in $(seq 1 60); do
+            conclusion="$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs" --jq '[.check_runs[] | select(.name=="ci")] | first | .conclusion // "pending"')"
+            case "$conclusion" in
+              success) echo "ci passed on $HEAD_SHA"; exit 0 ;;
+              failure|cancelled|timed_out|action_required) echo "::error::ci $conclusion on $HEAD_SHA"; exit 1 ;;
+              *) echo "ci $conclusion; waiting"; sleep 30 ;;
+            esac
+          done
+          echo "::error::timed out waiting for ci"; exit 1
+      - name: Merge
+        if: steps.scope.outputs.eligible == 'true'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --merge "$PR_URL"
