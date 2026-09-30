@@ -22,9 +22,10 @@ python3 <development-protocol skill folder>/scripts/devproto.py --project <repo>
 The verifier fails if anything moves HEAD after the commit, which is what you want: a new commit
 means this row must be recorded again.
 
-The checklist's own files under `.devproto/` change after every step. Leave them out of the change
-commit. If the team keeps the checklist in git, commit those files separately, after the row is
-recorded.
+The mutable checklist and receipts under `.devproto/` must stay outside release commits.
+Keep them locally excluded or in an external evidence store. Do not commit a receipt after
+recording it: that changes HEAD and invalidates its own binding. Commit any static metadata
+before recording the final implementation receipt.
 
 ## Steps
 
@@ -62,6 +63,14 @@ recorded.
    - Stage specific files (`git add <file>`), never everything at once.
    - Never stage files that look like secrets: `.env` files, credentials, private keys, API keys
      or tokens.
+   - Inspect the COMPLETE final index with `git diff --cached --name-status -z`
+     and `git diff --cached`, including entries staged before this skill ran.
+   - Require its paths and hunks to match the approved scope exactly; scan every
+     staged blob for secrets. An already-staged secret also blocks the commit.
+   - Preserve unrelated staging with a reviewed binary patch in private temporary
+     storage, then unstage only those unrelated paths without changing worktree
+     content. Restore their staging after the scoped commit and verify equality.
+     If staging cannot be preserved safely, stop without committing.
    - If you are unsure about a file, ask the user.
 
 6. **Present the commit for confirmation.** Show the user:
