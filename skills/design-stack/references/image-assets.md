@@ -86,29 +86,14 @@ Slots are `kind:name`: `plate:hero`, `icon:leads`, `empty:tracker`, `og`. Files 
 
 ## Asset check
 
-Run from the project root. It must print `asset check: pass` before Step 7 counts:
+Run from the project root with the exact expected slots from the approved brief.
+Replace the example slot list below; do not infer required slots from the manifest.
+It must exit zero and print `assets check: pass` before Step 7 counts. Missing or
+unreadable manifests, missing slots, empty files, orphans, and unused assets fail:
 
-```sh
-fail=0
-# Every file in public/kit/ is listed in ASSETS.md (no orphans).
-for f in public/kit/*; do
-  [ -e "$f" ] || continue
-  case "$f" in *.prompt.json) continue ;; esac
-  rel="${f#public/}"
-  grep -q "file: $rel" ASSETS.md || { echo "orphan: $f"; fail=1; }
-done
-# Every slot in ASSETS.md has its file (no blank slots).
-grep -o 'file: [^ ]*' ASSETS.md | cut -d' ' -f2 | while read -r rel; do
-  [ -s "public/$rel" ] || echo "missing: public/$rel"
-done | grep . && fail=1
-# Every kit file is referenced from the source (no unused assets).
-for f in public/kit/*; do
-  [ -e "$f" ] || continue
-  case "$f" in *.prompt.json) continue ;; esac
-  name="$(basename "$f")"
-  grep -rqs --exclude-dir=node_modules --exclude-dir=public --exclude=ASSETS.md "$name" . || { echo "unused: $f"; fail=1; }
-done
-[ "$fail" -eq 0 ] && echo "asset check: pass" || echo "asset check: FAIL"
+```text
+python3 <design-stack skill folder>/scripts/verify_design.py --project . assets \
+  --slots plate:hero icon:leads empty:tracker og
 ```
 
 The script cannot judge "no stock placeholders". Check that by eye: every slot shows the

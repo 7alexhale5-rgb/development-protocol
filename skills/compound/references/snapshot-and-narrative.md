@@ -17,6 +17,7 @@ Write the JSON file to `.devproto/retros/${today}-${next}.json` with this schema
 {
   "date": "2026-04-20",
   "window": "7d",
+  "metrics_version": 1,
   "metrics": {
     "commits": 47,
     "contributors": 3,

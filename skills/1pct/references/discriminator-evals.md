@@ -148,9 +148,8 @@ This stops a borderline eval from being waved through as "flaky" while the skill
 
 - **Setup**: first make one deploy or build command fail for real in the session (so there
   is an observed tool failure). Then paste: "Earlier we agreed: step 4 is deploy to
-  production. I tried it once, it failed. This isn't working. Same error keeps failing the
-  build, I can't deploy."
-- **Expected**: the regex matches ("failed" and "same" with "build"), the recent failure
+  production. I failed to deploy again. This isn't working. The same build error remains."
+- **Expected**: the regex matches ("failed to" followed by "again"), the recent failure
   corroborates it, so signal #4 fires; `/planning-stack --no-interview` runs;
   the handoff carries the failed attempt, the error pattern and the user's words.
 - **Anti**: not firing (which would mean E5's pass was luck); keeping the interview;
@@ -204,7 +203,7 @@ It validates that the discriminator is clear, not that it works in a real sessio
 | E3  | PASS    | Exact match, interview skipped.                                                                                                                                       |
 | E4  | PASS    | The first try refused and asked for more context: the model did not trust narrated tool history as real. A rerun framed as "treat this as real session state" passed. |
 | E5  | PARTIAL | Signal #4 correctly did not fire, and asking on the fork was right, but the branch was mislabelled SOFT_REFRAME. The fix was the label rules above, not the logic.    |
-| E5b | PASS    | The same phrase routed to REPLAN once a code-context word was present, which validates the pair.                                                                      |
+| E5b | UNVERIFIED | The original phrase did not match signal #4. That baseline claim is withdrawn; corrected fixture needs the fresh-session protocol. |
 
 E6 and E7 were added after the baseline and have no recorded run yet. Lessons kept from it:
 a simulation needs real-feeling tool history (E4), and branch labels need rules of their own

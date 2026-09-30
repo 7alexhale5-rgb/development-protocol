@@ -28,6 +28,7 @@ Exit 0 written, 2 usage error or unreadable input. Always lint the result:
 from __future__ import annotations
 
 import math
+import json
 import os
 import re
 import sys
@@ -54,6 +55,9 @@ def _js_round(v: float) -> int:
 
 
 def hsl_to_hex(h: float, s: float, l: float) -> str:
+    if not all(math.isfinite(v) for v in (h, s, l)) or not (0 <= s <= 100 and 0 <= l <= 100):
+        raise ValueError("HSL needs finite hue and saturation/lightness in 0..100")
+    h %= 360
     s_n, l_n = s / 100, l / 100
     c = (1 - abs(2 * l_n - 1)) * s_n
     hp = h / 60
@@ -84,9 +88,18 @@ def parse_color(raw: str):
     m = re.match(r"^#([0-9A-Fa-f])([0-9A-Fa-f])([0-9A-Fa-f])$", s)
     if m:
         return "#" + "".join(ch * 2 for ch in m.groups()).upper()
-    m = re.match(r"^hsla?\(\s*([0-9.]+)[\s,]+([0-9.]+)%[\s,]+([0-9.]+)%", s, re.I)
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+    m = re.fullmatch(
+        rf"(hsla?)\(\s*({number})[\s,]+({number})%[\s,]+({number})%"
+        rf"(?:\s*[,/]\s*({number})(%)?)?\s*\)", s, re.I,
+    )
     if m:
-        return hsl_to_hex(float(m.group(1)), float(m.group(2)), float(m.group(3)))
+        alpha = float(m.group(5)) if m.group(5) is not None else 1
+        if m.group(6):
+            alpha /= 100
+        if alpha != 1 or (m.group(1).lower() == "hsla" and m.group(5) is None):
+            raise ValueError("nonopaque or missing alpha cannot be represented as #RRGGBB")
+        return hsl_to_hex(float(m.group(2)), float(m.group(3)), float(m.group(4)))
     return None
 
 
@@ -216,6 +229,7 @@ def extract_typography(tables: list, body_family: str, display_family: str) -> l
         si = find_col(h, ["size", "desktop"])
         li = find_col(h, ["line-height", "line height", "leading"])
         wi = find_col(h, ["weight", "fontweight"])
+        fi = find_col(h, ["family"])
         ki = find_col(h, ["tracking", "letter-spacing", "letter spacing"])
         for row in t["rows"]:
             name = normalize_token_name(cell(row, ti))
@@ -239,10 +253,8 @@ def extract_typography(tables: list, body_family: str, display_family: str) -> l
             out.append(
                 {
                     "name": name,
-                    # Token prefix decides the family: display-* uses the display face.
-                    "fontFamily": display_family
-                    if name.startswith("display")
-                    else body_family,
+                    "fontFamily": (clean_cell(cell(row, fi)) if cell(row, fi) not in ("", "-")
+                                   else display_family if name.startswith("display") else body_family),
                     "fontSize": ensure_dimension(cell(row, si)) if si != -1 else "16px",
                     "fontWeight": weight,
                     "lineHeight": ensure_line_height(cell(row, li))
@@ -433,15 +445,7 @@ def build_components(tok: dict) -> dict:
 
 
 def yaml_string(s: str) -> str:
-    if s == "":
-        return '""'
-    if (
-        re.fullmatch(r"[A-Za-z0-9_./\-: ]+", s)
-        and s == s.strip()
-        and not re.search(r"[:#]", s)
-    ):
-        return s
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return json.dumps(s, ensure_ascii=False)
 
 
 def num(v) -> str:
@@ -458,11 +462,11 @@ def emit_front_matter(tok: dict, comps: dict) -> str:
         f"description: {yaml_string(tok['description'])}",
         "colors:",
     ]
-    out += [f"  {c['name']}: {yaml_string(c['hex'])}" for c in tok["colors"]]
+    out += [f"  {yaml_string(c['name'])}: {yaml_string(c['hex'])}" for c in tok["colors"]]
     out.append("typography:")
     for t in tok["typography"]:
         out += [
-            f"  {t['name']}:",
+            f"  {yaml_string(t['name'])}:",
             f"    fontFamily: {yaml_string(t['fontFamily'])}",
             f"    fontSize: {yaml_string(t['fontSize'])}",
             f"    fontWeight: {t['fontWeight']}",
@@ -471,9 +475,9 @@ def emit_front_matter(tok: dict, comps: dict) -> str:
         if t["letterSpacing"]:
             out.append(f"    letterSpacing: {yaml_string(t['letterSpacing'])}")
     out.append("rounded:")
-    out += [f"  {r['name']}: {yaml_string(r['value'])}" for r in tok["rounded"]]
+    out += [f"  {yaml_string(r['name'])}: {yaml_string(r['value'])}" for r in tok["rounded"]]
     out.append("spacing:")
-    out += [f"  {s['name']}: {yaml_string(s['value'])}" for s in tok["spacing"]]
+    out += [f"  {yaml_string(s['name'])}: {yaml_string(s['value'])}" for s in tok["spacing"]]
     if comps:
         out.append("components:")
         for name, fields in comps.items():
@@ -602,7 +606,11 @@ def main(argv=None) -> int:
     except OSError as exc:
         print(f"extract_design_md: cannot read {pos[0]}: {exc}", file=sys.stderr)
         return 2
-    text, tok, comps = convert(md, pos[0], pos[1])
+    try:
+        text, tok, comps = convert(md, pos[0], pos[1])
+    except ValueError as exc:
+        print(f"extract_design_md: {exc}", file=sys.stderr)
+        return 2
     if dry:
         sys.stdout.write(text)
         return 0

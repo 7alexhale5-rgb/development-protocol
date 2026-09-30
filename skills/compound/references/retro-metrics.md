@@ -323,10 +323,10 @@ Track a team streak and a personal streak:
 
 ```bash
 # Team streak: every unique commit date (local time), full history
-git log origin/$DEFAULT --format="%ad" --date=format:"%Y-%m-%d" | sort -u
+git log origin/$DEFAULT --format="%ad" --date=format-local:"%Y-%m-%d" | sort -u
 
 # Personal streak: only the current user's commits (the "you" identified in Step 1)
-git log origin/$DEFAULT --author="$(git config user.name)" --format="%ad" --date=format:"%Y-%m-%d" | sort -u
+git log origin/$DEFAULT --author="$(git config user.name)" --format="%ad" --date=format-local:"%Y-%m-%d" | sort -u
 ```
 
 Count backward from today. This reads the full history, so a streak of any length is accurate.
@@ -345,7 +345,10 @@ setopt +o nomatch 2>/dev/null || true  # zsh: do not error on an empty glob
 ls -t .devproto/retros/*.json 2>/dev/null
 ```
 
-**If earlier retros exist:** read the most recent. Compute deltas for the key metrics and add a
+**If earlier retros exist:** choose the newest earlier snapshot with the same `window`
+and `metrics_version` (currently `1`). Search past incompatible recent snapshots. Missing
+versions are incompatible; do not assume their metrics used the same definitions. If none
+match, omit trends and explain the window or definition mismatch. Otherwise compute deltas and add a
 **Trends vs Last Retro** section:
 
 ```text

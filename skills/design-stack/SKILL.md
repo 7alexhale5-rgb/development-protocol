@@ -277,20 +277,28 @@ screenshot paths in it, then verify with a command that only reads:
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
   --id <work-id> --step design --result pass --evidence .devproto/evidence/design.md \
-  --verify "grep -q '^## Verify report' .devproto/evidence/design.md && ! grep -Eq '^- [a-z /-]+: (fail|unverified)' .devproto/evidence/design.md && test -s .devproto/evidence/design-1440.png"
+  --verify "python3 <design-stack skill folder>/scripts/verify_design.py --project . report .devproto/evidence/design.md"
 ```
 
 `.devproto/evidence/design.md` holds, in this order: `## Brief` (intent answers and decisions),
 `## References` (sources and what each changed), `## Verify report` (one line per Step 7
 dimension, written `- <dimension>: pass|fail|unverified|n/a - <evidence>`, for example
-`- primary journey: pass - saved item read back after reload, journey.log`), and `## Critique`
+`- primary journey and recovery: pass - saved item read back after reload, journey.log`), and `## Critique`
 (findings and what was done). The verifier fails on any `fail` or `unverified` line, so an
 unproven dimension can never ride along inside a pass. Save the screenshots beside it as
 `design-390.png`, `design-768.png` and `design-1440.png`.
 
 If the primary journey could not be run, record the row as `blocked` with the reason instead of
-passing it. For a token-only or document-only deliverable, drop the screenshot test from the
-verifier and say in the report which runtime checks do not apply.
+passing it. For a token-only or document-only deliverable, add `--non-runtime` to the report
+verifier and explain each non-applicable runtime check. Do not use it for a working interface.
+
+The report must include these dimension labels (case-insensitive): `source-to-build trace`,
+`code and build`, `configuration and service contracts`, `data`, `primary journey and recovery`,
+and `visual quality, accessibility, performance, contrast and types`. When DESIGN.md exists,
+also include `DESIGN.md lint: pass - <lint evidence>`. Additional dimensions are allowed;
+any failed or unverified dimension fails the check. Missing, malformed, duplicate, or empty
+entries fail too. Runtime reports require all three screenshots. This checks report completeness;
+it does not substitute for executing the checks or reviewing their linked evidence.
 
 ---
 
