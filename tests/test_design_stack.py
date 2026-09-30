@@ -225,7 +225,7 @@ class ReportAndAssetTest(unittest.TestCase):
         import subprocess
         import os
         with tempfile.TemporaryDirectory() as folder:
-            env = dict(os.environ, TZ='America/Chicago', GIT_AUTHOR_DATE='2026-09-29T00:30:00+0900',
+            env = dict(os.environ, TZ='UTC', GIT_AUTHOR_DATE='2026-09-29T00:30:00+0900',
                        GIT_COMMITTER_DATE='2026-09-29T00:30:00+0900')
             subprocess.run(['git', 'init', '-q', folder], check=True)
             subprocess.run(['git', '-C', folder, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
