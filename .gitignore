@@ -3,7 +3,8 @@ __pycache__/
 .DS_Store
 .devproto/
 .ruff_cache/
-.planning/
+.planning/*
+!.planning/CONTEXT.md
 tests/private-patterns.txt
 .coverage
 htmlcov/
