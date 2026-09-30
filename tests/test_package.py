@@ -119,6 +119,16 @@ class PackageTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0, r.stdout[-3000:])
 
+    def test_scanner_handles_unicode_names_and_windows_paths(self):
+        planted = SKILLS / 'zz-résumé.md'
+        for content in ['see ' + '/Us' + 'ers/someone/private', 'C:' + chr(92) + 'Users' + chr(92) + 'someone' + chr(92) + 'private.txt']:
+            planted.write_text(content)
+            try:
+                result = subprocess.run([sys.executable, str(ROOT / 'tests/scan_private.py'), str(planted)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1, result.stdout)
+            finally:
+                planted.unlink()
+
     def test_scanner_catches_a_planted_leak(self):
         planted = SKILLS / "zz-planted-leak.md"
         planted.write_text("see " + "/Us" + "ers/someone/private and other stuff\n")
