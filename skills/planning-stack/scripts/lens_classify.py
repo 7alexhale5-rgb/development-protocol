@@ -136,7 +136,10 @@ MAX_LENSES = 8
 def _hit(keyword: str, text: str) -> bool:
     # Whole-word match, so "prod" does not fire on "product". A plural ending
     # counts ("payments" fires "payment"); the first version missed plurals.
-    pattern = r"(?<![a-z0-9])" + re.escape(keyword) + r"(?:e?s)?(?![a-z0-9])"
+    variants = [keyword, keyword + "s", keyword + "es"]
+    if keyword.endswith("y") and len(keyword) > 1 and keyword[-2] not in "aeiou":
+        variants.append(keyword[:-1] + "ies")
+    pattern = r"(?<![a-z0-9])(?:" + "|".join(map(re.escape, variants)) + r")(?![a-z0-9])"
     return re.search(pattern, text) is not None
 
 

@@ -75,10 +75,12 @@ Set these flags:
 
 Check whether the diff touches UI:
 
-```bash
-git diff --name-only "$BASE_REF"...HEAD \
-  | grep -E '\.(tsx|jsx|svelte|vue)$|^src/app/.*page\.|^app/.*page\.|^pages/' && DIFF_TOUCHES_UI=1
-```
+Use the exact selected review surface to form a NUL-delimited changed-path list:
+`git diff --name-only -z HEAD` plus `git ls-files -z --others --exclude-standard`
+for default uncommitted scope, `git diff --cached --name-only -z` for staged scope,
+`git diff --name-only -z "$BASE_REF"...HEAD` for branch scope, or explicit files.
+Set `DIFF_TOUCHES_UI=1` if any selected path is a UI component or page. Do not
+substitute a committed branch diff for uncommitted review scope.
 
 Pure API or backend changes leave `DIFF_TOUCHES_UI` unset.
 
@@ -141,9 +143,8 @@ If no target resolves, emit an **info** finding: "Browser UI probe skipped: no l
 **Probe, per route:**
 
 1. Open the target. If it fails to open, stop the probe for this route.
-2. Take an accessibility-tree snapshot of interactive elements only. Save it to
-   `$ART_DIR/snapshot-<route>.txt`. It is about 200 to 400 tokens per route, far smaller than the
-   page HTML.
+2. Take an unfiltered accessibility-tree snapshot including headings and static text. Save it to
+   `$ART_DIR/snapshot-<route>.txt`. Preserve the heading and error-text evidence; do not filter it to interactive elements.
 3. Take a screenshot to `$ART_DIR/probe-<route>.png`.
 4. Golden-path assertion: the tree must contain at least one heading.
 5. Error sweep: look for visible "error", "exception" or "stack trace" text in the tree.
@@ -232,8 +233,11 @@ routes, compared against a baseline when one exists.
    pages against previews is a widely used pattern (see
    https://www.bswanson.dev/blog/run-lighthouse-ci-on-changed-pages/).
 2. **A local production build**, when there is no preview:
-   `npm run build && PORT=$LH_PORT npm start &`. NEVER run Lighthouse against `npm run dev`. The
-   dev server's hot-reload overhead makes performance scores meaningless.
+   Build first, then allocate a free `LH_PORT` distinct from the dev server port.
+   Verify the port is free immediately before startup; start `PORT="$LH_PORT" npm start`
+   in the background and retain its PID. Require that process to remain alive and own
+   the listening port, and poll its HTTP readiness. A bind failure blocks this audit.
+   Set `VERIFIED_PRODUCTION_URL` only after those checks. Never fall back to the dev port.
 3. **Skip with a note** if neither is available. Emit an info finding and skip Lighthouse.
 
 **Precondition:**
@@ -255,7 +259,7 @@ Lighthouse CI's own recommendation (`numberOfRuns: 3`, see
 https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/configuration.md).
 
 ```bash
-TARGET_URL="${PREVIEW_URL:-http://localhost:${LH_PORT:-3000}}"
+TARGET_URL="${PREVIEW_URL:-${VERIFIED_PRODUCTION_URL:?production server was not verified}}"
 OUT_DIR="$ART_DIR/lighthouse"
 mkdir -p "$OUT_DIR"
 for route in $ROUTES; do
@@ -382,14 +386,21 @@ Exit code: 0 if passable (GREEN or YELLOW), non-zero if RED.
 **Run them in parallel:**
 
 ```bash
-for hook in $PROJECT_AUDITS; do
+pids=(); names=()
+for hook in "${PROJECT_AUDITS[@]}"; do
   name=$(basename "$(dirname "$hook")")
   bash "$hook" > "$ART_DIR/audit-$name.stdout" 2> "$ART_DIR/audit-$name.stderr" &
+  pids+=("$!"); names+=("$name")
 done
-wait
+for index in "${!pids[@]}"; do
+  code=0
+  wait "${pids[$index]}" || code=$?
+  printf '%s\n' "$code" > "$ART_DIR/audit-${names[$index]}.exit"
+done
 ```
 
-**Parse and classify:** read each stdout file, take the `AUDIT_RESULT=` line, and parse its JSON.
+**Parse and classify:** a missing or nonzero exit receipt is a failure regardless of GREEN
+stdout. First check each exit receipt, then read each stdout file, take the `AUDIT_RESULT=` line, and parse its JSON.
 Emit one summary finding per audit plus one finding per failed bar.
 
 | Outcome                                 | Severity     | Finding                                                                         |

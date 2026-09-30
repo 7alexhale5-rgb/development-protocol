@@ -23,14 +23,21 @@ This skill satisfies two rows of the development protocol checklist: `spec` (Lay
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
   --id <work-id> --step spec --result pass \
-  --evidence <the failing test file, or .devproto/evidence/spec.md> \
-  --verify "<runs the acceptance test and expects the planned failure, e.g. ! npm test -- spec.test.ts>"
+  --evidence .devproto/evidence/spec-baseline.json \
+  --verify "<read and validate the saved baseline failure, source revision, command, expected failure and test-file hash>" \
+  --instrument <the acceptance test file>
 
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
   --id <work-id> --step verify --result pass \
   --evidence .devproto/evidence/verify.md \
   --verify "<the full test suite command>" --instrument <the acceptance test file>
 ```
+
+Capture the intended baseline failure once, before implementation: exact source revision,
+acceptance-test hash, command, nonzero exit, output hash and the expected failed assertion.
+Confirm that failure is the intended missing behavior, not a broken runner. Keep this receipt
+immutable. Its verifier validates that saved record and artifacts; it does not expect the
+current implementation to keep failing. Layer 2 runs the positive acceptance test and suite.
 
 Passing the acceptance test as `--instrument` means a weakened test reopens the row. The verifier
 only reads the evidence. It never rewrites it.

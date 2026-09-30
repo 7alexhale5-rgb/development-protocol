@@ -39,6 +39,12 @@ class LensClassifyTest(unittest.TestCase):
         self.assertEqual(r["matches"]["compliance"], ["payment"])
         self.assertEqual(r["matches"]["concurrency"], ["webhook"])
 
+    def test_irregular_plurals_keep_word_boundaries(self):
+        result = lens_classify.classify("libraries and dependencies need retries")
+        self.assertEqual(result["matches"].get("supply-chain"), ["library", "dependency"])
+        self.assertEqual(result["matches"].get("concurrency"), ["retry"])
+        self.assertFalse(lens_classify._hit("retry", "preretries"))
+
     def test_constraints_text_counts(self):
         r = lens_classify.classify("Speed up reports", "must keep the postgres schema")
         self.assertEqual(r["matches"]["data-integrity"], ["schema", "postgres"])

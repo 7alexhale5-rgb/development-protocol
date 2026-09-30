@@ -9,7 +9,7 @@ reviewed pack.
 
 Checks (all deterministic, on the .mmd text, no Mermaid engine needed):
   M1 manifest.json lists every .mmd in the folder and every sha256 matches disk;
-     a screen-only row (no "file", a "screen" PNG) must name a file that exists
+     screen rows must hash both their PNG and HTML artboard
   M2 mindmap: every leaf line (indented 6+ spaces) begins with R, W, P or U
   F1 flowchart: every declared node id is assigned a class
   F2 flowchart: at least one UNKNOWN node, or the manifest row says "unknowns": "none"
@@ -80,7 +80,7 @@ def kind(text: str) -> str:
         return "mindmap"
     if head.startswith("block-beta"):
         return "wireframe"
-    if head.startswith(("flowchart", "graph")):
+    if re.match(r"^(?:flowchart|graph)\s+(?:tb|td|bt|lr|rl)(?:\s|;|$)", head):
         return "flowchart"
     return "other"
 
@@ -121,17 +121,20 @@ def load_manifest(d: Path, fails: list[str]):
         if "file" in r:
             rows[r["file"]] = r
         elif "screen" in r:
-            # A screen-only row is legitimate (found 2026-09-09): rendered screens
-            # are the layer the owner judges, and a gate that demanded a "file" on
-            # every row kept packs stuck in the diagram-only format.
-            if not (d / r["screen"]).is_file():
-                fails.append(
-                    f"M1 manifest row {i} names a missing screen: {r['screen']}"
-                )
+            pass  # Screen fields are checked below, including combined file/screen rows.
         else:
             fails.append(
                 f"M1 manifest row {i} has neither a file nor a screen: {r.get('title', '(untitled)')}"
             )
+        if "screen" in r:
+            for field in ("screen", "artboard"):
+                name = r.get(field)
+                if not isinstance(name, str) or not name:
+                    fails.append(f"M1 manifest row {i} lacks {field}")
+                elif not (d / name).is_file():
+                    fails.append(f"M1 manifest row {i} names a missing {field}: {name}")
+                elif sha(d / name) != r.get(field + "_sha256"):
+                    fails.append(f"M1 manifest row {i} {field}_sha256 differs from disk")
     return rows
 
 
@@ -218,18 +221,14 @@ def check_flowchart(f: str, text: str, row: dict, fails, passes) -> None:
 
 def nav_graph(nav_text: str) -> dict[str, set[str]]:
     g: dict[str, set[str]] = defaultdict(set)
-    for a, b in EDGE_RE.findall(nav_text):
-        g[a].add(b)
-    # Chained edges (A --> B --> C): the pair regex misses the middle links.
-    for line in nav_text.splitlines():
-        ids = re.findall(
-            r"([A-Za-z][A-Za-z0-9_]*)(?:\[[^\]]*\])?\s*(?=-->|-\.->|==>)", line
-        )
-        tail = re.findall(
-            r"(?:-->|-\.->|==>)\s*(?:\|[^|]*\|\s*)?([A-Za-z][A-Za-z0-9_]*)", line
-        )
-        seq = ids + tail[-1:] if ids else []
-        for a, b in zip(seq, seq[1:]):
+    # A lookahead permits overlapping pairs in A --> B --> C, without
+    # joining separate statements or arrow-looking text inside labels.
+    body = re.sub(r'"[^"\n]*"', '""', nav_text)
+    body = re.sub(r"%%[^\n]*", "", body)
+    pairs = re.compile("(?=" + EDGE_RE.pattern + ")")
+    for statement in re.split(r"[;\n]", body):
+        for match in pairs.finditer(statement):
+            a, b = match.groups()
             g[a].add(b)
     return g
 
@@ -308,8 +307,12 @@ def check_pack(d: Path) -> tuple[list[str], list[str], list[str]]:
                 continue
             if "relationship" not in f:
                 counts["workflow"] += 1
+            before = len(fails)
             check_flowchart(f, text, row, fails, passes)
-    counts["relationship"] = sum(1 for f in mmds if "relationship" in f)
+            if "relationship" in f and declared_ids(text) and len(fails) == before:
+                counts["relationship"] += 1
+        elif "relationship" in f:
+            fails.append(f"F1 {f}: entity map must be a nonempty flowchart")
 
     for label, n in (
         ("P1 mindmap", counts["mindmap"]),

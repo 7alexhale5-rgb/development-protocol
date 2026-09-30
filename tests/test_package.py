@@ -111,6 +111,22 @@ class PackageTest(unittest.TestCase):
             "bash-only variable-call pattern (breaks on zsh):\n" + "\n".join(offenders),
         )
 
+    def test_review_result_rejects_false_passing_headlines(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('review_proof', ROOT / 'skills/review-stack/scripts/verify_review.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sha = 'a' * 40
+        good = {'commit': sha, 'verdict': 'SHIP_IT', 'gate': 'PASS', 'findings': [], 'criteria': []}
+        module.validate(good, sha)
+        for change in [{'gate': 'HARD_FAIL'}, {'commit': 'b' * 40},
+                       {'verdict': 'FIX_THEN_SHIP', 'findings': [{'severity': 'warn'}]},
+                       {'criteria': [{'verdict': 'CANNOT VERIFY'}]},
+                       {'findings': [{'severity': 'high', 'required': False, 'outcome': {'status': 'deferred', 'owner': 'owner', 'reason': 'later', 'accepted_by': 'owner'}}]}]:
+            with self.assertRaises(ValueError):
+                module.validate(dict(good, **change), sha)
+        module.validate(dict(good, findings=[{'outcome': {'status': 'fixed', 'evidence': 'regression passed'}}]), sha)
+
     def test_private_data_scan_is_clean(self):
         r = subprocess.run(
             [sys.executable, str(ROOT / "tests/scan_private.py")],

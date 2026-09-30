@@ -42,8 +42,8 @@ python3 <development-protocol skill folder>/scripts/devproto.py --project <repo>
   --verify "python3 <this skill folder>/scripts/spec_pack_check.py <pack folder>"
 ```
 
-The manifest holds a SHA-256 for every source, so a changed view changes the manifest and
-reopens the row. The review ledger is an instrument too: a new correction reopens it.
+The manifest holds a SHA-256 for every source, screen PNG, and HTML artboard.
+A changed asset fails the gate; updating its hash changes the proof instrument and reopens the row. The review ledger is an instrument too: a new correction reopens it.
 
 ## Files in this skill
 
@@ -91,7 +91,8 @@ diagrams that renders in a browser. The pack has eight parts:
      spec text. Screenshot each artboard to a PNG (with Playwright if you have it, or any
      headless browser, or a manual browser screenshot).
    - Manifest rows for screens carry `screen` (the PNG), `artboard` (the HTML), `width` and
-     `states`. The gate refuses a row that names a missing screen.
+     `states`, plus required `screen_sha256` and `artboard_sha256` hashes. The gate refuses
+     missing assets, missing hashes, or changed bytes.
    - If your team has a design canvas tool, publish the artboards there so the owner can move
      and retype things by hand. The canvas is the review surface; the pack page is the record.
    - Owner-set sizes apply on top of the design tokens (for example, a shop floor that asked for
@@ -186,7 +187,8 @@ when names or facts are corrected later, and note the correction in the manifest
 
 Compute each hash with `shasum -a 256 <file>`, `sha256sum <file>`, or
 `python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" <file>`.
-Update the manifest every time a source changes.
+Update the manifest every time a source, rendered PNG, or HTML artboard changes.
+Rehashing records new bytes; it does not grant approval. Request a new owner review.
 
 **Render** an `index.html` that works offline: rendered screens first, then each `.mmd` in
 manifest order inside `<pre class="mermaid">`, then the Plain-English Summary. Put a copy of
@@ -247,7 +249,9 @@ from home.
 
 "Mark anything wrong" needs a record, or a correction is only a memory. Keep
 `<pack folder>/review-ledger.md`: one numbered line per view, the reviewer's name, the date, and
-`correct` or `wrong: <their words>`. Comments left on a shared page count only once copied here.
+`correct` or `wrong: <their words>`. Include the exact `screen_sha256` and
+`artboard_sha256` reviewed for each screen. A line for older hashes does not approve newer bytes.
+Before recording the proof, compare those hashes with the manifest. Comments left on a shared page count only once copied here.
 
 Before the build, read each corrected item back to the client in their own words and record
 their confirmation. This is teach-back: repeating our words back does not count. A view with no

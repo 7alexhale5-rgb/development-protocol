@@ -64,7 +64,7 @@ Verification Report
 ```
 
 Also write a plain line `Verdict: <verdict>` near the top of the saved file. The checklist
-verifier reads that line.
+human report uses that line. The checklist validates the canonical JSON, not a text match.
 
 ---
 
@@ -214,7 +214,7 @@ listed as "not verified".
 {
   "verdict": "FIX_THEN_SHIP",
   "gate": "SOFT_FAIL",
-  "commit": "a1b2c3d",
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "scope": { "files": 6, "additions": 142, "deletions": 23 },
   "layers": {
     "l1": {
@@ -237,7 +237,9 @@ listed as "not verified".
       "evidence": "const data = req.body.payload // no validation",
       "recommendation": "Validate the payload with a schema before reading it",
       "layer": "L3-Context",
-      "source": "perspective:security"
+      "source": "perspective:security",
+      "required": true,
+      "outcome": { "status": "open" }
     }
   ],
   "criteria": [
@@ -249,6 +251,12 @@ listed as "not verified".
   ]
 }
 ```
+
+The example is an unresolved review and must fail the checklist verifier. Outcomes use
+`{"status":"fixed","evidence":"test receipt"}`, `{"status":"rejected","reason":"proof"}`,
+or `{"status":"deferred","owner":"name","reason":"scope","accepted_by":"owner"}`.
+Deferral requires `required: false` and cannot defer critical/high findings. Every acceptance
+criterion needs PASS with evidence. A HARD_FAIL gate always blocks any passing headline.
 
 The same object is what Step 7.5 writes to `.devproto/review/latest-findings.json`.
 

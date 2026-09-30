@@ -31,7 +31,8 @@ Or paste yesterday's resume prompt into a fresh session and run `/development-pr
 
 - One primary session per effort; worker sessions per component, each with a handoff prompt, each
   reporting back to the primary. See `docs/WORKFLOW.md` section 3.
-- Each worker on its own branch. Say in the team chat what you are changing.
+- Give each concurrent worker its own worktree or clone and its own branch. Branch names
+  alone do not isolate a shared checkout. Say in the team chat what you are changing.
 
 ## Before you stop
 

@@ -27,7 +27,7 @@ them, so this example is known to pass.
   06-wireframe-c-ticket.mmd
   07-navigation.mmd             navigation map ("navigation" in the name)
   screens/                      rendered artboards (HTML) and their PNG screenshots
-  manifest.json                 one row per source, with SHA-256
+  manifest.json                 source hashes and screen/artboard hash pairs
   review-ledger.md              one line per view: reviewer, date, correct / wrong: <words>
   index.md                      the pack's text, ending with ## Plain-English Summary
   index.html                    the rendered page
@@ -90,12 +90,17 @@ A JSON list of objects. Diagram rows:
 - Workflow rows may carry `"unknowns": "none"` when a workflow truly has no unknowns.
 - A correction note goes in the row: `"note": "customer name corrected A -> B, per the owner"`.
 
-Screen rows (no `file` key) describe rendered artboards. The gate checks that the PNG exists:
+Screen rows describe rendered artboards. Both assets and their SHA-256 hashes are required.
+The gate compares the bytes on disk with these hashes. Replace the placeholders below
+with computed hashes; placeholders do not pass. Copy both reviewed hashes into the
+review ledger with the owner's words. Updating hashes requires a new review before approval:
 
 ```json
 {
   "screen": "screens/b-new-ticket-390.png",
   "artboard": "screens/b-new-ticket.html",
+  "screen_sha256": "<SHA-256 of the PNG bytes>",
+  "artboard_sha256": "<SHA-256 of the HTML bytes>",
   "width": 390,
   "states": ["filled", "empty", "error"]
 }
