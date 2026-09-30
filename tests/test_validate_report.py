@@ -48,6 +48,11 @@ https://random-unknown-blog.biz/post.
 
 
 class StructureTest(unittest.TestCase):
+    def test_each_mandatory_element_fails_when_missing(self):
+        for aliases, _ in vr.SECTIONS:
+            self.assertEqual(vr.check_structure(GOOD.replace('## ' + aliases[0], 'ordinary text'))[0], 'FAIL')
+        self.assertEqual(vr.check_structure(vr.BRACKET_RE.sub('', GOOD))[0], 'FAIL')
+
     def test_good_report_passes(self):
         status, lines = vr.check_structure(GOOD)
         self.assertEqual(status, "PASS", lines)
@@ -76,6 +81,17 @@ class StructureTest(unittest.TestCase):
 
 
 class SourcesTest(unittest.TestCase):
+    def test_misleading_authority_does_not_gain_trust(self):
+        for url in ['https://untrusted.example/arxiv.org/article', 'https://arxiv.org.untrusted.example/article', 'https://arxiv.org@untrusted.example/article']:
+            self.assertEqual(vr.classify_url(url), 'unknown')
+        self.assertEqual(vr.classify_url('https://export.arxiv.org/article'), 'academic')
+
+    def test_ipv6_extraction_and_malformed_url(self):
+        url = 'https://[2606:4700:4700::1111]/'
+        self.assertEqual(vr.extract_urls('see [' + url + ']'), [url])
+        self.assertEqual(vr.classify_url('https://[invalid'), 'unknown')
+        self.assertIn(vr.check_sources(url)[0], ['PASS', 'WARN', 'FAIL'])
+
     def test_classify(self):
         self.assertEqual(vr.classify_url("https://arxiv.org/abs/1"), "academic")
         self.assertEqual(vr.classify_url("https://www.reddit.com/r/x"), "community")
@@ -110,6 +126,15 @@ def fake_fetch(table):
 class SsrfGuardTest(unittest.TestCase):
     """CRITICAL: the citation fetcher must never touch loopback/private/link-local/
     reserved addresses, and must never follow a redirect into one either."""
+
+    def test_shared_address_space_is_rejected(self):
+        for host in ['100.64.0.1', '100.127.255.254']:
+            with self.assertRaises(ValueError):
+                vr._reject_unsafe_url('http://' + host + '/')
+
+    def test_proxy_handler_is_disabled(self):
+        handlers = [h for h in vr._SAFE_OPENER.handlers if isinstance(h, vr.urllib.request.ProxyHandler)]
+        self.assertTrue(all(not h.proxies for h in handlers))
 
     def test_loopback_ipv4_is_rejected(self):
         with self.assertRaises(ValueError):
