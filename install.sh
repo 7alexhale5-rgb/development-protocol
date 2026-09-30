@@ -232,7 +232,7 @@ done
 
 if [[ $dry_run -eq 0 ]]; then
   echo
-  bash "$here/health-check.sh" --target "$target" || true
+  bash "$here/health-check.sh" --target "$target"
   echo
   echo "Done. Restart your agent, then try:"
   echo "  /development-protocol . \"<one sentence goal>\""

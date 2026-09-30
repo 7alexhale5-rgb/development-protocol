@@ -145,9 +145,9 @@ class PackageTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         sha = 'a' * 40
-        good = {'commit': sha, 'verdict': 'SHIP_IT', 'gate': 'PASS', 'findings': [], 'criteria': []}
+        good = {'commit': sha, 'verdict': 'SHIP_IT', 'gate': 'PASS', 'findings': [], 'criteria': [{'verdict': 'PASS', 'evidence': 'user journey read-back'}]}
         module.validate(good, sha)
-        for change in [{'gate': 'HARD_FAIL'}, {'commit': 'b' * 40},
+        for change in [{'criteria': []}, {'gate': 'HARD_FAIL'}, {'commit': 'b' * 40},
                        {'verdict': 'FIX_THEN_SHIP', 'findings': [{'severity': 'warn'}]},
                        {'criteria': [{'verdict': 'CANNOT VERIFY'}]},
                        {'findings': [{'severity': 'high', 'required': False, 'outcome': {'status': 'deferred', 'owner': 'owner', 'reason': 'later', 'accepted_by': 'owner'}}]}]:

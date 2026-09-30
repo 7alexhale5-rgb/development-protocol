@@ -73,20 +73,75 @@ class RunBashTest(unittest.TestCase):
         self.assertIsInstance(err, str)
 
 
-
 class RunVerifierTest(unittest.TestCase):
     def test_pipeline_failure_propagates(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as folder:
             code, _ = _shared.run_verifier("false | tee check.log", Path(folder), 5)
         self.assertNotEqual(code, 0)
 
     def test_missing_bash_fails_cleanly(self):
         from unittest.mock import patch
+
         with patch.object(_shared.shutil, "which", return_value=None):
             code, output = _shared.run_verifier("true", ROOT, 5)
         self.assertEqual(code, 127)
         self.assertIn("bash", output)
+
+
+class EvidenceSectionsTest(unittest.TestCase):
+    def test_empty_headings_fail(self):
+        self.assertFalse(
+            _shared.sections_have_content(
+                "## Key Decisions\n\n## Project Boundary\n",
+                ["Key Decisions", "Project Boundary"],
+            )
+        )
+
+    def test_comments_placeholders_and_empty_bullets_fail(self):
+        for body in (
+            "<!-- add decisions here -->",
+            "- ",
+            "TODO",
+            "[Decision with rationale]",
+        ):
+            with self.subTest(body=body):
+                self.assertFalse(
+                    _shared.sections_have_content(
+                        "## Key Decisions\n" + body, ["Key Decisions"]
+                    )
+                )
+
+    def test_nested_section_content_passes(self):
+        text = "## Key Decisions\n### Storage\n- Use SQLite for local records.\n## Project Boundary\n- In scope: local data only.\n"
+        self.assertTrue(
+            _shared.sections_have_content(text, ["Key Decisions", "Project Boundary"])
+        )
+
+    def test_content_in_later_section_does_not_fill_empty_section(self):
+        self.assertFalse(
+            _shared.sections_have_content(
+                "## Key Decisions\n## Other\nA real decision here.\n", ["Key Decisions"]
+            )
+        )
+
+    def test_missing_file_cli_fails(self):
+        import subprocess
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(_shared.__file__)),
+                "--evidence",
+                "/no-such-evidence.md",
+                "--section",
+                "Key Decisions",
+            ],
+            capture_output=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

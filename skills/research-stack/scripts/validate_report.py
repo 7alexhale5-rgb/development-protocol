@@ -395,16 +395,23 @@ def classify_citation(url, fetch=_default_fetch, timeout=10):
 def check_citations(text, fetch=_default_fetch, timeout=10, cap=30):
     urls = extract_urls(text)
     if not urls:
-        return "WARN", ["Citations: WARN (no URLs found)"]
+        return "FAIL", ["Citations: FAIL (no URLs found; nothing could be verified)"]
     counts = {"live": 0, "dead": 0, "unverified": 0}
     details = []
+    blocked = False
     for url in urls[:cap]:
         kind, detail = classify_citation(url, fetch, timeout)
         counts[kind] += 1
         if detail:
             details.append(f"  {detail}")
+            blocked = blocked or detail.startswith("BLOCKED ")
     dead = counts["dead"]
-    status = "PASS" if dead <= 2 else ("WARN" if dead <= 5 else "FAIL")
+    if blocked or counts["live"] == 0 or dead > 5:
+        status = "FAIL"
+    elif dead > 2 or counts["unverified"] or len(urls) > cap:
+        status = "WARN"
+    else:
+        status = "PASS"
     lines = [
         f"Citations: {status} ({counts['live']} live / {dead} dead / "
         f"{counts['unverified']} unverified / {min(len(urls), cap)} checked)"

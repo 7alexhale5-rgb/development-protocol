@@ -162,7 +162,7 @@ def all_ledgers(include_closed: bool = False) -> list[Path]:
 
 
 def current_session() -> str | None:
-    for key in ("SWEEP_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
+    for key in ("SWEEP_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
@@ -554,14 +554,19 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
             continue
         p = Path(it["id"]) if os.path.isabs(it["id"]) else project / it["id"]
         session = it.get("session")
-        if not p.is_file() or not session:
+        if not p.is_file():
             unauditable += 1
+            continue
+        if not session:
+            unauditable += 1
+            unverified.append(it["id"])
             continue
         if session not in cache:
             cache[session] = session_reads(session)
         found, reads, cmds = cache[session]
         if not found:
             unauditable += 1
+            unverified.append(it["id"])
             continue
         real = os.path.realpath(str(p))
         if real in reads:
@@ -1190,6 +1195,9 @@ def verify_ledger(path: Path) -> tuple[int, str]:
         return 1, f"{line}\nnot closed ({data.get('status')})"
     if data.get("forced"):
         return 1, f"{line}\nclosed with --force past: {', '.join(data['forced'])}"
+    missing_reads, _ = audit_reads(data)
+    if missing_reads:
+        return 1, f"{line}\n{len(missing_reads)} file read(s) unauditable or unverified"
     return 0, f"{line}\nclosed with every check passed"
 
 
@@ -1212,11 +1220,13 @@ def selftest() -> int:
             "SWEEP_TRANSCRIPTS",
             "SWEEP_SESSION_ID",
             "CLAUDE_CODE_SESSION_ID",
+            "CODEX_THREAD_ID",
         )
     }
     os.environ["SWEEP_HOME"] = str(tmp / "home")
     os.environ["SWEEP_TRANSCRIPTS"] = str(tmp / "transcripts")
     os.environ.pop("SWEEP_SESSION_ID", None)
+    os.environ.pop("CODEX_THREAD_ID", None)
     proj = tmp / "proj"
     proj.mkdir()
     fails: list[str] = []
@@ -1364,6 +1374,7 @@ def selftest() -> int:
         )
         # From here each close attempt has exactly one reason to refuse, so each
         # check proves its own branch rather than riding on another one.
+        transcript("sess-a", reads=[fa])
         check("close refuses with open items", run("close", "--slug", "t") == 1)
 
         # --- the read audit ----------------------------------------------------

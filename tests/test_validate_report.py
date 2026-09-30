@@ -388,6 +388,34 @@ class CitationTest(unittest.TestCase):
         )
         self.assertEqual(kind, "dead")
 
+    def test_unverified_only_cannot_pass_citations(self):
+        status, lines = vr.check_citations(
+            "https://a.org", fetch=fake_fetch({"https://a.org": 403})
+        )
+        self.assertEqual(status, "FAIL", lines)
+        self.assertIn("0 live", lines[0])
+
+    def test_partial_unverified_cannot_be_reported_as_pass(self):
+        urls = "https://a.org\nhttps://b.org"
+        status, lines = vr.check_citations(
+            urls, fetch=fake_fetch({"https://a.org": 200, "https://b.org": 403})
+        )
+        self.assertEqual(status, "WARN", lines)
+
+    def test_forbidden_citation_fails_even_with_a_live_source(self):
+        status, lines = vr.check_citations(
+            "https://a.org\nhttp://127.0.0.1/admin",
+            fetch=lambda url, method, timeout: (
+                (_ for _ in ()).throw(ValueError("forbidden URL"))
+                if url.startswith("http:") else 200
+            ),
+        )
+        self.assertEqual(status, "FAIL", lines)
+
+    def test_no_urls_is_incomplete(self):
+        status, _ = vr.check_citations("No links")
+        self.assertEqual(status, "FAIL")
+
     def test_many_dead_fails(self):
         urls = [f"https://d{i}.invalid/" for i in range(6)]
         fetch = fake_fetch({u: 404 for u in urls})

@@ -23,14 +23,16 @@ brief that keeps things as simple as possible without restricting the build.
   python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
     --id <work-id> --step premortem --result pass \
     --evidence .devproto/evidence/premortem.md \
-    --verify "grep -q 'Top revisions to apply BEFORE building' .devproto/evidence/premortem.md"
+    --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/evidence/premortem.md --section 'Top revisions to apply BEFORE building'"
   ```
 
 - **Default mode** has no row of its own. Save the brief to
   `.devproto/evidence/alignment-<topic-slug>.md`, next to the research evidence, so the `research`
   row (owned by `/research-stack`) and the plan can cite it.
 
-The verifier only reads the evidence file. It never rewrites it.
+The verifier only reads the evidence and rejects an empty revisions section. Review the failure
+chains and revisions against the plan before recording a pass; this structure check cannot judge
+their quality.
 
 ---
 

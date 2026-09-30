@@ -42,59 +42,132 @@ class InstallUninstallTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.claude_skills = self.tmp / ".claude" / "skills"
 
+    def test_health_rejects_corrupted_support_script(self):
+        installed = run(
+            [str(ROOT / "install.sh"), "--target", "claude", "--yes"], self.tmp
+        )
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        script = self.claude_skills / "pathway/scripts/pathway.py"
+        script.write_text('raise RuntimeError("broken installed tool")\n')
+        direct = subprocess.run(
+            [sys.executable, str(script), "--project", str(self.tmp), "doctor"],
+            capture_output=True,
+        )
+        self.assertNotEqual(direct.returncode, 0)
+        health = run([str(ROOT / "health-check.sh"), "--target", "claude"], self.tmp)
+        self.assertEqual(health.returncode, 1, health.stdout)
+
+    def test_install_propagates_failed_health_check(self):
+        package = self.tmp / "package"
+        package.mkdir()
+        shutil.copy2(ROOT / "install.sh", package / "install.sh")
+        (package / "health-check.sh").write_text("#!/bin/bash\nexit 1\n")
+        write_marker_skill(package / "skills", "ship", "---\nname: ship\n---\n")
+        result = run(
+            [str(package / "install.sh"), "--target", "claude", "--yes"],
+            self.tmp,
+            cwd=package,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("Done. Restart", result.stdout)
+        self.assertTrue((self.claude_skills / "ship/SKILL.md").exists())
+
+    def test_both_host_uninstall_preserves_distinct_edited_copies(self):
+        installed = run(
+            [str(ROOT / "install.sh"), "--target", "both", "--yes"], self.tmp
+        )
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        for host in (".claude", ".agents"):
+            entry = self.tmp / host / "skills/ship/SKILL.md"
+            entry.write_text(entry.read_text() + f"\nlocal edit for {host}\n")
+        result = run([str(ROOT / "uninstall.sh"), "--yes"], self.tmp)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        paths = [
+            line.split("saved to ", 1)[1]
+            for line in result.stdout.splitlines()
+            if "kept changed copy: ship " in line
+        ]
+        self.assertEqual(len(set(paths)), 2, result.stdout)
+        for path, host in zip(paths, (".claude", ".agents")):
+            self.assertIn(
+                f"local edit for {host}", (Path(path) / "SKILL.md").read_text()
+            )
+            self.assertFalse((Path(path) / "ship").exists())
+
     def test_shared_symlink_root_uninstalls_once(self):
-        shared = self.tmp / '.agents/skills'
+        shared = self.tmp / ".agents/skills"
         shared.mkdir(parents=True)
         self.claude_skills.parent.mkdir()
         self.claude_skills.symlink_to(shared, target_is_directory=True)
-        write_marker_skill(shared, 'pathway', 'ORIGINAL SHARED')
-        result = run([str(ROOT / 'install.sh'), '--yes'], self.tmp)
+        write_marker_skill(shared, "pathway", "ORIGINAL SHARED")
+        result = run([str(ROOT / "install.sh"), "--yes"], self.tmp)
         self.assertEqual(result.returncode, 0, result.stderr)
-        result = run([str(ROOT / 'uninstall.sh'), '--yes'], self.tmp)
+        result = run([str(ROOT / "uninstall.sh"), "--yes"], self.tmp)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((shared / 'pathway/SKILL.md').read_text(), 'ORIGINAL SHARED')
-        self.assertFalse((shared / 'ship').exists())
+        self.assertEqual((shared / "pathway/SKILL.md").read_text(), "ORIGINAL SHARED")
+        self.assertFalse((shared / "ship").exists())
 
     def test_symlink_ancestor_containment_is_rejected(self):
-        shared = self.tmp / 'shared-skills'
-        repo = shared / 'development-protocol/repo'
-        shutil.copytree(ROOT, repo, ignore=shutil.ignore_patterns('.git', '__pycache__'))
-        (self.tmp / '.agents').mkdir()
-        (self.tmp / '.agents/skills').symlink_to(shared, target_is_directory=True)
-        result = run([str(repo / 'install.sh'), '--target', 'codex', '--yes', '--skip-backup'], self.tmp, cwd=repo)
+        shared = self.tmp / "shared-skills"
+        repo = shared / "development-protocol/repo"
+        shutil.copytree(
+            ROOT, repo, ignore=shutil.ignore_patterns(".git", "__pycache__")
+        )
+        (self.tmp / ".agents").mkdir()
+        (self.tmp / ".agents/skills").symlink_to(shared, target_is_directory=True)
+        result = run(
+            [str(repo / "install.sh"), "--target", "codex", "--yes", "--skip-backup"],
+            self.tmp,
+            cwd=repo,
+        )
         self.assertNotEqual(result.returncode, 0)
-        self.assertTrue((repo / 'install.sh').is_file())
-        self.assertFalse((self.tmp / '.devproto-stack').exists())
+        self.assertTrue((repo / "install.sh").is_file())
+        self.assertFalse((self.tmp / ".devproto-stack").exists())
 
     def test_health_fails_when_checklist_script_missing(self):
-        self.assertEqual(run([str(ROOT / 'install.sh'), '--target', 'claude', '--yes'], self.tmp).returncode, 0)
-        (self.claude_skills / 'development-protocol/scripts/devproto.py').unlink()
-        result = run([str(ROOT / 'health-check.sh'), '--target', 'claude'], self.tmp)
+        self.assertEqual(
+            run(
+                [str(ROOT / "install.sh"), "--target", "claude", "--yes"], self.tmp
+            ).returncode,
+            0,
+        )
+        (self.claude_skills / "development-protocol/scripts/devproto.py").unlink()
+        result = run([str(ROOT / "health-check.sh"), "--target", "claude"], self.tmp)
         self.assertEqual(result.returncode, 1)
-        self.assertIn('required checklist tool missing', result.stdout)
+        self.assertIn("required checklist tool missing", result.stdout)
 
     def test_uninstall_retry_after_restore_keeps_original(self):
-        dest = self.claude_skills / 'pathway'
-        write_marker_skill(self.claude_skills, 'pathway', 'PARTIAL COPY')
-        state = self.tmp / '.devproto-stack'
-        saved = state / 'backup-test/pathway'
+        dest = self.claude_skills / "pathway"
+        write_marker_skill(self.claude_skills, "pathway", "PARTIAL COPY")
+        state = self.tmp / ".devproto-stack"
+        saved = state / "backup-test/pathway"
         saved.mkdir(parents=True)
-        (saved / 'SKILL.md').write_text('ORIGINAL')
-        (state / 'installed.txt').write_text(str(dest) + '\n')
-        (state / 'backups.txt').write_text('test\n')
-        (state / 'backup-test/restore.tsv').write_text(str(dest) + '\t' + str(saved) + '\n')
-        bindir = self.tmp / 'bin'
+        (saved / "SKILL.md").write_text("ORIGINAL")
+        (state / "installed.txt").write_text(str(dest) + "\n")
+        (state / "backups.txt").write_text("test\n")
+        (state / "backup-test/restore.tsv").write_text(
+            str(dest) + "\t" + str(saved) + "\n"
+        )
+        bindir = self.tmp / "bin"
         bindir.mkdir()
-        stub = bindir / 'mv'
-        stub.write_text('#!/bin/bash\n/bin/mv "$@"\nif [[ "$1" == *backup-test/pathway ]]; then kill -TERM "$PPID"; fi\n')
+        stub = bindir / "mv"
+        stub.write_text(
+            '#!/bin/bash\n/bin/mv "$@"\nif [[ "$1" == *backup-test/pathway ]]; then kill -TERM "$PPID"; fi\n'
+        )
         stub.chmod(0o755)
-        env = dict(os.environ, HOME=str(self.tmp), PATH=str(bindir)+os.pathsep+os.environ['PATH'])
-        first = subprocess.run([BASH, str(ROOT / 'uninstall.sh'), '--yes'], env=env, capture_output=True)
+        env = dict(
+            os.environ,
+            HOME=str(self.tmp),
+            PATH=str(bindir) + os.pathsep + os.environ["PATH"],
+        )
+        first = subprocess.run(
+            [BASH, str(ROOT / "uninstall.sh"), "--yes"], env=env, capture_output=True
+        )
         self.assertNotEqual(first.returncode, 0)
-        self.assertEqual((dest / 'SKILL.md').read_text(), 'ORIGINAL')
-        again = run([str(ROOT / 'uninstall.sh'), '--yes'], self.tmp)
+        self.assertEqual((dest / "SKILL.md").read_text(), "ORIGINAL")
+        again = run([str(ROOT / "uninstall.sh"), "--yes"], self.tmp)
         self.assertEqual(again.returncode, 0, again.stderr)
-        self.assertEqual((dest / 'SKILL.md').read_text(), 'ORIGINAL')
+        self.assertEqual((dest / "SKILL.md").read_text(), "ORIGINAL")
 
     # ---- F1: re-install must not re-back-up the stack's own copies --------
 

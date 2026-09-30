@@ -166,6 +166,41 @@ def redact(text: str) -> str:
     return text
 
 
+def sections_have_content(text: str, sections: list[str]) -> bool:
+    """Reject missing/empty Markdown sections, not judge their factual quality."""
+    text = re.sub(r"<!--[\s\S]*?-->", "", text)
+    bodies = {section: [] for section in sections}
+    active = None
+    level = 0
+    fence = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            marker = stripped[:3]
+            fence = None if fence == marker else (marker if fence is None else fence)
+            continue
+        if fence:
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*#*\s*$", line)
+        if heading:
+            depth, title = len(heading[1]), heading[2]
+            if title in bodies:
+                active, level = title, depth
+            elif depth <= level:
+                active = None
+            continue
+        if active:
+            value = re.sub(r"^(?:[-*+]\s*|\d+[.)]\s*)", "", stripped).strip()
+            if (
+                value
+                and value.upper() not in ("TODO", "TBD")
+                and not re.fullmatch(r"\[.*\]", value)
+                and re.search(r"\w", value)
+            ):
+                bodies[active].append(value)
+    return all(bodies.values())
+
+
 def selftest() -> int:
     """Smoke-check this module's own primitives. Used by relentless/scripts/mutants.py,
     which has no other hook into this file: it execs a mutated copy and calls this.
@@ -209,4 +244,30 @@ def selftest() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(selftest())
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Check primitives or nonempty Markdown evidence sections."
+    )
+    parser.add_argument("--evidence", type=Path)
+    parser.add_argument("--section", action="append", default=[])
+    args = parser.parse_args()
+    if args.evidence is None:
+        if args.section:
+            parser.error("--section requires --evidence")
+        raise SystemExit(selftest())
+    if not args.section:
+        parser.error("--evidence requires at least one --section")
+    try:
+        passed = sections_have_content(
+            args.evidence.read_text(encoding="utf-8"), args.section
+        )
+    except (OSError, UnicodeError) as exc:
+        print(f"FAIL cannot read evidence: {exc}")
+        raise SystemExit(1)
+    print(
+        "PASS required sections contain text"
+        if passed
+        else "FAIL required sections are missing or empty"
+    )
+    raise SystemExit(0 if passed else 1)
