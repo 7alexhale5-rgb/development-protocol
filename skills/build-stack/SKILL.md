@@ -37,8 +37,9 @@ Capture a complete snapshot before recording the row:
 1. Resolve the approved baseline to a commit SHA (merge-base with the remote default
    branch, or HEAD for local work). Save that SHA in the evidence.
 2. Use a temporary Git index (`GIT_INDEX_FILE`), seeded with `git read-tree HEAD`.
-   Enumerate tracked plus nonignored untracked files with `git ls-files -z -co
-   --exclude-standard`. Exclude `.devproto/`, validate the complete path list for
+   Enumerate the union of `git ls-tree -rz --name-only HEAD` and tracked plus
+   nonignored untracked files from `git ls-files -z -co --exclude-standard`.
+   The HEAD list retains staged deletions. Exclude `.devproto/`, validate the complete path list for
    secrets, and add those explicit paths to the temporary index. Include tracked
    deletions. Never change the user's real index.
 3. Write `git diff --cached --binary <baseline-sha>` from that temporary index to
