@@ -72,8 +72,10 @@ the workflow has been hand-edited (the sentinel comment is missing).
 
 ## Preview protection (SSO or password on previews)
 
-The workflow's `Verify preview is publicly accessible` step checks the preview URL with `curl`
-first. On HTTP 401 or 403 it fails fast with a clear error.
+The workflow checks parsed HTTPS hostnames against exact domains or `*.domain` boundaries.
+Each route must return 2xx directly. All redirects, including same-host login redirects, fail
+before their destinations are fetched. Use canonical routes without redirects. Each requested
+URL must match an assertion, and collected final URLs must match the requested routes.
 
 This guards against a silent false pass. When a preview sits behind a login, Lighthouse follows
 the redirect and audits the login page. The login path matches no `assertMatrix` pattern, so
@@ -84,9 +86,9 @@ If the guard fails, there are two ways through:
 1. **Turn off protection on preview deploys** in your host's dashboard. Easiest; previews lose
    their privacy.
 2. **Use the host's automation bypass token.** On Vercel: Settings > Deployment Protection >
-   Protection Bypass for Automation. Store it as a repository secret and append it to each URL
-   in the `Build route list from baseline` step (or send it as a header from a custom runner
-   config).
+   Protection Bypass for Automation. Store it as a repository secret. A custom runner must
+   send it as a header during both route checks and Lighthouse collection. Never commit it
+   into baseline URLs or config.
 
 ## Off-ramp: trended history across PRs
 
@@ -109,3 +111,5 @@ No other file changes are needed. The PR comment step keeps working alongside.
   captured locally can show a steady 30 to 50 point performance gap with no code change. Capture
   the baseline against the same surface CI audits (for example the production CDN) so deltas mean
   something.
+
+Baseline refresh preserves current assertion levels and unrelated config. Enforced checks stay enforced.

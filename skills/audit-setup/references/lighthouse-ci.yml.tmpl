@@ -46,6 +46,9 @@ jobs:
       checks: write
       deployments: read
       statuses: write
+    env:
+      ALLOWED_HOSTS_JSON: >-
+        {{DOMAIN_ALLOWLIST}}
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -71,88 +74,25 @@ jobs:
             echo "::error::No URL provided"
             exit 2
           fi
-          # Strict allowlist: audit-setup writes the allowed hosts at scaffold
-          # time. Blocks arbitrary schemes + hosts piped into LHCI.
-          case "$URL" in
-            {{DOMAIN_ALLOWLIST}})
-              ;;
-            *)
-              echo "::error::Rejecting audit URL outside allowlist: $URL"
-              exit 2
-              ;;
-          esac
+          python3 ops/lighthouse/lh_baseline.py preview-check --base-url "$URL" --validate-only
           # Strip trailing slash so LHCI can concat routes cleanly.
           URL="${URL%/}"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Auditing: $URL"
 
-      - name: Verify preview is publicly accessible
-        # Vercel Deployment Protection (SSO/password) returns 401 + redirects
-        # to vercel.com/login. Lighthouse follows the redirect and silently
-        # scores the login page, and assertMatrix patterns don't match the
-        # redirected path, so all assertions are skipped and the run falsely
-        # passes. Fail loudly here instead.
-        #
-        # Bypass options:
-        #   1. Disable Vercel Deployment Protection for Preview deploys in
-        #      the Vercel dashboard (Settings > Deployment Protection).
-        #   2. Generate a "Protection Bypass for Automation" secret in Vercel
-        #      and pass it via x-vercel-protection-bypass query param when
-        #      building the LHCI URL list (or as an HTTP header).
-        env:
-          URL: ${{ steps.url.outputs.url }}
-        run: |
-          set -uo pipefail
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$URL/")
-          if [ "$code" = "401" ] || [ "$code" = "403" ]; then
-            echo "::error::Preview behind Vercel Deployment Protection (HTTP $code). LHCI cannot audit a protected deploy; assertions would silently pass."
-            echo "::error::Fix: disable protection on Preview deploys, OR add a Protection Bypass token. See .github/workflows/lighthouse-ci.yml comment for details."
-            exit 1
-          fi
-          if [ "$code" -ge 400 ]; then
-            echo "::error::Preview returned HTTP $code (expected 2xx). Cannot audit."
-            exit 1
-          fi
-          echo "Preview accessible: HTTP $code"
-
-      - name: Build route list from baseline
+      - name: Validate direct route access and assertion coverage
         id: routes
         env:
           BASE_URL: ${{ steps.url.outputs.url }}
         run: |
-          # Read each baseline JSON's requestedUrl, swap its origin for the
-          # current preview BASE_URL, emit one URL per line. Slug-based
-          # reconstruction would lose nested paths (e.g. /docs/intro
-          # becomes docs-intro); reading requestedUrl is lossless.
-          if ! ls ops/lighthouse/baseline/*.report.json > /dev/null 2>&1; then
-            echo "::error::No baseline found at ops/lighthouse/baseline/*.report.json. Run /audit-setup --lighthouse-only"
-            exit 2
-          fi
-          URLS=$(node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const base = process.env.BASE_URL;
-            const dir = 'ops/lighthouse/baseline';
-            const out = [];
-            for (const f of fs.readdirSync(dir).filter(x => x.endsWith('.report.json')).sort()) {
-              const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-              const ru = j.requestedUrl || j.finalUrl;
-              if (!ru) continue;
-              try {
-                const u = new URL(ru);
-                out.push(base + u.pathname + u.search);
-              } catch {}
-            }
-            console.log(out.join('\n'));
-          ")
+          # Reject every redirect before following it, including login redirects.
+          # Every requested route must have an applicable assertion.
+          URLS=$(python3 ops/lighthouse/lh_baseline.py preview-check --base-url "$BASE_URL")
           {
             echo "urls<<EOF_URLS"
             echo "$URLS"
             echo "EOF_URLS"
           } >> "$GITHUB_OUTPUT"
-          echo "count=$(echo "$URLS" | grep -c .)" >> "$GITHUB_OUTPUT"
-          echo "Routes to audit:"
-          echo "$URLS"
 
       - name: Run Lighthouse CI
         id: lhci
@@ -165,6 +105,12 @@ jobs:
           temporaryPublicStorage: true
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Verify collected route identity
+        if: always() && steps.lhci.outcome != 'skipped'
+        env:
+          BASE_URL: ${{ steps.url.outputs.url }}
+        run: python3 ops/lighthouse/lh_baseline.py preview-check --base-url "$BASE_URL" --results-dir .lighthouseci
 
       - name: Post PR comment
         # Reads .lighthouseci/manifest.json (representative runs), diffs against

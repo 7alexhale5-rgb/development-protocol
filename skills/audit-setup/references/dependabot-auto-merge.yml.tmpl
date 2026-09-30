@@ -14,6 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
+      - name: Bind metadata to event commit
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA"
       - name: Fetch Dependabot metadata
         id: meta
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
@@ -27,8 +33,11 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          test "$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" || exit 1
           files="$(gh pr view "$PR_URL" --json files --jq '[.files[].path] | join("\n")')"
+          test "$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" || exit 1
           if printf '%s\n' "$files" | grep -qE '^__WORKDIR_RE__package(-lock)?\.json$|^__WORKDIR_RE__(pnpm-lock\.yaml|yarn\.lock|bun\.lock)$' && ! printf '%s\n' "$files" | grep -qvE '^__WORKDIR_RE__(package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock)$'; then
             echo "eligible=true" >> "$GITHUB_OUTPUT"
           else
@@ -58,4 +67,5 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge --merge "$PR_URL"
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: gh pr merge --merge --match-head-commit "$HEAD_SHA" "$PR_URL"

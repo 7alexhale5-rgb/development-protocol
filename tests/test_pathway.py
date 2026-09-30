@@ -5,7 +5,8 @@ import json
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, contextmanager
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -218,6 +219,85 @@ class PathwayTest(unittest.TestCase):
         final = pathway.report(self.project, "w1")
         self.assertEqual(final["pathways"]["security"]["status"], "na")
 
+
+    def test_persisted_verifier_command_is_redacted(self):
+        self.start()
+        fake = "example-bearer-value-123456"
+        cmd = "printf '%s' 'Bearer " + fake + "'"
+        pathway.log(self.project, "w1", "govern", "ev.md", cmd)
+        self.assertNotIn(fake, pathway.item_path(self.project, "w1").read_text())
+
+    def test_report_refresh_holds_store_lock(self):
+        self.start()
+        held = []
+        real_load = pathway.load
+        @contextmanager
+        def guard(project):
+            held.append(True)
+            try:
+                yield
+            finally:
+                held.pop()
+        def guarded_load(project, work_id):
+            self.assertTrue(held, "report loaded state without the store lock")
+            return real_load(project, work_id)
+        with patch.object(pathway, "_store_lock", guard), patch.object(pathway, "load", guarded_load):
+            pathway.report(self.project, "w1")
+
+    def test_slow_verifier_cannot_overwrite_newer_na(self):
+        self.start()
+        def changed(*args):
+            pathway.cover(self.project, "w1", "govern", add=False, na=True, reason="new decision")
+            return 0, "ok"
+        with patch.object(pathway, "_run_verifier", changed):
+            with self.assertRaisesRegex(ValueError, "changed while"):
+                pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        self.assertEqual(pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "na")
+
+    def test_slow_verifier_cannot_overwrite_newer_block(self):
+        self.start()
+        def changed(*args):
+            with patch.object(pathway, "_run_verifier", return_value=(1, "newer failure")):
+                pathway.log(self.project, "w1", "govern", "ev.md", "false")
+            return 0, "old success"
+        with patch.object(pathway, "_run_verifier", changed):
+            with self.assertRaisesRegex(ValueError, "changed while"):
+                pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        self.assertEqual(pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "blocked")
+
+    def close_demo(self):
+        self.start(goal="Write a tiny tool", tier="demoable")
+        for name in ("govern", "implementation", "quality"):
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        self.assertTrue(pathway.close(self.project, "w1")["closed"])
+
+    def test_changed_evidence_reopens_closed_work_and_implicit_selection(self):
+        self.close_demo()
+        (self.project / "ev.md").write_text("new evidence")
+        self.assertEqual(pathway.select(self.project, ""), "w1")
+        self.assertFalse(pathway.report(self.project, "w1")["closed"])
+
+    def test_added_coverage_reopens_closed_work(self):
+        self.close_demo()
+        result = pathway.cover(self.project, "w1", "security", add=True, na=False)
+        self.assertFalse(result["closed"])
+        self.assertEqual(pathway.select(self.project, ""), "w1")
+
+    def test_scope_evidence_ignores_progress_but_tracks_itinerary_changes(self):
+        self.start()
+        before = pathway.scope(self.project, "w1")
+        pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        self.assertEqual(before, pathway.scope(self.project, "w1"))
+        pathway.cover(self.project, "w1", "security", add=True, na=False)
+        self.assertNotEqual(before, pathway.scope(self.project, "w1"))
+
+    def test_legacy_command_is_redacted_when_status_is_read(self):
+        self.start()
+        item = pathway.load(self.project, "w1")
+        item["pathways"]["govern"]["verify"] = "echo AUTH_TOKEN=synthetic-private-value"
+        pathway.save(self.project, item)
+        pathway.report(self.project, "w1")
+        self.assertNotIn("synthetic-private-value", pathway.item_path(self.project, "w1").read_text())
 
 if __name__ == "__main__":
     unittest.main()

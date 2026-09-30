@@ -80,11 +80,14 @@ def note(**entry) -> None:
         pass
 
 
-def decide(path: Path) -> tuple[str, dict]:
+def decide(path: Path, session: str, failure: str = None) -> tuple[str, dict]:
     """Block while the at-floor count keeps rising; checkpoint on a stall."""
 
     def apply(data: dict) -> tuple[str, dict]:
         t = sweep.tally(data)
+        if failure is not None:
+            sweep.mark_checkpoint(data, failure, by="stop-failure")
+            return "checkpoint", sweep.tally(data)
         prior = sweep.last_block(data)
         if prior is None or t["at_floor"] > int(prior.get("at_floor", -1)):
             sweep.log(
@@ -98,8 +101,13 @@ def decide(path: Path) -> tuple[str, dict]:
         sweep.mark_checkpoint(data, STALL_WHY, by="stop-hook")
         return "stall", sweep.tally(data)
 
-    _, result = sweep.mutate(path, apply, work=False, timeout=LOCK_WAIT)
-    return result
+    with sweep.ledger_lock(path, timeout=LOCK_WAIT):
+        data = sweep.load(path)
+        if not session or data.get("session_id") != session or data.get("status") != "open":
+            return "skip", sweep.tally(data)
+        result = apply(data)
+        sweep.save(path, data)
+        return result
 
 
 def block_message(t: dict, path: Path) -> str:
@@ -152,26 +160,13 @@ def main() -> int:
     for path in ledgers:
         slug = path.parent.name
         try:
+            failure = None
             if event == "StopFailure":
                 reason = payload.get("error") or payload.get("reason") or "unknown"
-                data = sweep.checkpoint(
-                    path,
-                    f"session stopped by a failure: {reason}",
-                    by="stop-failure",
-                    timeout=LOCK_WAIT,
-                )
-                t = sweep.tally(data)
-                notices.append(stall_notice(t, path))
-                note(
-                    event=event,
-                    session=session,
-                    slug=slug,
-                    kind="checkpoint",
-                    open=t["open"],
-                    payload_keys=sorted(payload),
-                )
+                failure = f"session stopped by a failure: {reason}"
+            kind, t = decide(path, session, failure)
+            if kind == "skip":
                 continue
-            kind, t = decide(path)
         except TimeoutError:
             note(event=event, session=session, slug=slug, kind="lock-busy")
             continue

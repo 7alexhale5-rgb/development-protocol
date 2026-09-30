@@ -31,8 +31,9 @@ sessions at once, all day.
   one handoff prompt per component. Start one new session per handoff.
 - Each worker session knows the primary by name and reports back to it when finished, so you manage
   one conversation, not five.
-- Workers commit only their own files, on their own branch, through a pull request. Never commit
-  another session's uncommitted work.
+- Give each concurrent worker a separate Git worktree or clone, with its own branch.
+  A branch alone does not isolate files or the index. Workers commit only their own files
+  through a pull request; never switch branches in another worker's checkout.
 - Cross-session messaging usually needs the worker to run without permission prompts. If a report
   never arrives, check the worker's permission mode first.
 
@@ -78,8 +79,8 @@ Current Anthropic lineup, checked on 2026-09-29 against Anthropic's models overv
 
 ## 7. Branches, pull requests and the team
 
-- A branch is a sandbox copy of the code. Review it on your own machine (localhost), not in
-  production.
+- A branch names a line of commits. A separate worktree or clone supplies an isolated
+  working folder. Use both for concurrent workers and review locally before production.
 - Merge to main through a pull request. The repo's checks run on the pull request. When main
   changes, the host (for example Vercel) redeploys production. A separate testing environment is
   optional, not required.

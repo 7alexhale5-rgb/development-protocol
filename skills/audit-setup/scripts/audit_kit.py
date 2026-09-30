@@ -346,7 +346,7 @@ def require_node18() -> None:
         )
 
 
-def find_chrome() -> str:
+def find_chrome(root: Path = None) -> str:
     if os.environ.get("CHROME_PATH"):
         return os.environ["CHROME_PATH"]
     mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -356,6 +356,17 @@ def find_chrome() -> str:
         found = shutil.which(name)
         if found:
             return found
+    if root is not None:
+        try:
+            probe = subprocess.run(
+                ["node", "-e", "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);"],
+                cwd=root, capture_output=True, text=True, timeout=10,
+            )
+            candidate = probe.stdout.strip()
+            if probe.returncode == 0 and candidate and Path(candidate).is_file():
+                return candidate
+        except (OSError, subprocess.TimeoutExpired):
+            pass
     raise SetupError(
         "Chrome or Chromium not found. Set CHROME_PATH, or install one (npx playwright install chromium works)."
     )
@@ -391,7 +402,7 @@ def setup_lighthouse(
             f"lighthouse: Node v{node[0]}.{node[1]}, pinning {pkg} (Lighthouse 13 needs Node 22.19+)"
         )
     ensure_dev(root, pkg)
-    chrome = find_chrome()
+    chrome = find_chrome(root)
     route_list = routes.split() if routes else detect_routes(root)
     print(f"lighthouse: routes {' '.join(route_list)}")
 
@@ -434,7 +445,8 @@ def setup_lighthouse(
                     f"local server did not answer on :3000 within 30s (log: {log.name}). Pass --target-url or set PREVIEW_URL."
                 )
         write_baseline_files(root, target_url.rstrip("/"), " ".join(route_list), runs)
-        env = dict(os.environ, CHROME_PATH=chrome)
+        env = dict(os.environ, CHROME_PATH=chrome, LH_TARGET_URL=target_url.rstrip("/"),
+                   LH_ROUTES=" ".join(route_list), LH_RUNS=str(runs))
         r = subprocess.run(["sh", "ops/lighthouse/run-baseline.sh"], cwd=root, env=env)
         if r.returncode != 0 or baseline_count(root) == 0:
             raise SetupError(
@@ -644,6 +656,9 @@ def quality_ci(
         root / ".github/workflows/ci.yml",
         root / ".github/workflows/dependabot-auto-merge.yml",
     ]
+    if uninstall and dry_run:
+        print("quality-ci --dry-run: would remove owned workflows")
+        return
     if uninstall:
         for f in files:
             if has_sentinel(f, QCI_SENTINEL):
@@ -769,9 +784,7 @@ def quality_ci(
             t = t.replace(k, v)
         return re.sub(r"\n\n+(?=      - name)", "\n", t)
 
-    for f in files:
-        if not clobber_guard(root, f, QCI_SENTINEL, force, "quality-ci"):
-            return
+    write_files = {f: clobber_guard(root, f, QCI_SENTINEL, force, "quality-ci") for f in files}
     ci_body, dam_body = (
         render("quality-ci.yml.tmpl"),
         render("dependabot-auto-merge.yml.tmpl"),
@@ -784,8 +797,9 @@ def quality_ci(
         print(ci_body)
         return
     files[0].parent.mkdir(parents=True, exist_ok=True)
-    files[0].write_text(ci_body)
-    files[1].write_text(dam_body)
+    for path, body in zip(files, (ci_body, dam_body)):
+        if write_files[path]:
+            path.write_text(body)
     dep_cfg = root / ".github/dependabot.yml"
     if not dep_cfg.exists():
         directory = "/" if workdir == "." else f"/{workdir}"
@@ -845,6 +859,9 @@ def lighthouse_ci(
         (root / ".github/ci/README.md", LHCI_SENTINEL),
         (root / ".lighthouserc.json", LHCI_SENTINEL),
     ]
+    if uninstall and dry_run:
+        print("lighthouse-ci --dry-run: would remove owned files and unchanged package scripts")
+        return
     if uninstall:
         kept = []
         for f, sentinel in owned:
@@ -919,26 +936,29 @@ def lighthouse_ci(
         lh_baseline.enforce(rc)
         return
     config = (
-        json.dumps(lh_baseline.assertions(root / "ops/lighthouse/baseline"), indent=2)
+        json.dumps(lh_baseline.assertions(
+            root / "ops/lighthouse/baseline",
+            json.loads(rc.read_text()) if has_sentinel(rc, LHCI_SENTINEL) else None,
+        ), indent=2)
         + "\n"
     )
     if regen_only:
+        if rc.exists() and not has_sentinel(rc, LHCI_SENTINEL) and not force:
+            raise SetupError("refusing to replace unowned .lighthouserc.json; use --force")
         if dry_run:
             print(config[:1500])
             return
         rc.write_text(config)
         print("lighthouse-ci: regenerated .lighthouserc.json")
         return
-    patterns = list(allow_hosts or []) or ["https://*.vercel.app*"]
-    remote = subprocess.run(
-        ["git", "remote", "get-url", "origin"], cwd=root, capture_output=True, text=True
-    ).stdout.strip()
-    m = re.search(r"github\.com[:/][^/]+/([^/]+?)(?:\.git)?$", remote)
-    if m and not allow_hosts:
-        patterns.append(f"https://{m.group(1).lower()}*.vercel.app*")
-    allowlist = "|".join(patterns)
-    if not clobber_guard(root, wf, LHCI_SENTINEL, force, "lighthouse-ci"):
-        return
+    patterns = lh_baseline.normalize_hosts(allow_hosts or ["*.vercel.app"])
+    allowlist = json.dumps(patterns)
+    helper = root / "ops/lighthouse/lh_baseline.py"
+    if helper.exists() and 'Lighthouse baseline helper.' not in helper.read_text():
+        if not force:
+            raise SetupError("unowned ops/lighthouse/lh_baseline.py; use --force")
+    write_files = {f: clobber_guard(root, f, sentinel, force, "lighthouse-ci")
+                   for f, sentinel in owned}
     if dry_run:
         print(
             f"lighthouse-ci --dry-run: package manager {detect_pm(root)}, URL allowlist {allowlist}"
@@ -952,23 +972,20 @@ def lighthouse_ci(
     ensure_dev(root, "@lhci/cli")
     (root / ".github/ci").mkdir(parents=True, exist_ok=True)
     wf.parent.mkdir(parents=True, exist_ok=True)
-    wf.write_text(
-        (REFS / "lighthouse-ci.yml.tmpl")
-        .read_text()
-        .replace("{{DOMAIN_ALLOWLIST}}", allowlist)
-    )
-    rc.write_text(config)
-    bless = root / ".github/ci/lh-bless.sh"
-    shutil.copyfile(REFS / "lh-bless.sh.tmpl", bless)
-    bless.chmod(0o755)
-    (root / ".github/ci/README.md").write_text(
-        (REFS / "ci-readme.md.tmpl")
-        .read_text()
-        .replace("{{PM_RUN_LH_BLESS}}", pm_run(root, "lh:bless"))
-    )
-    lhb = root / "ops/lighthouse/lh_baseline.py"
-    if not lhb.exists():
-        shutil.copyfile(HERE / "lh_baseline.py", lhb)
+    bodies = {
+        wf: (REFS / "lighthouse-ci.yml.tmpl").read_text().replace("{{DOMAIN_ALLOWLIST}}", allowlist),
+        rc: config,
+        root / ".github/ci/lh-bless.sh": (REFS / "lh-bless.sh.tmpl").read_text(),
+        root / ".github/ci/README.md": (REFS / "ci-readme.md.tmpl").read_text().replace("{{PM_RUN_LH_BLESS}}", pm_run(root, "lh:bless")),
+    }
+    for path, body in bodies.items():
+        if write_files[path]:
+            path.write_text(body)
+            if path.name == "lh-bless.sh":
+                path.chmod(0o755)
+    helper.parent.mkdir(parents=True, exist_ok=True)
+    if not helper.exists() or force or "preview-check" not in helper.read_text():
+        shutil.copyfile(HERE / "lh_baseline.py", helper)
     add_script(root, "lhci", "lhci autorun")
     add_script(root, "lh:bless", "sh .github/ci/lh-bless.sh")
     print(
@@ -993,13 +1010,21 @@ def missing(root: Path, tool: str) -> bool:
             for d in ("@next/bundle-analyzer", "rollup-plugin-visualizer", "size-limit")
         )
     if tool == "knip":
-        return not has_dep(root, "knip")
+        return (not has_dep(root, "knip")
+                or not any((root / n).exists() for n in ("knip.json", "knip.ts"))
+                or "dead-code" not in (read_pkg(root).get("scripts") or {}))
     if tool == "quality-ci":
-        return not has_sentinel(root / ".github/workflows/ci.yml", QCI_SENTINEL)
+        return not all(has_sentinel(root / ".github/workflows" / n, QCI_SENTINEL)
+                       for n in ("ci.yml", "dependabot-auto-merge.yml"))
     if tool == "ci":
-        return not has_sentinel(
-            root / ".github/workflows/lighthouse-ci.yml", LHCI_SENTINEL
-        )
+        return (not has_dep(root, "@lhci/cli") or not all(
+            has_sentinel(root / n, sentinel) for n, sentinel in (
+                (".github/workflows/lighthouse-ci.yml", LHCI_SENTINEL),
+                (".github/ci/lh-bless.sh", LH_BLESS_SENTINEL),
+                (".github/ci/README.md", LHCI_SENTINEL),
+                (".lighthouserc.json", LHCI_SENTINEL),
+            )) or not (root / "ops/lighthouse/lh_baseline.py").is_file()
+            or not all(k in (read_pkg(root).get("scripts") or {}) for k in ("lhci", "lh:bless")))
     raise ValueError(tool)
 
 
@@ -1076,6 +1101,9 @@ def run_all(
     routes: str = "",
     runs: int = 3,
 ) -> int:
+    if only == "quality-ci":
+        quality_ci(root, force=force, dry_run=dry_run)
+        return 0
     s = status(root)
     print_status(s)
     print()
@@ -1176,7 +1204,7 @@ def main(argv=None) -> int:
         "--allow-host",
         action="append",
         default=[],
-        help="URL glob the workflow may audit (repeatable)",
+        help="hostname or *.domain boundary the workflow may audit (repeatable)",
     )
     for p in sub.choices.values():
         p.add_argument("--force", action="store_true")

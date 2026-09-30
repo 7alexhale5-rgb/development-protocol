@@ -17,7 +17,7 @@ request link and the check results, then record the row with a verifier that re-
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
   --id <work-id> --step ship --result pass --evidence .devproto/evidence/ship.txt \
-  --verify "gh pr checks <pr-number>"
+  --verify 'expected=$(sed -n "s/^sha //p" .devproto/evidence/ship.txt); test -n "$expected" && test "$(git rev-parse HEAD)" = "$expected" && test "$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)" = "$expected" && gh pr checks <pr-number> && test "$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)" = "$expected"'
 ```
 
 `gh pr checks` exits non-zero while any check is failing or pending, so the row cannot pass on a
@@ -158,9 +158,16 @@ Timeout: 300 seconds (5 minutes).
 
 ---
 
+Before pushing, commit scoped test repairs using the commit workflow. Re-run all
+applicable checks on the resulting commit and refresh any invalidated evidence.
+Require a clean implementation worktree and index; exclude only mutable receipts.
+Save `git rev-parse HEAD` as `sha` now. It is the tested, committed revision.
+
 ## Step 3: Push
 
 ```bash
+sha=$(git rev-parse HEAD)
+test -z "$(git status --porcelain -- . ':!.devproto')" || exit 1
 git push -u origin {current_branch}
 ```
 
@@ -216,8 +223,12 @@ attached to the exact commit you pushed. Do not rely on `gh pr checks --watch` a
 reprint an earlier run.
 
 ```bash
-sha=$(gh pr view {n} --json headRefOid --jq .headRefOid)
-gh run watch $(gh run list --branch {branch} --limit 1 --json databaseId --jq '.[0].databaseId') --exit-status
+test "$(gh pr view {n} --json headRefOid --jq .headRefOid)" = "$sha" || exit 1
+# Select applicable workflow runs by --commit "$sha", never latest branch run.
+gh run list --commit "$sha" --json databaseId,headSha,status,conclusion
+# Watch each applicable run ID above, then recheck PR head equality.
+gh pr checks {n} --watch
+test "$(gh pr view {n} --json headRefOid --jq .headRefOid)" = "$sha" || exit 1
 gh api "repos/{owner}/{repo}/commits/$sha/check-runs" --jq '.check_runs[] | "\(.name)\t\(.status)\t\(.conclusion)"'
 ```
 

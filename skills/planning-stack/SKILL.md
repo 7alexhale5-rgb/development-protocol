@@ -85,7 +85,8 @@ inform the plan. They do not replace it.
 This skill runs in any agent that can read files and search. Note what else exists this session:
 web search, a page fetcher, the `/research-stack` skill, subagents, background tasks. The flag
 table is in `references/context.md` ("Tool detection"). Everything optional has a fallback. The
-minimum is: read files, list files, search text.
+minimum is: read files, list files, search text. With `--no-research`, do not probe
+web/search/fetch services and do not run any external research or best-practice searches.
 
 ## Step 1.6: Interview to surface assumptions
 
@@ -133,7 +134,7 @@ or in the background, do; otherwise run them back to back without waiting to ana
 - **Source 4, research (conditional).** Skipped by `--no-research`, forced by `--research`,
   otherwise only when the goal holds unknowns (a new technology, an external service, a
   third-party API).
-- **Source 5, best practices.** Two web searches: "<technology> <goal terms> best practices
+- **Source 5, best practices.** Skip entirely with `--no-research`. Otherwise two web searches: "<technology> <goal terms> best practices
   <year>" and "<technology> <goal terms> common mistakes pitfalls".
 
 **Fallback rule.** A source that errors is noted and skipped. Never retry it. Track which sources

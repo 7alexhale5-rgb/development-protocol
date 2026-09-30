@@ -23,9 +23,10 @@ function.
 
 Find the plan, decision, or recommendation in this order:
 
-1. **The current conversation.** If `/planning-stack` or `/research-stack` ran this session, use
-   its output.
-2. **A path the user gave.** If the user said "premortem this <path>", read that file.
+1. **An explicit target path.** Read that exact file first. If unreadable, stop with its
+   error; never substitute another plan. Record its resolved path and content hash in evidence.
+2. **The current conversation, only without an explicit path.** If `/planning-stack` or
+   `/research-stack` ran this session, use its output.
 3. **The newest plan in the repo.** Check `.devproto/evidence/plan.md`, then the project's planning
    folder (for example `.planning/`), then any plan files your agent saves. Take the most recently
    changed one.

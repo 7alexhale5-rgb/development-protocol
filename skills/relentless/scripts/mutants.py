@@ -40,8 +40,8 @@ MUTANTS = [
         # here by relative path since it is outside this skill's own folder.
         "../development-protocol/scripts/_shared.py",
         "pipefail dropped",
-        '[bash, "-o", "pipefail", "-c", cmd]',
-        "[bash, '-c', cmd]",
+        '[bash, "-o", "pipefail", "-c", cmd],\n            cwd=str(cwd)',
+        "[bash, '-c', cmd],\n            cwd=str(cwd)",
     ),
     (
         "scripts/sweep.py",

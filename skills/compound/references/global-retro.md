@@ -18,7 +18,9 @@ one parent folder and needs no repository of its own.
 
 ## Global Step 1: Compute the time window
 
-Use the same midnight-aligned logic as the repository retro. Default 7 days. The second
+Use the same window logic as the repository retro. Set `SINCE` once before querying:
+`24 hours ago` for an `h` window; local midnight on the computed start date for a `d` or `w`
+window. Reuse that exact `SINCE` for every repository. Default 7 days. The second
 argument after `global` is the window (`14d`, `30d`, `24h`).
 
 ## Global Step 2: Discover projects
@@ -65,19 +67,19 @@ Then:
 
 ```bash
 repo_path="<path to this repository>"   # fill in before running
-start_date="<the window's start date, e.g. 2026-09-22>"   # fill in before running
+SINCE="${SINCE:?compute the window in Global Step 1 first}"
 
 # Commits with stats
-git -C "$repo_path" log origin/$DEFAULT --since="${start_date}T00:00:00" --format="%H|%aN|%ai|%s" --shortstat
+git -C "$repo_path" log origin/$DEFAULT --since="$SINCE" --format="%H|%aN|%ai|%s" --shortstat
 
 # Commit timestamps for sessions, streak and context switching
-git -C "$repo_path" log origin/$DEFAULT --since="${start_date}T00:00:00" --format="%at|%aN|%ai|%s" | sort -n
+git -C "$repo_path" log origin/$DEFAULT --since="$SINCE" --format="%at|%aN|%ai|%s" | sort -n
 
 # Per-author commit counts
-git -C "$repo_path" shortlog origin/$DEFAULT --since="${start_date}T00:00:00" -sn --no-merges
+git -C "$repo_path" shortlog origin/$DEFAULT --since="$SINCE" -sn --no-merges
 
 # Pull or merge request numbers from commit messages
-git -C "$repo_path" log origin/$DEFAULT --since="${start_date}T00:00:00" --format="%s" | grep -oE '[#!][0-9]+' | sort -t'#' -k1 | uniq
+git -C "$repo_path" log origin/$DEFAULT --since="$SINCE" --format="%s" | grep -oE '[#!][0-9]+' | sort -t'#' -k1 | uniq
 ```
 
 Skip repositories that fail (deleted paths, network errors) and note "N repositories could not
@@ -89,7 +91,7 @@ For each repository, get commit dates, capped at 365 days:
 
 ```bash
 repo_path="<path to this repository>"   # fill in before running
-git -C "$repo_path" log origin/$DEFAULT --since="365 days ago" --format="%ad" --date=format:"%Y-%m-%d" | sort -u
+git -C "$repo_path" log origin/$DEFAULT --since="365 days ago" --format="%ad" --date=format-local:"%Y-%m-%d" | sort -u
 ```
 
 Union the dates across every repository. Count backward from today: how many consecutive days
@@ -248,7 +250,8 @@ ls -t ~/.devproto/retros/global-*.json 2>/dev/null | head -5
 ```
 
 **Only compare against an earlier retro with the same `window` value** (7d against 7d). If the
-most recent one used a different window, skip the comparison and note: "The prior global retro
+most recent one used a different window, search older snapshots for a match. Also require
+the same `metrics_version` (currently `1`); missing versions are incompatible. If none match, note: "The prior global retro
 used a different window. Skipping comparison."
 
 If a matching retro exists, read it. Show a **Trends vs Last Global Retro** table with deltas for
@@ -278,6 +281,7 @@ Write the JSON to `~/.devproto/retros/global-${today}-${next}.json`:
   "type": "global",
   "date": "2026-04-20",
   "window": "7d",
+  "metrics_version": 1,
   "parent": "<the parent folder that was walked>",
   "projects": [
     {

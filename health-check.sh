@@ -42,6 +42,10 @@ for root in "${roots[@]}"; do
     if [[ ! -f "$f" ]]; then bad "$s missing"; continue; fi
     name="$(awk '/^---/{n++; next} n==1 && /^name:/{sub(/^name:[ ]*/,""); print; exit}' "$f")"
     if [[ "$name" != "$s" ]]; then bad "$s: frontmatter name is '$name'"; continue; fi
+    while IFS= read -r asset; do
+      relative="${asset#"$here/skills/$s/"}"
+      [[ -f "$root/$s/$relative" ]] || bad "$s: required asset missing: $relative"
+    done < <(find "$here/skills/$s" -type f \( -name '*.py' -o -name '*.sh' \))
     if cmp -s "$f" "$here/skills/$s/SKILL.md"; then ok "$s"; else note "$s differs from this repo copy (older install? re-run install.sh)"; fi
   done
   dp="$root/development-protocol/scripts/devproto.py"
@@ -54,6 +58,8 @@ for root in "${roots[@]}"; do
       bad "checklist tool failed to start a work item"
     fi
     rm -rf "$tmp"
+  else
+    bad "required checklist tool missing"
   fi
 done
 

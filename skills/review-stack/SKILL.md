@@ -25,20 +25,20 @@ the task.
 This skill satisfies the `review` row of the development-protocol checklist. `DEVPROTO` means
 `python3 <development-protocol skill folder>/scripts/devproto.py`.
 
-Write the finished report to `.devproto/evidence/review.md`. Include the commit SHA you reviewed
-(`git rev-parse HEAD`) at the top. Then record the row with a verifier that only reads the report
-and fails on a bad verdict:
+Write the report to `.devproto/evidence/review.md` and its canonical structured result to
+`.devproto/evidence/review.json`. Both name the exact reviewed commit. Record the row using
+the structured result; pass the human report as an instrument:
 
 ```text
 DEVPROTO --project <repo> step --id <work-id> --step review --result pass \
-  --evidence .devproto/evidence/review.md \
-  --verify "grep -Eq 'Verdict: (SHIP IT|READY TO SHIP|FIX THEN SHIP|SHIP WITH CAVEATS)' .devproto/evidence/review.md"
+  --evidence .devproto/evidence/review.json --instrument .devproto/evidence/review.md \
+  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)"'
 ```
 
-A NEEDS WORK or BLOCKED verdict fails that verifier, so the row records `blocked`. That is
-correct. The row passes only after the findings are fixed or answered and a re-review returns a
-passing verdict. Every finding needs an outcome in the report: fixed, rejected with a reason, or
-deferred with an owner.
+HARD_FAIL, missing gate data, failed criteria, and unresolved required findings block the
+row regardless of the headline verdict. A fixed outcome needs evidence; rejection needs
+a reason. Deferral is only allowed for explicitly nonrequired, noncritical/nonhigh findings
+with an owner, reason and named acceptance. Re-review and update both reports after fixes.
 
 ---
 
@@ -546,14 +546,15 @@ example are in `references/output-templates.md` (section "JSON output").
 
 ## Step 7.5: Persist the findings (always)
 
-At the end of **every** run with findings, write the structured finding pool (the Step 7 JSON
+At the end of **every** run, including clean runs, write the structured finding pool (the Step 7 JSON
 shape: verdict plus findings) to `.devproto/review/latest-findings.json`.
 
 This file is current state. Overwrite it each run. Never append. It lets the next session, and
 any tool your team uses to rank the next piece of work, see this project's real open findings
 without anyone copying them by hand. Tag each
 finding with the area its ID prefix points to (for example `mig-` is data and migrations, `sec-`
-is security, `rel-` is release). Skip only when there are zero findings.
+is security, `rel-` is release). A clean run writes `findings: []` and its current commit,
+gate and verdict, clearing stale issues.
 
 ---
 

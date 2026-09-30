@@ -58,9 +58,9 @@ cd "$project_path"
 # Commits in the window
 git log --oneline --after="$days_ago" --format="%h %s (%an, %ar)"
 
-# Totals: files changed, insertions, deletions
-git log --after="$days_ago" --shortstat --format="" \
-  | awk '/files? changed/ {f+=$1; i+=$4; d+=$6} END {printf "files: %d, +%d, -%d\n", f, i, d}'
+# Totals: file changes, insertions, deletions; binary changes have no LOC count
+git log --after="$days_ago" --numstat --format="" \
+  | awk -F '\t' 'NF >= 3 {f++; if ($1 == "-" || $2 == "-") {b++; next} i+=$1; d+=$2} END {printf "file changes: %d, +%d, -%d, binary: %d\n", f, i, d, b}'
 
 # Most changed files (hotspots)
 git log --after="$days_ago" --name-only --format="" | sort | uniq -c | sort -rn | head -10

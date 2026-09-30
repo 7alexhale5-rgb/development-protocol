@@ -434,6 +434,20 @@ project, skip silently. Compound already ran this cycle.
 
 Non-critical: log a failure, never stop the pipeline.
 
+## Step 9.4: Persist final artifacts and refresh safety
+
+After all session logs, handoffs, lessons and documentation writes, inspect status again.
+Classify every generated artifact as committed and pushed, intentionally local with a
+verified backup, or still unpersisted. Commit and push approved non-receipt artifacts
+through the normal scoped workflow; never sweep unrelated files into that commit.
+Keep mutable `.devproto/` receipts outside Git to avoid invalidating their own HEAD binding.
+If metadata changes HEAD, refresh affected release evidence before recording closeout.
+
+Re-run Step 1b after the final writes and remote update. Replace `safe_to_close` and its
+reasons with this fresh result; never reuse the initial value. List every local-only or
+uncommitted artifact, its backup, and any remaining risk in the handoff and final report.
+A failed persistence step keeps safety false while Step 10 still emits the resume prompt.
+
 ## Step 9.5: Record the closeout row (end of a work item only)
 
 Only when the work item is shipped and merged -- which by this point already required a remote
@@ -463,6 +477,8 @@ label, like 1b. It does not stop Step 10.
 ---
 
 ## Step 10: Emit the closeout output [ALWAYS FIRES]
+
+Recheck safety if Step 9.5 changed any artifacts. Report their final persistence state.
 
 > **Why this is strict.** The resume prompt is the only contract the next session inherits. If
 > it is missing, the user loses everything this turn produced: no handoff link, no next task, no

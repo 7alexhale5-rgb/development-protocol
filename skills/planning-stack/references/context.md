@@ -68,7 +68,8 @@ No hit, or nothing relevant: go to Step 1.
 
 ## Tool detection
 
-Note which of these work this session. Probe by trying the cheapest call, not by assuming.
+Note which of these work this session. With `--no-research`, skip all external
+web/search/fetch probes and research calls. Otherwise probe with the cheapest call.
 
 | Flag                 | How to set it                                                       | Fallback if false                                  |
 | -------------------- | ------------------------------------------------------------------- | -------------------------------------------------- |
@@ -144,7 +145,7 @@ anti-patterns, performance characteristics, and (TECH mode) security considerati
 
 ### Source 5: best practices
 
-If web search works:
+Skip this entire source with `--no-research`. Otherwise, if web search works:
 
 ```text
 "<technology> <goal terms> best practices <current year>"

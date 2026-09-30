@@ -83,6 +83,8 @@ works, and only the Stop hook and the read audit need an id.
 5. **Leave items only on purpose.** `sweep defer <id> --why "<reason>"` for items that are
    genuinely out of scope (vendored code, a dead source). Never skip silently. Deferring
    more than a quarter of the universe blocks `close`: at that point the sweep was not done.
+   If work later covers an item, explicitly use `sweep revive <id> --why "<what changed>"`.
+   Visiting alone does not revoke a deferral. Revival keeps the original deferral in the log.
 
 6. **Close it.** `sweep close` refuses while items are open, re-runs the enumeration to
    catch drift, runs `--done-cmd`, and checks that every file you marked as read was
@@ -127,8 +129,11 @@ result.
 
 The ledger checks this. At `close`, every file-path item at L2 or above is matched against
 the file reads in the transcript of the session that visited it, subagents included: read
-tool calls, and shell commands that print the file (`cat`, `sed`, `head`, `tail`, `nl`,
-`awk`, `less`, `more`, `bat`, `view`) and name it. A visit with no read behind it makes
+tool calls paired with successful results, and successful shell commands that name the file
+and return its full text. Requests without results and denied reads do not count. Numbered
+partial Read results can combine to cover all lines; one partial read cannot prove L2.
+A truncated shell result cannot prove whole-file coverage. Unrecognized or binary result
+formats do not gain full coverage automatically. A visit with no full read behind it makes
 `close` refuse and name the file. Marking items to quiet the hook defeats the whole point:
 the ledger is the proof the user relies on, and a false one is worse than an honest
 "partial".

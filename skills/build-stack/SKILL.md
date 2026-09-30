@@ -32,20 +32,26 @@ earlier row is open, close it first or mark it `na` with a reason where the tool
 
 When the build is done and Full Verify passes, save the diff and record the row:
 
-```bash
-# Detect the default branch instead of assuming main -- a repo can default to
-# master, or (a fresh local-only repo, no push yet) have no origin at all.
-base="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-if [ -n "$base" ] && [ "$(git branch --show-current)" != "${base#origin/}" ]; then
-  git diff "$base"... > .devproto/evidence/build.diff
-else
-  git diff > .devproto/evidence/build.diff   # no remote, or already on the default branch
-fi
-```
+Capture a complete snapshot before recording the row:
+
+1. Resolve the approved baseline to a commit SHA (merge-base with the remote default
+   branch, or HEAD for local work). Save that SHA in the evidence.
+2. Use a temporary Git index (`GIT_INDEX_FILE`), seeded with `git read-tree HEAD`.
+   Enumerate the union of `git ls-tree -rz --name-only HEAD` and tracked plus
+   nonignored untracked files from `git ls-files -z -co --exclude-standard`.
+   The HEAD list retains staged deletions. Exclude `.devproto/`, validate the complete path list for
+   secrets, and add those explicit paths to the temporary index. Include tracked
+   deletions. Never change the user's real index.
+3. Write `git diff --cached --binary <baseline-sha>` from that temporary index to
+   `.devproto/evidence/build.diff`. This includes committed, staged, unstaged and new files.
+4. Record the read-only snapshot procedure as an evidence instrument. The verifier
+   must rebuild the same snapshot in another temporary index and compare it byte
+   for byte with `build.diff`, then run the focused tests. Delete only temporary
+   indexes created by this procedure. A changed implementation must invalidate proof.
 
 ```text
 DEVPROTO --project <repo> step --id <work-id> --step build --result pass \
-  --evidence .devproto/evidence/build.diff --verify "<the focused test command>" \
+  --evidence .devproto/evidence/build.diff --verify "<compare the current snapshot with build.diff, then run focused tests>" \
   --instrument <the main test file you relied on>
 ```
 
@@ -78,7 +84,9 @@ Keep GOAL and FLAGS for the whole run.
 
 ## Step 1: Load the plan
 
-Find the plan. Check these sources in order.
+If an explicit plan path was supplied, resolve and read that exact file first.
+If it is missing or unreadable, stop with that error; never substitute a newer plan.
+Only when no path was supplied, check these sources in order.
 
 ### 1a: Conversation context
 
@@ -255,7 +263,8 @@ Pick the path that matches the classification.
 
 1. Make the fix directly.
 2. Run the **Light Checkpoint** (types and lint only).
-3. If it passes, go to Step 7 (Complete).
+3. If it passes, continue through the mandatory skeptic, Steps 6.4 and 6.5
+   as applicable, and Full Verify before Step 7. Honor explicit `--review` and `--audit`.
 4. If it fails, auto-fix deterministic issues (type errors, lint violations, under 5 lines).
 5. Re-run the Light Checkpoint (at most 2 retries).
 6. If it still fails, show the user the error details and stop.
@@ -268,7 +277,7 @@ Pick the path that matches the classification.
 4. If Full Verify fails:
    - Auto-fix type errors and lint issues (under 5 lines, deterministic).
    - Surface test failures and build errors to the user. They need judgment.
-5. Report the results, then go to Step 7.
+5. Continue through applicable perspectives, audit and review stages before Step 7.
 
 ### MEDIUM path
 

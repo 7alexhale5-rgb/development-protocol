@@ -79,6 +79,11 @@ while IFS= read -r dest; do
   fi
 done < "$manifest"
 
+# Removal is complete. Persist that before restoring anything: a retry must
+# never mistake a restored original for an unhashed partial installation.
+# Keep the empty manifest until restoration finishes, so retries still restore.
+[[ $dry_run -eq 1 ]] || : > "$manifest"
+
 # Restore backups, oldest first, so the first thing that was replaced comes back.
 if [[ -f "$state_dir/backups.txt" ]]; then
   while IFS= read -r bstamp; do

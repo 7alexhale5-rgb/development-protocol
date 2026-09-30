@@ -50,12 +50,12 @@ def load_patterns():
 def shippable():
     """Files git would publish (tracked plus untracked, minus ignored). None outside git."""
     r = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-files", "-co", "--exclude-standard"],
+        ["git", "-C", str(ROOT), "ls-files", "-z", "-co", "--exclude-standard"],
         capture_output=True,
         text=True,
     )
     return (
-        {(ROOT / l).resolve() for l in r.stdout.splitlines()}
+        {(ROOT / l).resolve() for l in r.stdout.split("\0") if l}
         if r.returncode == 0
         else None
     )

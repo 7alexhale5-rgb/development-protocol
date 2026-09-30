@@ -56,9 +56,12 @@ For every changed file:
 - Did you "improve" nearby code, comments or formatting that nobody asked about?
 - Did you refactor something that was not broken?
 
-**Fix:** revert lines that do not trace to the request. `git checkout -- <file>` for whole files,
-or revert single hunks (`git restore -p <file>` walks them one at a time, if your tool can answer
-its prompts; otherwise edit the lines back by hand).
+**Fix:** remove only this task's out-of-scope edits. Preserve pre-existing user work and
+staging first. For a file wholly owned by this task, restore both index and worktree from
+the reviewed baseline: `git restore --source=HEAD --staged --worktree -- <file>`.
+For mixed ownership, save private binary patches and restore only this task's unwanted
+hunks in both surfaces; verify the user's original staged and unstaged content survives.
+Never restore an entire mixed file just because some lines are out of scope.
 
 **Do not fix:** dead code or formatting issues that were already there before your change.
 Mention them in the report; do not delete them.
@@ -91,7 +94,11 @@ those up:
 
 ```bash
 # Quick orphan scan in changed files
-git diff HEAD --name-only | xargs -I {} sh -c 'echo "=== {} ==="; grep -nE "^(import|from|const |let |function |def )" {}'
+git diff HEAD --name-only -z | while IFS= read -r -d '' file; do
+  [ -f "$file" ] || continue
+  printf '%s\n' "$file"
+  grep -nE '^(import|from|const |let |function |def )' -- "$file" || :
+done
 ```
 
 - Imports your changes made unused: remove.

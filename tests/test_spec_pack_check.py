@@ -141,10 +141,16 @@ class GateTest(unittest.TestCase):
         write_manifest(self.d, rows)
         fails, _, _ = spc.check_pack(self.d)
         self.assertEqual(
-            fails, ["M1 manifest row 7 names a missing screen: screens/b-390.png"]
+            fails, ["M1 manifest row 7 names a missing screen: screens/b-390.png",
+                    "M1 manifest row 7 lacks artboard"]
         )
         (self.d / "screens").mkdir()
         (self.d / "screens/b-390.png").write_bytes(b"png")
+        (self.d / "screens/b.html").write_text("<h1>View</h1>")
+        rows[-1].update(artboard="screens/b.html",
+                        screen_sha256=sha(self.d / "screens/b-390.png"),
+                        artboard_sha256=sha(self.d / "screens/b.html"))
+        write_manifest(self.d, rows)
         self.assertEqual(spc.check_pack(self.d)[0], [])
 
     def test_row_with_neither_file_nor_screen_fails(self):
@@ -228,6 +234,40 @@ class GateTest(unittest.TestCase):
         )
         write_manifest(self.d, rows)
         self.assertEqual(spc.check_pack(self.d)[0], [])
+
+    def test_separate_navigation_statements_do_not_join(self):
+        fails, passes = [], []
+        spc.check_navigation("flowchart TB; HOME --> A; X --> B", ["B"], fails, passes)
+        self.assertTrue(any("not reachable" in x for x in fails))
+        self.assertNotIn("X", spc.nav_graph("HOME --> A; X --> B")["HOME"])
+        self.assertIn("C", spc.nav_graph('HOME["Semi; colon"] --> A --> C')["A"])
+
+    def test_relationship_requires_nonempty_valid_flowchart(self):
+        rows = self.build_example()
+        path = next(self.d.glob("*relationship*.mmd"))
+        for text in ("", "sequenceDiagram\n A->>B: hi\n", "flowchart TB\n", 'graphical nonsense\n A["Thing"]\n class A entity\n', 'flowchart TB\n A["Thing"]\n'):
+            with self.subTest(text=text):
+                path.write_text(text)
+                write_manifest(self.d, rows)
+                self.assertTrue(any(x.startswith("P4") for x in spc.check_pack(self.d)[0]))
+
+    def test_screen_and_artboard_versions_are_hashed(self):
+        rows = self.build_example()
+        for filename in ("view.png", "view.html"):
+            (self.d / filename).write_text("reviewed version")
+        row = {"screen": "view.png", "artboard": "view.html",
+               "screen_sha256": sha(self.d / "view.png"),
+               "artboard_sha256": sha(self.d / "view.html")}
+        rows.append(row)
+        write_manifest(self.d, rows)
+        self.assertEqual(spc.check_pack(self.d)[0], [])
+        for filename in ("view.png", "view.html"):
+            (self.d / filename).write_text("changed version")
+            self.assertTrue(any("sha256" in x for x in spc.check_pack(self.d)[0]))
+            (self.d / filename).write_text("reviewed version")
+        del row["artboard_sha256"]
+        write_manifest(self.d, rows)
+        self.assertTrue(any("sha256" in x for x in spc.check_pack(self.d)[0]))
 
     def test_summary_must_be_last_heading(self):
         self.build_example()

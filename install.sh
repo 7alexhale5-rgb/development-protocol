@@ -114,26 +114,29 @@ for d in "$here"/skills/*/; do
 done
 [[ ${#skills[@]} -gt 0 ]] || { echo "no skills found under $here/skills" >&2; exit 1; }
 
-# R3-4: a symlinked skills root (or skills/ itself symlinked in from $here)
-# would make $root/$s and $here/skills/$s the same file on disk -- installing
-# would then read from and write to the same tree at once. realpath, not the
-# string-prefix check above, is what actually catches that.
-same_path() {
-  python3 -c '
-import os, sys
-a, b = sys.argv[1], sys.argv[2]
-sys.exit(0 if os.path.exists(a) and os.path.exists(b) and os.path.realpath(a) == os.path.realpath(b) else 1)
-' "$1" "$2"
-}
-
+# Resolve symlinked roots before ownership and containment checks. Two hosts
+# may share the same directory; process that physical directory only once.
+canonical_roots=()
+for root in "${roots[@]}"; do
+  resolved="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$root")"
+  duplicate=0
+  if [[ ${#canonical_roots[@]} -gt 0 ]]; then
+    for known in "${canonical_roots[@]}"; do
+      [[ "$resolved" == "$known" ]] && duplicate=1
+    done
+  fi
+  [[ $duplicate -eq 1 ]] || canonical_roots+=("$resolved")
+done
+roots=("${canonical_roots[@]}")
 for root in "${roots[@]}"; do
   for s in "${skills[@]}"; do
-    case "$here/" in "$root/$s"/*)
-      echo "refusing: this repo is inside $root/$s. Clone it somewhere else first." >&2
-      exit 1 ;;
-    esac
-    if same_path "$root/$s" "$here/skills/$s"; then
-      echo "refusing: $root/$s and $here/skills/$s are the same path on disk (a symlinked skills root?). Clone this repo somewhere else first." >&2
+    if python3 -c '
+import os, sys
+dest, repo, source = map(os.path.realpath, sys.argv[1:])
+unsafe = any(os.path.commonpath([dest, p]) == dest for p in (repo, source))
+sys.exit(0 if unsafe else 1)
+' "$root/$s" "$here" "$here/skills/$s"; then
+      echo "refusing: destination contains this repo or its source on disk. Clone elsewhere first." >&2
       exit 1
     fi
   done

@@ -3,7 +3,7 @@
 # repo and point DEVPROTO_PRIVATE_PATTERNS at it; the scan then applies both lists.
 /Users/[^/\s]+
 /home/[a-z][a-z0-9_-]*/
-C:\\\\Users\\\\
+C:\\Users\\
 ~/Projects/
 ~/\.claude/(scripts|references|rules|projects|logs|hooks|sweeps)/
 ~/\.codex/

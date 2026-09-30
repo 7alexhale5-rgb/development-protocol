@@ -73,5 +73,20 @@ class RunBashTest(unittest.TestCase):
         self.assertIsInstance(err, str)
 
 
+
+class RunVerifierTest(unittest.TestCase):
+    def test_pipeline_failure_propagates(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            code, _ = _shared.run_verifier("false | tee check.log", Path(folder), 5)
+        self.assertNotEqual(code, 0)
+
+    def test_missing_bash_fails_cleanly(self):
+        from unittest.mock import patch
+        with patch.object(_shared.shutil, "which", return_value=None):
+            code, output = _shared.run_verifier("true", ROOT, 5)
+        self.assertEqual(code, 127)
+        self.assertIn("bash", output)
+
 if __name__ == "__main__":
     unittest.main()

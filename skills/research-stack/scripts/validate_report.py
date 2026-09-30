@@ -55,7 +55,7 @@ SECTIONS = [
     (("Coverage gaps", "Gaps"), 1),
 ]
 
-URL_RE = re.compile(r"https?://[^\s)\]>\"'`]+")
+URL_RE = re.compile(r"https?://(?:\[[^\]\s]+\]|[^\s)\]>\"'`/]+)[^\s)\]>\"'`]*")
 BRACKET_RE = re.compile(r"\[([^\[\]\n]{1,120})\]")
 TOKEN_SPLIT_RE = re.compile(r"\s*(?:\+|,|;)\s*|\s+")
 
@@ -72,8 +72,7 @@ TIER_SCORES = {
     "unknown": 4,
 }
 
-# Substring patterns matched against "domain" and "domain/path". First match wins,
-# so keep specific patterns above broad ones.
+# Hostname rules. Exact domains and their subdomains only; paths never grant trust.
 DOMAIN_MAP = [
     ("arxiv.org", "academic"),
     ("ieee.org", "academic"),
@@ -82,30 +81,24 @@ DOMAIN_MAP = [
     ("science.org", "academic"),
     ("semanticscholar.org", "academic"),
     ("doi.org", "academic"),
-    ("scholar.google", "academic"),
+    ("scholar.google.com", "academic"),
     ("rfc-editor.org", "technical"),
     ("ietf.org", "technical"),
     ("w3.org", "technical"),
     ("github.com", "technical"),
     ("huggingface.co", "technical"),
     ("modelcontextprotocol.io", "technical"),
-    ("docs.", "official"),
-    ("documentation.", "official"),
-    ("developer.", "official"),
-    ("developers.", "official"),
+    ("docs.python.org", "official"),
     ("learn.microsoft.com", "official"),
     ("cloud.google.com", "official"),
     ("aws.amazon.com", "official"),
     # Vendor engineering blogs are primary sources for their own product
     # status and pricing: the only place a release date or a fee is announced.
-    ("engineering.", "quality_blog"),
-    ("eng.", "quality_blog"),
     ("blog.cloudflare.com", "quality_blog"),
     ("blog.google", "quality_blog"),
     ("simonwillison.net", "quality_blog"),
     ("medium.com", "blog"),
     ("dev.to", "blog"),
-    ("hashnode.", "blog"),
     ("substack.com", "blog"),
     ("techcrunch.com", "news"),
     ("theverge.com", "news"),
@@ -115,7 +108,6 @@ DOMAIN_MAP = [
     ("reddit.com", "community"),
     ("news.ycombinator.com", "community"),
     ("hn.algolia.com", "community"),
-    ("discourse.", "community"),
     ("wikipedia.org", "wiki"),
     ("twitter.com", "social"),
     ("x.com", "social"),
@@ -172,7 +164,7 @@ def check_structure(text):
         issues.append(f"WARN: only {words} words, possibly incomplete")
         score -= 2
     score = max(0, score)
-    status = "PASS" if score >= 7 else ("WARN" if score >= 4 else "FAIL")
+    status = "FAIL" if present != len(SECTIONS) or not tags else ("PASS" if score >= 7 else ("WARN" if score >= 4 else "FAIL"))
     lines = [
         f"Structure: {status} ({score}/10)",
         f"  Sections: {present}/{len(SECTIONS)}",
@@ -183,17 +175,17 @@ def check_structure(text):
 
 
 def classify_url(url):
-    parsed = urlparse(url)
-    domain = parsed.netloc.lower()
-    if domain.startswith("www."):
-        domain = domain[4:]
-    full = domain + parsed.path.lower()
+    try:
+        parsed = urlparse(url)
+        domain = (parsed.hostname or "").lower().rstrip(".")
+    except ValueError:
+        return "unknown"
     for pattern, tier in DOMAIN_MAP:
-        if pattern in domain or pattern in full:
+        if domain == pattern or domain.endswith("." + pattern):
             return tier
     if domain.endswith(".edu"):
         return "academic"
-    if domain.endswith(".gov") or ".gov." in domain:
+    if domain.endswith(".gov"):
         return "official"
     return "unknown"
 
@@ -271,7 +263,8 @@ def _validate_and_pin(host):
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
         if (
-            ip.is_loopback
+            not ip.is_global
+            or ip.is_loopback
             or ip.is_private
             or ip.is_link_local
             or ip.is_reserved
@@ -283,6 +276,8 @@ def _validate_and_pin(host):
             )
         if safe_ip is None:
             safe_ip = str(ip)
+    if safe_ip is None:
+        raise ValueError(f"no addresses for {host}")
     _PINNED_ADDRS[_normalize_host(host)] = safe_ip
     return safe_ip
 
@@ -348,7 +343,7 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-_SAFE_OPENER = urllib.request.build_opener(_SafeRedirectHandler)
+_SAFE_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SafeRedirectHandler)
 
 
 def _default_fetch(url, method, timeout):
