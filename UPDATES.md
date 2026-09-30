@@ -1,6 +1,18 @@
 # Update log
 
-Every re-port and source change, newest first.
+Every re-port, source baseline, and public maintenance change, newest first.
+
+## 2026-09-29T21:01:33-05:00
+
+Public maintenance release 2.0.1 fixes confirmed release-review findings. These are changes to
+the portable package, not a re-port from private sources. The source fingerprint lock remains
+unchanged so future drift checks do not hide upstream differences.
+
+- Runtime proof: development-protocol and pathway.
+- Safety and recovery: installer, uninstaller, health check, and scanner.
+- Validation: audit-setup, research-stack, design-stack, and workflow instructions.
+- Reporting: compound metric definitions and local-day grouping.
+
 
 ## 2026-09-29T20:07:41-05:00
 
