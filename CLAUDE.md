@@ -13,7 +13,7 @@ order and will not call a row done without an evidence file and a green verifier
 | Add, edit, or sanitize one of the 19 skills        | `skills/`    | [skills/CONTEXT.md](skills/CONTEXT.md)       | `/build-stack`   |
 | Update install/setup/workflow/troubleshooting docs | `docs/`      | [docs/CONTEXT.md](docs/CONTEXT.md)           | none             |
 | Run or add a test (unit, sanitization, install)    | `tests/`     | [tests/CONTEXT.md](tests/CONTEXT.md)         | none             |
-| Pick up a Codex handoff or in-flight state         | `.planning/` | `.planning/CONTEXT.md` (local only: gitignored) | `/handoff-codex` |
+| Pick up a Codex handoff or in-flight state         | `.planning/` | [.planning/CONTEXT.md](.planning/CONTEXT.md) | `/handoff-codex` |
 
 Root files stay where their tools expect them: `install.sh` / `uninstall.sh` / `health-check.sh`
 (README-documented entry points), `.claude-plugin/marketplace.json` + `plugin.json` (Claude Code
