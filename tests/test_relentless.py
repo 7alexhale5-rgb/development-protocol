@@ -225,3 +225,97 @@ class Store(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewFixTests(unittest.TestCase):
+    setUp = Store.setUp
+    tearDown = Store.tearDown
+    sweep = Store.sweep
+    init = Store.init
+
+    def test_failed_and_partial_read_requests_do_not_establish_full_coverage(self):
+        from unittest.mock import patch
+        transcripts = self.other / 'transcripts/proj'; transcripts.mkdir(parents=True)
+        target = self.repo / 'a.py'; target.write_text('one\ntwo\nthree\n')
+        transcript = transcripts / 's1.jsonl'
+        def write(request, result=None):
+            records = [{'message': {'content': [request]}}]
+            if result is not None:
+                records.append({'message': {'content': [result]}})
+            transcript.write_text('\n'.join(json.dumps(r) for r in records))
+        request = {'type': 'tool_use', 'id': 'r1', 'name': 'Read', 'input': {'file_path': str(target)}}
+        with patch.dict(os.environ, {'SWEEP_TRANSCRIPTS': str(transcripts.parent)}):
+            write(request)
+            self.assertNotIn(str(target), sweep.session_reads('s1')[1])
+            write(request, {'type': 'tool_result', 'tool_use_id': 'r1', 'is_error': True, 'content': 'denied'})
+            self.assertNotIn(str(target), sweep.session_reads('s1')[1])
+            write(request, {'type': 'tool_result', 'tool_use_id': 'r1', 'content': '1→one\n'})
+            self.assertNotIn(str(target), sweep.session_reads('s1')[1])
+            write(request, {'type': 'tool_result', 'tool_use_id': 'r1', 'content': '1→one\n2→two\n3→three\n'})
+            self.assertIn(str(target), sweep.session_reads('s1')[1])
+
+    def test_init_rechecks_existence_after_lock_acquisition(self):
+        from unittest.mock import patch
+        path = self.other / 'store/demo/ledger.json'
+        @contextlib.contextmanager
+        def concurrent_init(*args, **kwargs):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{"winner": true}')
+            yield
+        with patch.dict(os.environ, {'SWEEP_HOME': str(path.parents[1])}), patch.object(sweep, 'ledger_lock', concurrent_init):
+            with self.assertRaises(SystemExit):
+                quiet(sweep.main, ['init', '--slug', 'demo', '--goal', 'g', '--done', 'd', '--project', str(self.repo)])
+        self.assertEqual(json.loads(path.read_text()), {'winner': True})
+
+    def test_revive_preserves_history_and_allows_normal_close(self):
+        self.init()
+        self.sweep('add', 'one', 'two', 'three', 'four')
+        self.sweep('defer', 'three', 'four', '--why', 'later')
+        self.sweep('visit', 'one', 'two', 'three', 'four', '--depth', '2', '--evidence', 'done')
+        self.assertNotEqual(self.sweep('close').returncode, 0)
+        result = self.sweep('revive', 'three', 'four', '--why', 'now completed')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads((self.repo / '.sweeps/demo/ledger.json').read_text())
+        self.assertEqual(data['deferred'], [])
+        self.assertTrue(any(row['event'] == 'revive' for row in data['log']))
+        self.assertEqual(self.sweep('close').returncode, 0)
+
+    def test_hook_rechecks_owner_and_open_status_under_lock(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('relentless_stop_test', HOOK)
+        hook = importlib.util.module_from_spec(spec); spec.loader.exec_module(hook)
+        self.init()
+        path = self.repo / '.sweeps/demo/ledger.json'
+        for event in ('Stop', 'StopFailure'):
+            for changed in ({'session_id': 'new-owner'}, {'status': 'checkpointed'}):
+                data = json.loads(path.read_text()); data.update(status='open', session_id='s1'); path.write_text(json.dumps(data))
+                def selected(session):
+                    data.update(changed); path.write_text(json.dumps(data))
+                    return [path]
+                payload = json.dumps({'session_id': 's1', 'hook_event_name': event, 'cwd': str(self.repo)})
+                with patch.object(sweep, 'open_ledgers_for', selected), patch.object(sys, 'stdin', io.StringIO(payload)):
+                    result = quiet(hook.main)
+                self.assertEqual(result, 0)
+                self.assertEqual(json.loads(path.read_text()), data)
+
+
+    def test_partial_reads_combine_and_failed_results_cannot_close(self):
+        self.init()
+        target = self.repo / 'readme.txt'; target.write_text('first\nsecond\n')
+        self.sweep('add', 'readme.txt')
+        self.sweep('visit', 'readme.txt', '--depth', '2', '--evidence', 'read all')
+        root = self.other / 'transcripts/proj'; root.mkdir(parents=True)
+        transcript = root / 's1.jsonl'
+        records = []
+        for ident, text in [('r1', '1→first\n'), ('r2', '2→second\n')]:
+            records.append({'message': {'content': [{'type': 'tool_use', 'id': ident, 'name': 'Read',
+                                                     'input': {'file_path': str(target), 'limit': 1}}]}})
+            records.append({'message': {'content': [{'type': 'tool_result', 'tool_use_id': ident,
+                                                     'is_error': ident == 'r2', 'content': text}]}})
+        transcript.write_text('\n'.join(json.dumps(row) for row in records))
+        environment = {'SWEEP_TRANSCRIPTS': str(root.parent)}
+        self.assertEqual(self.sweep('close', **environment).returncode, 1)
+        records[-1]['message']['content'][0]['is_error'] = False
+        transcript.write_text('\n'.join(json.dumps(row) for row in records))
+        self.assertEqual(self.sweep('close', **environment).returncode, 0)

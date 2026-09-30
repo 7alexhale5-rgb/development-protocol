@@ -466,37 +466,67 @@ def transcripts_root() -> Path:
     )
 
 
-def session_reads(session: str) -> tuple[bool, set[str], list[str]]:
-    """(transcript found, Read paths, Bash commands) for a session and its subagents.
-    Claude Code keeps transcripts under <home>/.claude/projects; other agents are
-    unauditable unless SWEEP_TRANSCRIPTS points at transcripts in the same format."""
+def _result_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(c.get("text", "") for c in content if isinstance(c, dict))
+    return ""
+
+
+def session_reads(session: str) -> tuple[bool, set[str], list[tuple[str, str]]]:
+    """Successful full-file reads only; combine numbered partial results by path.
+
+    Requests without matching results, failed results, and incomplete coverage
+    do not count. Bash evidence retains successful output for the caller to check.
+    """
     root = transcripts_root()
     files = list(root.glob(f"*/{session}.jsonl")) + list(
         root.glob(f"*/{session}/subagents/*.jsonl")
     )
-    reads: set[str] = set()
-    cmds: list[str] = []
-    for f in files:
+    reads, line_coverage, cmds = set(), {}, []
+    for file in files:
+        requests = {}
         try:
-            with f.open(errors="replace") as fh:
-                for line in fh:
-                    if '"tool_use"' not in line:
+            for line in file.read_text(errors="replace").splitlines():
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                content = (record.get("message") or {}).get("content") or []
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict):
                         continue
+                    if block.get("type") == "tool_use" and block.get("id"):
+                        requests[block["id"]] = block
+                        continue
+                    if block.get("type") != "tool_result" or block.get("is_error"):
+                        continue
+                    request = requests.get(block.get("tool_use_id"))
+                    if not request:
+                        continue
+                    inp = request.get("input") or {}
+                    output = _result_text(block.get("content"))
+                    if request.get("name") == "Bash" and inp.get("command"):
+                        cmds.append((inp["command"], output))
+                    if request.get("name") != "Read" or not inp.get("file_path"):
+                        continue
+                    path = os.path.realpath(inp["file_path"])
                     try:
-                        rec = json.loads(line)
-                    except ValueError:
+                        body = Path(path).read_text()
+                    except (OSError, UnicodeError):
                         continue
-                    content = (rec.get("message") or {}).get("content") or []
-                    if not isinstance(content, list):
-                        continue
-                    for c in content:
-                        if not isinstance(c, dict) or c.get("type") != "tool_use":
-                            continue
-                        inp = c.get("input") or {}
-                        if c.get("name") == "Read" and inp.get("file_path"):
-                            reads.add(os.path.realpath(inp["file_path"]))
-                        elif c.get("name") == "Bash" and inp.get("command"):
-                            cmds.append(inp["command"])
+                    count = len(body.splitlines())
+                    numbered = {int(m.group(1)) for m in re.finditer(
+                        r"^\s*(\d+)(?:→|\t)", output, re.M)}
+                    if numbered:
+                        line_coverage.setdefault(path, set()).update(numbered)
+                        if set(range(1, count + 1)) <= line_coverage[path]:
+                            reads.add(path)
+                    elif output == body and (count or not inp.get("offset")):
+                        reads.add(path)
         except OSError:
             continue
     return bool(files), reads, cmds
@@ -516,7 +546,7 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
     transcript on disk. Those are counted and shown, never passed silently."""
     project = Path(data.get("project") or ".")
     deferred = {d["id"] for d in data.get("deferred", [])}
-    cache: dict[str, tuple[bool, set[str], list[str]]] = {}
+    cache: dict[str, tuple[bool, set[str], list[tuple[str, str]]]] = {}
     unverified: list[str] = []
     unauditable = 0
     for it in data.get("universe", []):
@@ -536,10 +566,15 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
         real = os.path.realpath(str(p))
         if real in reads:
             continue
-        if any(
-            READ_VERBS.search(c)
-            and any(_named_in(c, x) for x in (real, str(p), it["id"]))
-            for c in cmds
+        try:
+            body = p.read_text()
+        except (OSError, UnicodeError):
+            body = ""
+        if body and any(
+            READ_VERBS.search(command)
+            and any(_named_in(command, x) for x in (real, str(p), it["id"]))
+            and body in output
+            for command, output in cmds
         ):
             continue
         unverified.append(it["id"])
@@ -762,12 +797,6 @@ def cmd_init(args) -> int:
             1,
         )
     path = ledger_path(args.slug)
-    if path.exists():
-        die(
-            f"a sweep named '{args.slug}' already exists at {path}. Resume it, or "
-            "pick another slug (prefix it with the project, e.g. billing-auth-audit).",
-            1,
-        )
     data = {
         "slug": args.slug,
         "goal": args.goal,
@@ -787,6 +816,12 @@ def cmd_init(args) -> int:
     }
     log(data, "init", args.goal, session=data["session_id"])
     with ledger_lock(path):
+        if path.exists():
+            die(
+                f"a sweep named '{args.slug}' already exists at {path}. Resume it, or "
+                "pick another slug (prefix it with the project, e.g. billing-auth-audit).",
+                1,
+            )
         save(path, data)
     print(f"sweep '{args.slug}' opened at {path}")
     print(f"  done when: {args.done}")
@@ -968,6 +1003,28 @@ def cmd_defer(args) -> int:
 
     data, n = mutate(path, apply)
     print(f"{n} item(s) deferred: {args.why}")
+    print(headline(tally(data)))
+    return 0
+
+
+def cmd_revive(args) -> int:
+    """Explicitly remove obsolete deferrals while retaining their full history."""
+    if not args.why.strip():
+        die("revive needs a written --why", 1)
+    path = resolve(args)
+
+    def apply(data):
+        requested = set(args.ids)
+        previous = [row for row in data["deferred"] if row["id"] in requested]
+        if requested != {row["id"] for row in previous}:
+            die("revive only accepts currently deferred item ids", 1)
+        data["deferred"] = [row for row in data["deferred"] if row["id"] not in requested]
+        log(data, "revive", args.why, ids=sorted(requested), prior_deferrals=previous,
+            session=current_session())
+        return len(previous)
+
+    data, count = mutate(path, apply)
+    print(f"{count} item(s) revived: {args.why}")
     print(headline(tally(data)))
     return 0
 
@@ -1189,15 +1246,24 @@ def selftest() -> int:
         f.parent.mkdir(parents=True, exist_ok=True)
         with f.open("a") as fh:
             for p in reads:
+                tool_id = f"read-{p}"
                 block = {
+                    "id": tool_id,
                     "type": "tool_use",
                     "name": "Read",
                     "input": {"file_path": str(p)},
                 }
                 fh.write(json.dumps({"message": {"content": [block]}}) + "\n")
+                result = {"type": "tool_result", "tool_use_id": tool_id, "content": p.read_text()}
+                fh.write(json.dumps({"message": {"content": [result]}}) + "\n")
             for c in bash:
-                block = {"type": "tool_use", "name": "Bash", "input": {"command": c}}
+                tool_id = f"bash-{c}"
+                block = {"type": "tool_use", "id": tool_id, "name": "Bash", "input": {"command": c}}
                 fh.write(json.dumps({"message": {"content": [block]}}) + "\n")
+                code, output, error = run_bash(c)
+                result = {"type": "tool_result", "tool_use_id": tool_id,
+                          "is_error": code != 0, "content": output + error}
+                fh.write(json.dumps({"message": {"content": [result]}}) + "\n")
 
     try:
 
@@ -1574,6 +1640,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slug")
     p.add_argument("--why", required=True)
     p.set_defaults(fn=cmd_defer)
+
+    p = add("revive", help="remove an obsolete deferral and preserve its history")
+    p.add_argument("ids", nargs="+")
+    p.add_argument("--slug")
+    p.add_argument("--why", required=True)
+    p.set_defaults(fn=cmd_revive)
 
     p = add("status", help="coverage arithmetic")
     p.add_argument("--slug")
