@@ -325,22 +325,31 @@ def _stable(path: Path, sha: str, stat) -> tuple[bool, list | None]:
 
 
 def git_identity(project: Path) -> dict | None:
-    """Bind release receipts to HEAD and branch; folders without Git stay usable."""
+    """None means a confirmed ordinary folder, never a failed Git lookup."""
+    has_git = any((parent / ".git").exists() for parent in (project.resolve(), *project.resolve().parents))
     if shutil.which("git") is None:
+        if has_git:
+            raise ValueError("Git identity unavailable: git is missing")
         return None
 
     def read(*args):
-        result = subprocess.run(
-            ["git", "-C", str(project), *args],
-            capture_output=True, text=True, timeout=10,
-        )
-        return result.stdout.strip() if result.returncode == 0 else None
-    if read("rev-parse", "--is-inside-work-tree") != "true":
-        return None
-    return {
-        "head": read("rev-parse", "--verify", "HEAD"),
-        "branch": read("symbolic-ref", "--quiet", "HEAD"),
-    }
+        try:
+            return subprocess.run(["git", "-C", str(project), *args],
+                                  capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ValueError("Git identity lookup failed") from exc
+    inside = read("rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0:
+        if not has_git and "not a git repository" in inside.stderr.lower():
+            return None
+        raise ValueError("Git identity lookup failed")
+    if inside.stdout.strip() != "true":
+        raise ValueError("Release proof requires a Git working tree")
+    head = read("rev-parse", "--verify", "HEAD")
+    branch = read("symbolic-ref", "--quiet", "HEAD")
+    if head.returncode != 0 or branch.returncode not in (0, 1):
+        raise ValueError("Git release identity cannot be established")
+    return {"head": head.stdout.strip(), "branch": branch.stdout.strip() or None}
 
 
 def refresh(project: Path, record: dict) -> bool:
@@ -381,6 +390,7 @@ def refresh(project: Path, record: dict) -> bool:
             step["instruments"][name] = {"sha256": sha, "stat": cur}
             changed = changed or not ok
         if changed or reopen:
+            step["revision"] = step.get("revision", 0) + 1
             step["status"] = "pending"
             step["reason"] = (
                 "Git HEAD or branch changed after it passed. Repeat this step."
@@ -448,8 +458,10 @@ def _commit(
     if {k: target.get(k) for k in RECORD_KEYS} != before:
         for later in record["steps"][target["sequence"] :]:
             if later["status"] == "passed":
+                later["revision"] = later.get("revision", 0) + 1
                 later["status"] = "pending"
                 later["reason"] = "An earlier step was re-recorded. Repeat this step."
+    target["revision"] = target.get("revision", 0) + 1
     record["updated_at"] = now()
     save(path, record)
 
@@ -489,6 +501,7 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
             )
         if not target["required"]:
             raise ValueError(f"{step_id} is already optional")
+        target["revision"] = target.get("revision", 0) + 1
         target["required"] = False
         record.setdefault("rule_notes", []).append(
             f"{step_id} made optional by set-optional: {reason.strip()}"
@@ -522,6 +535,7 @@ def step(
             save(path, record)
         target = _target(record, step_id)
         before = {k: target.get(k) for k in RECORD_KEYS}
+        before_revision = target.get("revision", 0)
         if result in {"na", "blocked"}:
             if result == "na" and target["required"]:
                 raise ValueError("n/a needs a conditional step; this row is required")
@@ -573,7 +587,7 @@ def step(
         record = load(path)
         refresh(project, record)
         target = _target(record, step_id)
-        if {k: target.get(k) for k in RECORD_KEYS} != before:
+        if target.get("revision", 0) != before_revision or {k: target.get(k) for k in RECORD_KEYS} != before:
             raise ValueError(
                 "this step was changed by someone else while the verifier ran; retry"
             )

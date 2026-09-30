@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from contextlib import redirect_stdout
 from pathlib import Path
 
@@ -152,6 +153,33 @@ class DevprotoTest(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertIn("Git HEAD or branch changed", out["error"])
         self.assertEqual(self.rows(out)["build"]["status"], "passed")
+
+    def test_missing_git_cannot_accept_legacy_release_receipt(self):
+        self.init_git()
+        self.start()
+        self.close_until('commit')
+        self.pass_step('commit')
+        path = devproto.store_path(self.project, 'w1')
+        record = devproto.load(path)
+        self.rows(record)['commit'].pop('git_identity')
+        devproto.save(path, record)
+        with patch.object(devproto.shutil, 'which', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'Git identity unavailable'):
+                devproto.status(self.project, 'w1')
+
+    def test_older_success_cannot_overwrite_identical_newer_failure(self):
+        self.start()
+        self.pass_step('pathway', 'false')
+        def older_verifier(*args):
+            with patch.object(devproto, 'run_verifier', return_value=(1, 'new failure')):
+                self.pass_step('pathway', 'false')
+            return 0, 'older success'
+        with patch.object(devproto, 'run_verifier', side_effect=older_verifier):
+            with self.assertRaisesRegex(ValueError, 'changed by someone else'):
+                self.pass_step('pathway', 'false')
+        row = self.rows(devproto.status(self.project, 'w1'))['pathway']
+        self.assertEqual(row['status'], 'blocked')
+        self.assertEqual(row['output_tail'], 'new failure')
 
     # ---- row rules -------------------------------------------------------
 
