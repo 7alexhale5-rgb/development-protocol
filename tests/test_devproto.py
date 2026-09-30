@@ -51,6 +51,108 @@ class DevprotoTest(unittest.TestCase):
                     self.project, "w1", s["step_id"], "na", reason="not needed"
                 )
 
+    def test_verifier_pipeline_failure_blocks(self):
+        self.start()
+        out = self.pass_step("pathway", "false | tee check.log")
+        self.assertFalse(out["ok"])
+        self.assertEqual(self.rows(out)["pathway"]["status"], "blocked")
+
+    def test_command_secret_is_not_stored_or_displayed(self):
+        self.start()
+        token = "fixture-token-123456789"
+        command = "printf '%s' 'Bearer " + token + "'"
+        out = self.pass_step("pathway", command)
+        self.assertTrue(out["ok"])
+        row = self.rows(out)["pathway"]
+        self.assertNotIn(token, json.dumps(out))
+        self.assertNotIn(token, devproto.store_path(self.project, "w1").read_text())
+        self.assertEqual(len(row["verify_command_sha256"]), 64)
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            devproto.print_human(devproto.status(self.project, "w1"))
+        self.assertNotIn(token, stream.getvalue())
+
+    def git(self, *args):
+        return subprocess.check_output(
+            ["git", "-C", str(self.project), *args], stderr=subprocess.DEVNULL,
+            text=True).strip()
+
+    def init_git(self):
+        self.git("init")
+        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
+                 "commit", "--allow-empty", "-m", "first")
+
+    def test_commit_proof_reopens_on_head_change_only_from_commit_onward(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        self.pass_step("commit")
+        self.pass_step("ship")
+        self.assertTrue(devproto.status(self.project, "w1", "ship")["ready"])
+        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
+                 "commit", "--allow-empty", "-m", "second")
+        out = devproto.status(self.project, "w1", "commit")
+        self.assertFalse(out["ready"])
+        rows = self.rows(out)
+        self.assertEqual(rows["commit"]["status"], "pending")
+        self.assertEqual(rows["ship"]["status"], "pending")
+        self.assertEqual(rows["build"]["status"], "passed")
+
+    def test_branch_switch_invalidates_commit_proof(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        self.pass_step("commit")
+        self.git("checkout", "-b", "other")
+        self.assertFalse(devproto.status(self.project, "w1", "commit")["ready"])
+
+    def test_first_commit_keeps_precommit_progress(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
+                 "commit", "--allow-empty", "-m", "work")
+        self.assertTrue(self.pass_step("commit")["ok"])
+        self.assertTrue(devproto.status(self.project, "w1", "commit")["ready"])
+
+    def test_legacy_command_and_output_are_scrubbed_on_status(self):
+        self.start()
+        self.pass_step("pathway")
+        path = devproto.store_path(self.project, "w1")
+        record = devproto.load(path)
+        row = record["steps"][0]
+        token = "fixture-legacy-token-123456"
+        row["verify_command"] = "printf 'Bearer " + token + "'"
+        row["output_tail"] = "Bearer " + token
+        row.pop("verify_command_sha256", None)
+        devproto.save(path, record)
+        out = devproto.status(self.project, "w1")
+        self.assertNotIn(token, json.dumps(out))
+        self.assertNotIn(token, path.read_text())
+        self.assertEqual(self.rows(out)["pathway"]["status"], "passed")
+
+    def test_legacy_git_release_receipt_requires_new_binding(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        self.pass_step("commit")
+        path = devproto.store_path(self.project, "w1")
+        record = devproto.load(path)
+        self.rows(record)["commit"].pop("git_identity")
+        devproto.save(path, record)
+        self.assertFalse(devproto.status(self.project, "w1", "commit")["ready"])
+
+    def test_head_change_during_commit_verifier_blocks(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        out = self.pass_step("commit", "git -c user.name=Fixture "
+                             "-c user.email=fixture@example.test "
+                             "commit --allow-empty -m changed")
+        self.assertFalse(out["ok"])
+        self.assertIn("Git HEAD or branch changed", out["error"])
+        self.assertEqual(self.rows(out)["build"]["status"], "passed")
+
     # ---- row rules -------------------------------------------------------
 
     def test_seventeen_rows_map_to_bundled_skills(self):

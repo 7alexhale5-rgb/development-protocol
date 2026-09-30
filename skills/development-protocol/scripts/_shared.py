@@ -68,10 +68,12 @@ def run_verifier(cmd: str, project: Path, timeout: int) -> tuple[int, str]:
     output open cannot hang the run. When the command ends, times out, or is
     interrupted, its whole process group is killed so nothing keeps running.
     """
+    bash = shutil.which("bash")
+    if bash is None:
+        return 127, "bash not found on PATH"
     with tempfile.TemporaryFile() as out:
         proc = subprocess.Popen(
-            cmd,
-            shell=True,
+            [bash, "-o", "pipefail", "-c", cmd],
             cwd=str(project),
             stdin=subprocess.DEVNULL,
             stdout=out,
@@ -150,6 +152,11 @@ REDACT_PATTERNS = [
         r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"
     ),
 ]
+
+
+def command_digest(cmd: str) -> str:
+    """Identify an original command without storing its plaintext credentials."""
+    return hashlib.sha256(cmd.encode("utf-8")).hexdigest()
 
 
 def redact(text: str) -> str:

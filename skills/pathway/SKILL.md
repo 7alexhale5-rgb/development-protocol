@@ -16,6 +16,9 @@ Two tools, both Python 3.9+ standard library, called by full path:
 - `DEVPROTO` means `python3 <development-protocol skill folder>/scripts/devproto.py`. It keeps the
   step checklist in `<project>/.devproto/<work-id>.json`.
 
+Use environment-variable references in verifier commands instead of inline credentials. Stored
+commands and output are redacted; only their digest retains the original command identity.
+
 Both use the **same work id**. The itinerary says which kinds of engineering work this outcome
 owes. The checklist says which steps of the proof loop are done. Every call below takes
 `--project <folder>`; add `--json` when you need to read fields.
@@ -28,13 +31,16 @@ the answer:
 
 ```text
 PATHWAY --project <repo> start --goal "<goal>" --id <work-id>   # only if <work-id> has no outcome yet
-PATHWAY --project <repo> next --id <work-id> > .devproto/evidence/pathway.md
+mkdir -p .devproto/evidence
+PATHWAY --project <repo> scope --id <work-id> > .devproto/evidence/pathway-scope.json
 DEVPROTO --project <repo> step --id <work-id> --step pathway --result pass \
-  --evidence .devproto/evidence/pathway.md --verify "grep -q '^Next:' .devproto/evidence/pathway.md"
+  --evidence .devproto/evidence/pathway-scope.json --verify "python3 -m json.tool .devproto/evidence/pathway-scope.json >/dev/null"
 ```
 
-The verifier only reads the file. Re-record the row whenever the itinerary changes shape (a
-pathway added, or one marked n/a).
+The scope output contains only the goal, tier, required pathways and n/a reasons. Proof progress
+and next recommendations stay in the separate `next` report. Re-record this row only at intake
+or when that scope changes. An ordinary LOG or ASK must not replace its evidence with a
+changing progress report.
 
 ## Parse the arguments
 
@@ -181,7 +187,8 @@ What goes in the block, by situation:
    - **The skill to run**: `card.skill`.
    - **Where the evidence came from**: the itinerary file and, if present, the checklist file. If
      the project has no outcome yet, say so plainly; the one good move is to start it.
-3. Record the `pathway` checklist row (above) if the outcome has a checklist.
+3. Record the `pathway` row only if it is missing or its stable scope has changed.
+   Routine progress does not require re-recording intake evidence.
 4. End with the hand-off block: `/pathway <project> go` when work is tracked, or
    `/pathway <project> <your goal>` when it is not. That single line is the user's whole next
    action. Do not also list the LOG or CLOSE syntax; `go` and the next hand-off block carry it.

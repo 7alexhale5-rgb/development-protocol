@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import digest, now, redact, run_verifier  # noqa: E402
+from _shared import command_digest, digest, now, redact, run_verifier  # noqa: E402
 from _shared import locked as _store_locked  # noqa: E402
 
 # (row id, skill that satisfies it, what the row proves)
@@ -96,7 +96,11 @@ STEPS = [
 ]
 STEP_IDS = [s[0] for s in STEPS]
 TERMINAL = {"passed", "not-applicable"}
-RECORD_KEYS = ("status", "evidence_sha256", "instruments", "verify_command")
+RECORD_KEYS = (
+    "status", "evidence_sha256", "instruments", "verify_command",
+    "verify_command_sha256", "git_identity",
+)
+RELEASE_STEPS = set(STEP_IDS[STEP_IDS.index("commit"):])
 CONDITIONAL = {"brainstorm", "research", "visual-spec", "design"}
 OPTIONAL_WHEN_TRIVIAL = {
     "spec",
@@ -234,6 +238,8 @@ def new_row(i: int, sid: str, skill: str, purpose: str, required: bool) -> dict:
         "evidence_stat": None,
         "instruments": {},
         "verify_command": "",
+        "verify_command_sha256": "",
+        "git_identity": None,
         "verifier_exit": None,
         "output_tail": "",
         "verified_at": "",
@@ -252,6 +258,8 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
     with locked(path):
         if path.exists():
             record = load(path)
+            if refresh(project, record):
+                save(path, record)
             if record["goal"] != goal:
                 raise ValueError("that work id already exists with a different goal")
             stored = {s["step_id"] for s in record["steps"] if s["required"]}
@@ -315,10 +323,44 @@ def _stable(path: Path, sha: str, stat) -> tuple[bool, list | None]:
     return digest(path) == sha, cur
 
 
+
+def git_identity(project: Path) -> dict | None:
+    """Bind release receipts to HEAD and branch; folders without Git stay usable."""
+    if shutil.which("git") is None:
+        return None
+
+    def read(*args):
+        result = subprocess.run(
+            ["git", "-C", str(project), *args],
+            capture_output=True, text=True, timeout=10,
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+    if read("rev-parse", "--is-inside-work-tree") != "true":
+        return None
+    return {
+        "head": read("rev-parse", "--verify", "HEAD"),
+        "branch": read("symbolic-ref", "--quiet", "HEAD"),
+    }
+
+
 def refresh(project: Path, record: dict) -> bool:
     """Reopen a passed step, and every later passed step, when its inputs changed."""
     changed_any, reopen = False, False
+    identity = git_identity(project) if any(
+        s["status"] == "passed" and s["step_id"] in RELEASE_STEPS
+        for s in record["steps"]
+    ) else None
     for step in record["steps"]:
+        # Scrub old receipts on read, too; status must not expose old credentials.
+        command = step.get("verify_command", "")
+        if command and not step.get("verify_command_sha256"):
+            step["verify_command_sha256"] = command_digest(command)
+            changed_any = True
+        for key in ("verify_command", "output_tail"):
+            original = step.get(key, "")
+            if redact(original) != original:
+                step[key] = redact(original)
+                changed_any = True
         if step["status"] != "passed":
             continue
         ev_ok, ev_stat = _stable(
@@ -327,7 +369,11 @@ def refresh(project: Path, record: dict) -> bool:
             step.get("evidence_stat"),
         )
         step["evidence_stat"] = ev_stat
-        changed = not ev_ok
+        identity_changed = (
+            step["step_id"] in RELEASE_STEPS
+            and step.get("git_identity") != identity
+        )
+        changed = not ev_ok or identity_changed
         for name, meta in step["instruments"].items():
             sha = meta["sha256"] if isinstance(meta, dict) else meta
             stat = meta.get("stat") if isinstance(meta, dict) else None
@@ -337,6 +383,8 @@ def refresh(project: Path, record: dict) -> bool:
         if changed or reopen:
             step["status"] = "pending"
             step["reason"] = (
+                "Git HEAD or branch changed after it passed. Repeat this step."
+                if identity_changed else
                 "Evidence or instrument changed after it passed. Repeat this step."
             )
             reopen = changed_any = True
@@ -397,7 +445,7 @@ def _target(record: dict, step_id: str) -> dict:
 def _commit(
     project: Path, path: Path, record: dict, target: dict, before: dict
 ) -> None:
-    if {k: target[k] for k in RECORD_KEYS} != before:
+    if {k: target.get(k) for k in RECORD_KEYS} != before:
         for later in record["steps"][target["sequence"] :]:
             if later["status"] == "passed":
                 later["status"] = "pending"
@@ -473,7 +521,7 @@ def step(
         if refresh(project, record):
             save(path, record)
         target = _target(record, step_id)
-        before = {k: target[k] for k in RECORD_KEYS}
+        before = {k: target.get(k) for k in RECORD_KEYS}
         if result in {"na", "blocked"}:
             if result == "na" and target["required"]:
                 raise ValueError("n/a needs a conditional step; this row is required")
@@ -515,6 +563,7 @@ def step(
                 )
             deps[portable(project, q)] = digest(q)
         sha = digest(ev)
+        identity = git_identity(project) if step_id in RELEASE_STEPS else None
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     code, output = run_verifier(verify_cmd, project, timeout)
@@ -524,7 +573,7 @@ def step(
         record = load(path)
         refresh(project, record)
         target = _target(record, step_id)
-        if {k: target[k] for k in RECORD_KEYS} != before:
+        if {k: target.get(k) for k in RECORD_KEYS} != before:
             raise ValueError(
                 "this step was changed by someone else while the verifier ran; retry"
             )
@@ -532,11 +581,16 @@ def step(
         stable = sha == digest(ev) and all(
             digest(resolve(project, q)) == h for q, h in deps.items()
         )
-        passed = code == 0 and stable and not earlier
+        identity_stable = (
+            step_id not in RELEASE_STEPS or identity == git_identity(project)
+        )
+        passed = code == 0 and stable and identity_stable and not earlier
         if earlier:
             why = "An earlier step reopened while the verifier ran: " + ", ".join(
                 earlier
             )
+        elif not identity_stable:
+            why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
         elif not stable:
             why = (
                 "The verifier changed the evidence or an instrument file. "
@@ -558,7 +612,9 @@ def step(
                 }
                 for name, h in deps.items()
             },
-            verify_command=verify_cmd,
+            verify_command=redact(verify_cmd),
+            verify_command_sha256=command_digest(verify_cmd),
+            git_identity=identity,
             verifier_exit=code,
             output_tail=redact(output)[-2000:],
             verified_at=now(),

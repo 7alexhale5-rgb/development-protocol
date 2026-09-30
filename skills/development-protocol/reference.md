@@ -93,3 +93,19 @@ recovery path.
 `--no-verify`, skipped tests, missing CI, and unavailable third-party smoke tests are exceptions.
 Write down the reason, scope, owner and next proof in the handoff. An exception lowers
 confidence. It does not create a pass.
+
+
+## Verifier commands and commit receipts
+
+Verifiers run with Bash pipeline failure checks: `false | tee check.log` fails.
+Timeouts still stop the full verifier process group. Bash must be on PATH.
+The stored command is redacted and paired with a SHA-256 digest of the original.
+Use environment-variable references for credentials instead of inline secret values;
+redaction is a safeguard, not a way to store secrets. Existing command and output
+fields are scrubbed when their checklist is refreshed; older Git history is unchanged.
+
+The commit row and later release rows bind their proof to Git HEAD and branch.
+Status and check reopen those rows after either changes. Earlier plan and build
+rows remain valid unless their evidence or instruments change. Record commit proof
+after committing, with a verifier that only reads the commit. Old Git release
+receipts without this binding must be verified again. Non-Git folders remain usable.

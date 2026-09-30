@@ -36,7 +36,7 @@ if not (_SHARED_DIR / "_shared.py").is_file():
         f"(expected {_SHARED_DIR / '_shared.py'}); reinstall the development-protocol-skill stack."
     )
 sys.path.insert(0, str(_SHARED_DIR))
-from _shared import digest, locked, now, redact  # noqa: E402
+from _shared import command_digest, digest, locked, now, redact  # noqa: E402
 from _shared import run_verifier as _run_verifier  # noqa: E402
 
 # Catalog order is foundation first: the router recommends the first open one.
@@ -240,6 +240,8 @@ def blank() -> dict:
         "evidence": "",
         "sha256": "",
         "verify": "",
+        "verify_sha256": "",
+        "revision": 0,
         "exit": None,
         "verified_at": "",
         "reason": "",
@@ -254,13 +256,13 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
     if tier not in TIERS:
         raise ValueError(f"tier must be one of: {', '.join(TIERS)}")
     with _store_lock(project):
-        for it in items(project):  # a dated default id must not open a second outcome
+        for it in _live_items_locked(project):  # reuse even when stale proof reopens work
             if (
                 it["goal"] == goal
                 and not it.get("closed")
                 and (not work_id or it["work_id"] == work_id)
             ):
-                out = report(project, it["work_id"])
+                out = _report_locked(project, it["work_id"])
                 out["note"] = (
                     "an open outcome with this goal already exists; reusing it"
                 )
@@ -279,7 +281,7 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
             "log": [],
         }
         save(project, item)
-        return report(project, work_id)
+        return _report_locked(project, work_id)
 
 
 def cover(
@@ -300,7 +302,8 @@ def cover(
             if not reason.strip():
                 raise ValueError("--na needs a written --reason")
             ways.setdefault(pathway, blank()).update(
-                status="na", reason=reason.strip(), stale=False, verified_at=now()
+                status="na", reason=reason.strip(), stale=False, verified_at=now(),
+                revision=ways.get(pathway, {}).get("revision", 0) + 1
             )
             item["pathways"] = {p: ways[p] for p in CATALOG if p in ways}
         item["log"].append(
@@ -311,8 +314,9 @@ def cover(
                 "reason": reason.strip(),
             }
         )
+        _reopen_if_incomplete(item)
         save(project, item)
-        return report(project, work_id)
+        return _report_locked(project, work_id)
 
 
 def log(
@@ -337,6 +341,7 @@ def log(
                 "log needs --evidence (an existing regular file) and --verify"
             )
         sha = digest(ev)
+        prior = json.dumps(item["pathways"][pathway], sort_keys=True)
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     # Reuses devproto's verifier runner: temp-file output (no pipe a background
@@ -350,6 +355,8 @@ def log(
             raise ValueError(
                 f"{pathway} is not on this outcome's itinerary; add it with cover --add"
             )
+        if json.dumps(item["pathways"][pathway], sort_keys=True) != prior:
+            raise ValueError("pathway changed while the verifier ran; verify it again")
         stable = digest(ev) == sha
         passed = code == 0 and stable
         try:
@@ -369,7 +376,9 @@ def log(
             status="proved" if passed else "blocked",
             evidence=shown,
             sha256=sha,
-            verify=verify,
+            verify=redact(verify),
+            verify_sha256=command_digest(verify),
+            revision=item["pathways"][pathway].get("revision", 0) + 1,
             exit=code,
             verified_at=now(),
             reason=reason,
@@ -386,27 +395,54 @@ def log(
             }
         )
         save(project, item)
-        out = report(project, work_id)
+        out = _report_locked(project, work_id)
     if not passed:
         out.update(ok=False, error=reason)
     return out
+
+
+def _reopen_if_incomplete(item: dict) -> bool:
+    if item.get("closed") and any(p["status"] not in ("proved", "na") for p in item["pathways"].values()):
+        item["closed"] = False
+        item.pop("closed_at", None)
+        return True
+    return False
+
+
+def _live_items_locked(project: Path) -> list:
+    live = []
+    for item in items(project):
+        if refresh(project, item):
+            save(project, item)
+        if not item.get("closed"):
+            live.append(item)
+    return live
 
 
 def refresh(project: Path, item: dict) -> bool:
     """Reopen a proved pathway whose evidence changed or vanished. Marks it stale."""
     changed = False
     for name, p in item["pathways"].items():
+        raw = p.get("verify", "")
+        if raw and not p.get("verify_sha256"):
+            p["verify_sha256"] = command_digest(raw)
+            changed = True
+        for key in ("verify", "output_tail"):
+            if key in p and redact(p[key]) != p[key]:
+                p[key] = redact(p[key])
+                changed = True
         if p["status"] == "proved":
             ev = Path(p["evidence"])
             ev = ev if ev.is_absolute() else project / ev
             if digest(ev) != p["sha256"]:
                 p.update(
                     status="open",
+                    revision=p.get("revision", 0) + 1,
                     stale=True,
                     reason="Evidence changed or vanished after it was proved. Prove it again.",
                 )
                 changed = True
-    return changed
+    return _reopen_if_incomplete(item) or changed
 
 
 def checklist_confidence(project: Path, work_id: str) -> tuple:
@@ -424,6 +460,28 @@ def checklist_confidence(project: Path, work_id: str) -> tuple:
 
 
 def report(project: Path, work_id: str) -> dict:
+    with _store_lock(project):
+        return _report_locked(project, work_id)
+
+
+def scope(project: Path, work_id: str) -> dict:
+    """Stable intake evidence: proof progress never changes this payload."""
+    with _store_lock(project):
+        item = load(project, work_id)
+        return {
+            "ok": True,
+            "work_id": work_id,
+            "goal": item["goal"],
+            "tier": item["tier"],
+            "pathways": [
+                {"name": name, "required": item["pathways"][name]["status"] != "na",
+                 "reason": item["pathways"][name]["reason"] if item["pathways"][name]["status"] == "na" else ""}
+                for name in CATALOG if name in item["pathways"]
+            ],
+        }
+
+
+def _report_locked(project: Path, work_id: str) -> dict:
     item = load(project, work_id)
     if refresh(project, item):
         save(project, item)
@@ -493,7 +551,8 @@ def report(project: Path, work_id: str) -> dict:
 def select(project: Path, work_id: str) -> str:
     if work_id:
         return work_id
-    live = [it["work_id"] for it in items(project) if not it.get("closed")]
+    with _store_lock(project):
+        live = [it["work_id"] for it in _live_items_locked(project)]
     if len(live) == 1:
         return live[0]
     if not live:
@@ -503,7 +562,7 @@ def select(project: Path, work_id: str) -> str:
 
 def close(project: Path, work_id: str) -> dict:
     with _store_lock(project):
-        out = report(project, work_id)
+        out = _report_locked(project, work_id)
         blockers = out["coverage"]["open"]
         if blockers:
             out.update(
@@ -527,7 +586,8 @@ def pilot(projects: list, goal: str, report_file: str) -> dict:
         if not proj.is_dir():
             rows.append({"project": str(proj), "error": "not a folder"})
             continue
-        live = [it for it in items(proj) if not it.get("closed")]
+        with _store_lock(proj):
+            live = _live_items_locked(proj)
         if len(live) > 1:
             rows.append(
                 {
@@ -689,6 +749,8 @@ def main(argv=None) -> int:
         help="coverage, trust and the next pathway (read-mostly)",
     )
     p.add_argument("--id", default="")
+    p = sub.add_parser("scope", parents=[common], help="stable intake and itinerary evidence as JSON")
+    p.add_argument("--id", required=True)
     p = sub.add_parser(
         "cover",
         parents=[common],
@@ -738,6 +800,8 @@ def main(argv=None) -> int:
             r = start(project, a.goal, a.tier, a.id)
         elif a.cmd == "next":
             r = report(project, select(project, a.id))
+        elif a.cmd == "scope":
+            r = scope(project, a.id)
         elif a.cmd == "cover":
             r = cover(project, a.id, a.pathway, a.add, a.na, a.reason)
         elif a.cmd == "log":
@@ -762,7 +826,7 @@ def main(argv=None) -> int:
         r = {"ok": False, "error": str(exc)}
         print(json.dumps(r, indent=2) if as_json else f"ERROR: {exc}")
         return 2
-    if as_json:
+    if as_json or a.cmd == "scope":
         print(json.dumps(r, indent=2))
     else:
         print_human(r)
