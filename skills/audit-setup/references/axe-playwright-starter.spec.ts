@@ -14,8 +14,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
-
 const ROUTES: { name: string; path: string }[] = [
   { name: 'home', path: '/' },
   // Add the routes real users hit most.
@@ -26,7 +24,7 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 for (const route of ROUTES) {
   test(`@a11y ${route.name} has no critical/serious violations`, async ({ page }) => {
-    await page.goto(`${BASE}${route.path}`, { waitUntil: 'networkidle' });
+    await page.goto(route.path, { waitUntil: 'networkidle' });
 
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)

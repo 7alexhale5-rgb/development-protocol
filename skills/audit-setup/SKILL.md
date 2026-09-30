@@ -44,7 +44,7 @@ KIT axe [--routes "/ /a"]
 KIT bundle
 KIT knip
 KIT quality-ci [--workdir web] [--node 22] [--default-branch main] [--uninstall]
-KIT lighthouse-ci [--enforce] [--regen-assertions-only] [--uninstall] [--allow-host GLOB]
+KIT lighthouse-ci [--enforce] [--regen-assertions-only] [--uninstall] [--allow-host HOST]
 KIT routes                          print detected routes
 ```
 
@@ -286,16 +286,20 @@ writes:
 - `.github/ci/lh-bless.sh` and `.github/ci/README.md`: the baseline refresh flow and the docs.
 - `lhci` and `lh:bless` package scripts.
 
-The URL allowlist defaults to `https://*.vercel.app*` plus a guess from the repo name. Pass
-`--allow-host GLOB` (repeatable) for other hosts.
+The host allowlist defaults to `*.vercel.app`, matched at a domain boundary. Pass
+`--allow-host HOST` (repeatable), using an exact hostname or `*.example.com`. URLs must
+use HTTPS without credentials. Older HTTPS glob inputs are normalized to host boundaries.
 
 **Assertions start warn-only.** Regressions show in the PR comment but do not fail the build
 until you flip `"warn"` to `"error"` in `.lighthouserc.json`, or run `--ci-only --enforce`.
 
 **Why the login check exists.** When a preview sits behind a login, Lighthouse follows the
 redirect and audits the login page. Its path matches no assertion pattern, so every assertion is
-skipped and the run reports success, including error-level ones. The workflow fails on HTTP 401
-or 403 instead.
+skipped and the run reports success, including error-level ones. The workflow now requires
+a direct 2xx response for every route. All redirects fail before their targets are fetched.
+Use canonical routes that do not redirect. Every collected URL must match an assertion;
+post-capture checks reject changed final URLs and missing routes. Baseline refresh preserves
+existing assertion levels and unrelated config, so enforced checks stay enforced.
 
 `--ci-only --uninstall` deletes only the owned files that still carry their own sentinel (the
 workflow, `.lighthouserc.json` and `.github/ci/README.md` share one; `lh-bless.sh` carries a

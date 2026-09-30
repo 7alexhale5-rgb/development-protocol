@@ -36,7 +36,10 @@ if [ -z "${CHROME_PATH:-}" ]; then
   elif command -v chromium-browser >/dev/null 2>&1; then
     CHROME_PATH="$(command -v chromium-browser)"
   fi
-  if [ -n "${CHROME_PATH:-}" ]; then export CHROME_PATH; fi
+  if [ -z "${CHROME_PATH:-}" ]; then
+    CHROME_PATH="$(node -e "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);" 2>/dev/null || true)"
+  fi
+  if [ -n "${CHROME_PATH:-}" ] && [ -f "$CHROME_PATH" ]; then export CHROME_PATH; fi
 fi
 
 OUT_DIR="ops/lighthouse/baseline"
@@ -44,10 +47,12 @@ RAW_DIR="$OUT_DIR/.raw"
 mkdir -p "$RAW_DIR"
 # Stale raw runs from an earlier capture would leak into the median.
 rm -f "$RAW_DIR"/*.json
+: > "$RAW_DIR/.expected-slugs"
 
+set -f # route glob characters are data, not filenames
 for route in $ROUTES; do
-  slug="$(printf '%s' "$route" | sed 's|^/||; s|/|-|g')"
-  if [ -z "$slug" ]; then slug="home"; fi
+  slug="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' "$route")"
+  printf '%s\n' "$slug" >> "$RAW_DIR/.expected-slugs"
   echo "[$slug] $route ($RUNS runs)"
   i=1
   while [ "$i" -le "$RUNS" ]; do

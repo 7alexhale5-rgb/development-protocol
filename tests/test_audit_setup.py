@@ -6,6 +6,7 @@ No network, no package installs: install_dev is patched wherever a step would in
 import contextlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -160,7 +161,7 @@ class BaselineTest(Base):
         )
         cfg = lh_baseline.assertions(base)
         entry = cfg["ci"]["assert"]["assertMatrix"][0]
-        self.assertEqual(entry["matchingUrlPattern"], ".*/docs/intro$")
+        self.assertEqual(entry["matchingUrlPattern"], r"^https?://[^/?#]+/docs/intro$")
         a = entry["assertions"]
         self.assertEqual(a["categories:performance"], ["warn", {"minScore": 0.92}])
         self.assertEqual(a["categories:accessibility"][1]["minScore"], 1.0)
@@ -402,7 +403,7 @@ class LighthouseCiTest(Base):
         install.assert_called_once_with(self.root, "@lhci/cli")
         wf = (self.root / ".github/workflows/lighthouse-ci.yml").read_text()
         self.assertIn(audit_kit.LHCI_SENTINEL, wf)
-        self.assertIn("https://*.example.test*)", wf)
+        self.assertIn('["*.example.test"]', wf)
         self.assertNotIn("{{DOMAIN_ALLOWLIST}}", wf)
         self.assertIn(
             "npm run lh:bless", (self.root / ".github/ci/README.md").read_text()
@@ -477,7 +478,7 @@ class RunTest(Base):
         self.assertEqual(code, 2)
 
     def test_second_run_is_a_no_op_and_keeps_status_file(self):
-        self.pkg(name="x", devDependencies={"knip": "6"})
+        self.pkg(name="x", devDependencies={"knip": "6"}, scripts={"dead-code": "knip"})
         (self.root / "knip.json").write_text("{}")
         code, out = self.quiet(audit_kit.run_all, self.root, only="knip")
         self.assertEqual(code, 0)
@@ -583,3 +584,170 @@ class ReviewDesignAuditTest(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewRegressionTest(Base):
+    def baseline(self):
+        base = self.root / 'ops/lighthouse/baseline'
+        base.mkdir(parents=True, exist_ok=True)
+        (base / 'home.report.json').write_text(json.dumps(report('https://preview.vercel.app/', .9)))
+        return base
+
+    def test_uninstall_dry_runs_preserve_files_and_scripts(self):
+        self.pkg(scripts={'lhci': 'lhci autorun', 'lh:bless': 'sh .github/ci/lh-bless.sh'})
+        paths = {'.github/workflows/ci.yml': audit_kit.QCI_SENTINEL,
+                 '.github/workflows/dependabot-auto-merge.yml': audit_kit.QCI_SENTINEL,
+                 '.github/workflows/lighthouse-ci.yml': audit_kit.LHCI_SENTINEL,
+                 '.github/ci/lh-bless.sh': audit_kit.LH_BLESS_SENTINEL,
+                 '.github/ci/README.md': audit_kit.LHCI_SENTINEL,
+                 '.lighthouserc.json': audit_kit.LHCI_SENTINEL}
+        for name, text in paths.items():
+            p = self.root / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(text)
+        before = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        self.quiet(audit_kit.quality_ci, self.root, uninstall=True, dry_run=True)
+        self.quiet(audit_kit.lighthouse_ci, self.root, uninstall=True, dry_run=True)
+        self.assertEqual(before, {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+
+    def test_lighthouse_refuses_unowned_sibling_before_install(self):
+        self.pkg(); self.baseline()
+        p = self.root / '.lighthouserc.json'; p.write_text('{"custom": true}')
+        with patch.object(audit_kit, 'ensure_dev') as install:
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.lighthouse_ci, self.root)
+        install.assert_not_called()
+        self.assertEqual(p.read_text(), '{"custom": true}')
+
+    def test_refresh_keeps_enforcement_and_custom_configuration(self):
+        base = self.baseline(); rc = self.root / '.lighthouserc.json'
+        old = lh_baseline.assertions(base)
+        old['ci']['collect']['numberOfRuns'] = 7
+        old['ci']['assert']['assertMatrix'][0]['assertions']['categories:performance'][0] = 'error'
+        old['ci']['upload'] = {'target': 'filesystem', 'outputDir': 'private-results'}
+        rc.write_text(json.dumps(old))
+        self.assertEqual(lh_baseline.main(['assertions', '--baseline-dir', str(base), '--out', str(rc)]), 0)
+        new = json.loads(rc.read_text())
+        self.assertEqual(new['ci']['assert']['assertMatrix'][0]['assertions']['categories:performance'][0], 'error')
+        self.assertEqual(new['ci']['collect']['numberOfRuns'], 7)
+        self.assertEqual(new['ci']['upload'], old['ci']['upload'])
+
+    def test_query_assertion_matches_only_the_requested_route(self):
+        base = self.baseline()
+        (base / 'home.report.json').write_text(json.dumps(report('https://x.test/search?q=term', .9)))
+        pattern = lh_baseline.assertions(base)['ci']['assert']['assertMatrix'][0]['matchingUrlPattern']
+        self.assertIsNotNone(re.search(pattern, 'https://preview.vercel.app/search?q=term'))
+        self.assertIsNone(re.search(pattern, 'https://preview.vercel.app/other/search?q=term'))
+        self.assertIsNone(re.search(pattern, 'https://search?q=term'))
+
+    def test_complete_capture_replaces_obsolete_reports_and_preserves_other_files(self):
+        base = self.baseline(); (base / 'old.report.json').write_text(json.dumps(report('https://x/old', .9)))
+        (base / 'notes.txt').write_text('keep')
+        raw = self.root / 'raw'; raw.mkdir()
+        (raw / 'home.1.json').write_text(json.dumps(report('https://x/', .8)))
+        self.assertEqual(lh_baseline.summarize(raw, base), 0)
+        self.assertFalse((base / 'old.report.json').exists())
+        self.assertEqual((base / 'notes.txt').read_text(), 'keep')
+
+    def test_invalid_report_does_not_replace_previous_capture(self):
+        base = self.baseline(); before = (base / 'home.report.json').read_bytes()
+        raw = self.root / 'raw'; raw.mkdir()
+        bad = report('https://x/', None); bad['runtimeError'] = {'code': 'NO_FCP'}
+        (raw / 'home.1.json').write_text(json.dumps(bad))
+        self.assertEqual(lh_baseline.summarize(raw, base), 1)
+        self.assertEqual((base / 'home.report.json').read_bytes(), before)
+
+    def test_partial_knip_is_missing(self):
+        self.pkg(devDependencies={'knip': '^6'})
+        self.assertTrue(audit_kit.missing(self.root, 'knip'))
+
+    def test_partial_quality_ci_repairs_only_missing_companion(self):
+        self.pkg(scripts={'test': 'node --test'})
+        p = self.root / '.github/workflows/ci.yml'; p.parent.mkdir(parents=True)
+        p.write_text('# ' + audit_kit.QCI_SENTINEL + '\ncustom-owned-content\n')
+        before = p.read_bytes()
+        self.assertTrue(audit_kit.missing(self.root, 'quality-ci'))
+        self.quiet(audit_kit.quality_ci, self.root)
+        self.assertEqual(p.read_bytes(), before)
+        self.assertTrue((p.parent / 'dependabot-auto-merge.yml').exists())
+
+    def test_run_quality_ci_reaches_nested_package(self):
+        (self.root / 'web').mkdir()
+        (self.root / 'web/package.json').write_text(json.dumps({'scripts': {'test': 'node --test'}}))
+        code, _ = self.quiet(audit_kit.run_all, self.root, only='quality-ci', dry_run=True)
+        self.assertEqual(code, 0)
+
+    def test_axe_starter_uses_configured_base_url(self):
+        text = (SKILL / 'references/axe-playwright-starter.spec.ts').read_text()
+        self.assertIn('page.goto(route.path,', text)
+        self.assertNotIn('http://localhost:3000', text)
+
+    def test_dependabot_merge_is_bound_to_checked_sha(self):
+        text = (SKILL / 'references/dependabot-auto-merge.yml.tmpl').read_text()
+        self.assertIn('--match-head-commit "$HEAD_SHA"', text)
+        self.assertIn('headRefOid', text)
+
+    def test_preview_host_boundaries_and_credentials(self):
+        for url in ['https://preview.vercel.app.attacker.example/', 'https://preview.vercel.app@127.0.0.1/', 'https://preview.vercel.app/\n']:
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                lh_baseline.validate_preview_url(url, ['*.vercel.app'])
+        lh_baseline.validate_preview_url('https://preview.vercel.app/', ['*.vercel.app'])
+
+
+    def test_capture_route_names_do_not_collide(self):
+        audit_kit.write_baseline_files(self.root, "https://x.test", "/ /home /docs/intro /docs-intro", 1)
+        binary = self.root / "bin"; binary.mkdir()
+        stub = binary / "npx"
+        stub.write_text("#!/usr/bin/env python3\nimport sys,json,os\nargs=sys.argv[1:]\np=next(a.split('=',1)[1] for a in args if a.startswith('--output-path='))\nr=json.loads(os.environ['FIXTURE_REPORT'])\nr['requestedUrl']=args[2]\nopen(p,'w').write(json.dumps(r))\n")
+        stub.chmod(0o755)
+        env = dict(os.environ, PATH=str(binary)+os.pathsep+os.environ['PATH'],
+                   CHROME_PATH=sys.executable, FIXTURE_REPORT=json.dumps(report('https://x/', .9)))
+        for key in ('LH_TARGET_URL', 'LH_ROUTES', 'LH_RUNS'):
+            env.pop(key, None)
+        result = subprocess.run(['sh', 'ops/lighthouse/run-baseline.sh'], cwd=self.root,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(audit_kit.baseline_count(self.root), 4)
+
+    def test_explicit_capture_arguments_override_environment(self):
+        self.pkg()
+        def capture(*args, **kwargs):
+            self.assertEqual(kwargs['env']['LH_TARGET_URL'], 'https://staging.test')
+            self.assertEqual(kwargs['env']['LH_ROUTES'], '/chosen')
+            self.assertEqual(kwargs['env']['LH_RUNS'], '2')
+            self.baseline()
+            return subprocess.CompletedProcess(args, 0)
+        with patch.dict(os.environ, {'LH_TARGET_URL': 'https://prod.test', 'LH_ROUTES': '/wrong', 'LH_RUNS': '9'}), \
+             patch.object(audit_kit, 'require_node18'), patch.object(audit_kit, 'ensure_dev'), \
+             patch.object(audit_kit, 'node_version', return_value=(22, 19)), \
+             patch.object(audit_kit, 'find_chrome', return_value='/fixture/chrome'), \
+             patch.object(audit_kit.subprocess, 'run', side_effect=capture):
+            self.quiet(audit_kit.setup_lighthouse, self.root, 'https://staging.test', '/chosen', 2)
+
+    def test_playwright_managed_chromium_is_found(self):
+        executable = self.root / 'chromium'; executable.write_text('fixture')
+        with patch.dict(os.environ, {'CHROME_PATH': ''}), patch.object(Path, 'exists', return_value=False), \
+             patch.object(audit_kit.shutil, 'which', return_value=None), \
+             patch.object(audit_kit.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, str(executable)+'\n')):
+            self.assertEqual(audit_kit.find_chrome(self.root), str(executable))
+
+    def test_preview_missing_assertion_and_redirected_result_fail(self):
+        base = self.baseline(); rc = self.root / '.lighthouserc.json'
+        rc.write_text(json.dumps(lh_baseline.assertions(base)))
+        expected = lh_baseline.preview_routes('https://preview.vercel.app', base, rc, ['*.vercel.app'], False)
+        self.assertEqual(expected, ['https://preview.vercel.app/'])
+        results = self.root / 'results'; results.mkdir()
+        rep = report(expected[0], .9); rep['finalUrl'] = 'https://preview.vercel.app/login'
+        (results / 'lhr.json').write_text(json.dumps(rep))
+        with self.assertRaises(ValueError):
+            lh_baseline.check_results(results, expected, ['*.vercel.app'])
+        self.assertIsNone(lh_baseline.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://elsewhere.test'))
+        cfg = json.loads(rc.read_text()); cfg['ci']['assert']['assertMatrix'] = []; rc.write_text(json.dumps(cfg))
+        with self.assertRaises(ValueError):
+            lh_baseline.preview_routes('https://preview.vercel.app', base, rc, ['*.vercel.app'], False)
+
+    def test_route_with_no_valid_runs_preserves_entire_previous_set(self):
+        base = self.baseline(); old = (base / 'home.report.json').read_bytes()
+        raw = self.root / 'raw'; raw.mkdir()
+        (raw / '.expected-slugs').write_text('home\nabout\n')
+        (raw / 'home.1.json').write_text(json.dumps(report('https://x/', .9)))
+        self.assertEqual(lh_baseline.summarize(raw, base), 1)
+        self.assertEqual((base / 'home.report.json').read_bytes(), old)
