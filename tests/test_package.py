@@ -111,6 +111,34 @@ class PackageTest(unittest.TestCase):
             "bash-only variable-call pattern (breaks on zsh):\n" + "\n".join(offenders),
         )
 
+    def test_orphan_scan_does_not_execute_repository_filenames(self):
+        text = (SKILLS / 'simplify/SKILL.md').read_text()
+        script = text.split('# Quick orphan scan in changed files\n', 1)[1].split('```', 1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(['git', 'init', '-q', directory], check=True)
+            subprocess.run(['git', '-C', directory, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--allow-empty', '-qm', 'base'], check=True)
+            name = '$(touch INJECTED).py'
+            (root / name).write_text('import os\n')
+            subprocess.run(['git', '-C', directory, 'add', '--', name], check=True)
+            result = subprocess.run(['bash', '-c', script], cwd=root, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('import os', result.stdout)
+            self.assertFalse((root / 'INJECTED').exists())
+
+    def test_domain_hook_exit_overrides_green_output(self):
+        text = (SKILLS / 'review-stack/references/runtime-checks.md').read_text()
+        script = text.split('**Run them in parallel:**', 1)[1].split('```bash\n', 1)[1].split('```', 1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            hook = root / 'example/run.sh'
+            hook.parent.mkdir()
+            hook.write_text('echo AUDIT_VERDICT=GREEN\nexit 7\n')
+            env = dict(os.environ, ART_DIR=directory, HOOK=str(hook))
+            result = subprocess.run(['bash', '-c', 'PROJECT_AUDITS=("$HOOK")\n' + script], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / 'audit-example.exit').read_text().strip(), '7')
+
     def test_review_result_rejects_false_passing_headlines(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location('review_proof', ROOT / 'skills/review-stack/scripts/verify_review.py')
