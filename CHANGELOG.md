@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read-audit guidance states its retained-transcript requirement and the missing native Codex
+  transcript adapter. Session ownership does not establish whole-file read proof.
 - Premortem evidence uses verifier-compatible headings. Lighthouse publication locks refuse
   capture before dependency work, including forced recapture. Replaced-file backups are reported
   and their exclusions share one append path; all prior copies remain retained.

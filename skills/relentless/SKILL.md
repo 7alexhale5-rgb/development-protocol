@@ -52,10 +52,9 @@ ignore `.sweeps/**/.lock` and `.sweeps/**/*.tmp` either way. Closed and abandone
 move to `.sweeps/_closed/`.
 
 **Session ownership.** A ledger belongs to the session that last changed it. The id comes
-from `SWEEP_SESSION_ID` if you set it, else `CLAUDE_CODE_SESSION_ID`, which Claude Code
-sets for every session (its subagents share their parent's id). On an agent that exposes
-no session id, set `SWEEP_SESSION_ID` yourself, or work unbound: every command still
-works, and only the Stop hook and the read audit need an id.
+from `SWEEP_SESSION_ID`, then `CLAUDE_CODE_SESSION_ID`, then `CODEX_THREAD_ID`. Claude Code
+subagents share their parent's id. With no id, ownership is unbound and no Stop hook acts
+on the ledger; file-read proof is still required for a verified close.
 
 ## The loop
 
@@ -138,11 +137,21 @@ formats do not gain full coverage automatically. A visit with no full read behin
 the ledger is the proof the user relies on, and a false one is worse than an honest
 "partial".
 
-The read audit knows Claude Code's transcript format and location. Items it cannot audit
-(not a file, no recorded session, no transcript on disk, or another agent) are counted and
-shown at `close`, never passed silently. On an agent without readable transcripts, your
-evidence strings carry the whole weight, so make them specific. `SWEEP_TRANSCRIPTS` points
-the audit at another folder of transcripts in the same format.
+The read audit knows Claude Code's transcript format and location. `SWEEP_TRANSCRIPTS`
+points it at another root containing compatible `*/<session-id>.jsonl` receipts. File items
+without a visiting session or readable transcript make `close` and `verify` refuse; evidence
+strings alone cannot substitute for captured successful reads. Non-file items are counted
+as unauditable and reported separately.
+
+**Retain the proof.** Keep visiting-session transcripts while the ledger is used for current
+verification. `verify` re-audits them; pruning or rotating them makes a fresh verification
+fail even when the ledger and project are unchanged. A past recorded pass remains historical
+evidence, not a replacement for missing proof.
+
+**Codex limitation.** `CODEX_THREAD_ID` binds ledger ownership, but this parser has no native
+Codex transcript adapter. A raw Codex session store is not a compatible receipt root. Until
+a producer supplies actual successful reads in the supported format, file sweeps remain
+open. Do not manufacture receipts or use `--force` to claim a verified close.
 
 ## Parallel work
 

@@ -28,8 +28,8 @@ in the transcript of the session that visited it. `--force` closes anyway and
 records which checks it overrode.
 
 OWNERSHIP. A ledger belongs to the session that last changed it. The session id
-comes from SWEEP_SESSION_ID if set, else CLAUDE_CODE_SESSION_ID (Claude Code sets
-it; its subagents share their parent's id). With neither, ledgers are unbound and
+comes from SWEEP_SESSION_ID if set, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
+Claude Code subagents share their parent's id. With none, ledgers are unbound and
 no Stop hook acts on them. The optional Stop hook (../hooks/relentless-stop.py)
 acts only on open ledgers the stopping session owns.
 
@@ -40,7 +40,11 @@ SWEEP_HOME overrides the whole store. Closed and abandoned sweeps move to
 on every save, so the two can never drift apart.
 
 A checklist verifier can read a closed ledger without changing it:
-`sweep.py verify <ledger.json>` exits 0 only for a sweep closed without --force.
+`sweep.py verify <ledger.json>` requires a close without --force and retained read proof.
+It re-audits visiting-session transcripts under the configured transcript root.
+Pruned transcripts prevent a fresh pass even when the ledger is unchanged. The parser
+supports Claude-format receipts; CODEX_THREAD_ID binds ownership but does not supply a
+Codex transcript adapter. File sweeps without compatible read proof remain open.
 
 Exit codes:  0 ok  ·  1 refused (open items, bad args)  ·  2 could not measure
 

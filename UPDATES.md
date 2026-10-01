@@ -6,8 +6,9 @@ Every re-port, source baseline, and public maintenance change, newest first.
 
 Independent review follow-up: the premortem template matches its verifier; Lighthouse
 publication locks refuse capture early and retained backup paths are reported. Ad-hoc review
-and citation guidance now state their proof requirements. These are portable maintenance
-changes, not an upstream re-port; source fingerprints remain unchanged.
+and citation guidance now state their proof requirements. Read-audit guidance also states
+its retained-transcript requirement and missing native Codex transcript adapter. These are
+portable maintenance changes, not an upstream re-port; source fingerprints remain unchanged.
 
 ## 2026-09-30T21:21:38-05:00
 
