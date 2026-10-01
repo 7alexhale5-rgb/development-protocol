@@ -252,6 +252,11 @@ def status(root: Path) -> dict:
         "lighthouse_target": lighthouse_pkg(node),
         "lighthouse": "installed" if has_dep(root, "lighthouse") else "missing",
         "baseline": f"present ({n} routes)" if n else "missing",
+        "lighthouse_rerun": (
+            "missing" if not (root / "ops/lighthouse/run-baseline.sh").is_file()
+            else "stale (missing current publication lock guard)" if lighthouse_rerun_stale(root)
+            else "present (current publication lock guard)"
+        ),
         "axe": "installed" if has_dep(root, "@axe-core/playwright") else "missing",
         "axe_spec": "present" if axe_spec_present(root) else "missing",
         "playwright_test_dir": playwright_test_dir(root),
@@ -272,6 +277,7 @@ def print_status(s: dict) -> None:
         f"  node:           {s['node']}   (Lighthouse to install: {s['lighthouse_target']})"
     )
     print(f"  lighthouse:     {s['lighthouse']}   baseline: {s['baseline']}")
+    print(f"  lighthouse rerun: {s['lighthouse_rerun']}")
     print(
         f"  axe:            {s['axe']}   spec: {s['axe_spec']} (testDir {s['playwright_test_dir']})"
     )
@@ -399,12 +405,10 @@ def require_unlocked_lighthouse(root: Path) -> None:
 def lighthouse_rerun_stale(root: Path) -> bool:
     """Identify an existing rerun missing the current publication-lock guard."""
     rerun = root / "ops/lighthouse/run-baseline.sh"
-    guard = '\n'.join([
-        'if [ -e "$HERE/.baseline.publish-lock" ] || [ -L "$HERE/.baseline.publish-lock" ]; then',
-        '  echo "Lighthouse publication lock needs manual recovery: $HERE/.baseline.publish-lock" >&2',
-        '  exit 1',
-        'fi',
-    ])
+    template = (REFS / "run-baseline.sh.tmpl").read_text()
+    guard = template.split("# audit-setup:publication-lock begin\n", 1)[1].split(
+        "# audit-setup:publication-lock end", 1
+    )[0].strip()
     return rerun.is_file() and guard not in rerun.read_text(errors="replace")
 
 
@@ -1001,7 +1005,7 @@ def lighthouse_ci(
     rerun = root / "ops/lighthouse/run-baseline.sh"
     if lighthouse_rerun_stale(root):
         print("warning: existing Lighthouse rerun is stale: publication lock guard missing.")
-        print("         Recapture with --force before using the rerun or lh:bless.")
+        print("         Recapture with: KIT lighthouse --force (or /audit-setup --lighthouse-only --force) before using the rerun or lh:bless.")
     if rerun.exists() and "LH_TARGET_URL" not in rerun.read_text():
         print(
             "warning: ops/lighthouse/run-baseline.sh is a legacy hand-written version; lh:bless will not work until"

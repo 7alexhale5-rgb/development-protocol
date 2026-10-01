@@ -175,6 +175,29 @@ class LighthousePreservationTest(Base):
         self.assertIn("publication lock", output)
         self.assertEqual(runner.read_bytes(), original)
 
+    def test_generated_rerun_staleness_uses_template_guard(self):
+        self.pkg()
+        for indentation in ("  ", "    "):
+            with self.subTest(indentation=indentation), tempfile.TemporaryDirectory() as tmp:
+                refs = Path(tmp)
+                template = (audit_kit.REFS / "run-baseline.sh.tmpl").read_text()
+                template = template.replace('  echo "Lighthouse publication lock', indentation + 'echo "Lighthouse publication lock')
+                (refs / "run-baseline.sh.tmpl").write_text(template)
+                with patch.object(audit_kit, "REFS", refs):
+                    self.quiet(audit_kit.write_baseline_files, self.root, "https://source.test", "/", 1)
+                    self.assertFalse(audit_kit.lighthouse_rerun_stale(self.root))
+
+    def test_stale_rerun_preflight_and_recovery_command(self):
+        self.pkg()
+        base = self.published()
+        (base.parent / "lh_baseline.py").write_bytes(Path(lh_baseline.__file__).read_bytes())
+        (base.parent / "run-baseline.sh").write_text("#!/bin/sh\n# retained legacy rerun\n")
+        self.assertIn("stale", audit_kit.status(self.root)["lighthouse_rerun"])
+        _, status_output = self.quiet(audit_kit.print_status, audit_kit.status(self.root))
+        self.assertIn("stale", status_output)
+        _, output = self.quiet(audit_kit.lighthouse_ci, self.root, dry_run=True)
+        self.assertIn("lighthouse --force", output)
+
     def test_publication_lock_refuses_capture_before_any_dependency_work(self):
         for force in (False, True):
             for has_baseline in (False, True):

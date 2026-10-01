@@ -216,7 +216,10 @@ Just the baseline. Existing reports skip only after the saved capture proof, rep
 copied helper pass validation. Legacy baselines or stale helpers need explicit `--force`
 recapture. Replaced helpers and rerun scripts are backed up in ignored, private folders.
 Custom `.gitignore` lines are preserved. A publication lock requires manual recovery, not a
-successful skip. Ordinary errors preserve the prior reports; hard-kill recovery remains manual.
+successful skip. An existing rerun lacking the current publication lock guard is stale;
+recapture with `KIT lighthouse --force` (or `/audit-setup --lighthouse-only --force`).
+The replaced script is backed up. Status reports this staleness before setup.
+Ordinary errors preserve the prior reports; hard-kill recovery remains manual.
 
 ### `--axe-only`
 
