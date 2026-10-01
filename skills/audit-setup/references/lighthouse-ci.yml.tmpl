@@ -74,9 +74,7 @@ jobs:
             echo "::error::No URL provided"
             exit 2
           fi
-          python3 ops/lighthouse/lh_baseline.py preview-check --base-url "$URL" --validate-only
-          # Strip trailing slash so LHCI can concat routes cleanly.
-          URL="${URL%/}"
+          URL=$(python3 ops/lighthouse/lh_baseline.py preview-check --base-url "$URL" --validate-only)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Auditing: $URL"
 

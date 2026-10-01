@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import copy
@@ -65,16 +66,58 @@ def _median_run(runs: list) -> dict:
 def valid_report(report: dict) -> bool:
     if not isinstance(report, dict) or report.get("runtimeError"):
         return False
-    url = report.get("requestedUrl") or report.get("finalUrl") or ""
+    url = report.get("requestedUrl")
     if not isinstance(url, str) or re.search(r"[\x00-\x20\x7f]", url):
         return False
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return False
-    return all(isinstance(_score(report, c), (int, float))
-               and not isinstance(_score(report, c), bool)
-               and math.isfinite(_score(report, c)) and 0 <= _score(report, c) <= 1
-               for c in CATEGORIES)
+    if report.get("finalUrl") != url or report.get("finalDisplayedUrl", url) != url:
+        return False
+    settings = report.get("configSettings")
+    environment = report.get("environment")
+    fetch_time = report.get("fetchTime")
+    try:
+        parsed_time = datetime.datetime.fromisoformat(fetch_time.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return False
+    if parsed_time.tzinfo is None or parsed_time.utcoffset() is None:
+        return False
+    if (
+        not isinstance(settings, dict)
+        or settings.get("formFactor") not in ("mobile", "desktop")
+        or not isinstance(environment, dict)
+        or not isinstance(environment.get("hostUserAgent"), str)
+        or not environment.get("hostUserAgent")
+        or not isinstance(report.get("lighthouseVersion"), str)
+        or not report.get("lighthouseVersion")
+    ):
+        return False
+    audits = report.get("audits")
+    if not isinstance(audits, dict):
+        return False
+    for key in (
+        "largest-contentful-paint",
+        "first-contentful-paint",
+        "cumulative-layout-shift",
+        "total-blocking-time",
+    ):
+        audit = audits.get(key)
+        value = audit.get("numericValue") if isinstance(audit, dict) else None
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or value < 0
+        ):
+            return False
+    return all(
+        isinstance(_score(report, c), (int, float))
+        and not isinstance(_score(report, c), bool)
+        and math.isfinite(_score(report, c))
+        and 0 <= _score(report, c) <= 1
+        for c in CATEGORIES
+    )
 
 
 def summarize(raw_dir: Path, out_dir: Path) -> int:
@@ -86,52 +129,128 @@ def summarize(raw_dir: Path, out_dir: Path) -> int:
         if code:
             return code
         out_dir.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix=".lh-publish-", dir=out_dir.parent) as publish:
-            replacement, backup = Path(publish) / "new", Path(publish) / "old"
-            if out_dir.exists():
-                shutil.copytree(out_dir, replacement)
-            else:
-                replacement.mkdir()
-            for old in replacement.glob("*.report.json"):
-                old.unlink()
-            for generated in staged.iterdir():
-                shutil.copy2(generated, replacement / generated.name)
-            if out_dir.exists():
-                out_dir.rename(backup)
-            try:
-                replacement.rename(out_dir)
-            except BaseException:
-                if backup.exists():
-                    backup.rename(out_dir)
-                raise
+        lock = out_dir.parent / ("." + out_dir.name + ".publish-lock")
+        try:
+            lock.mkdir()
+        except FileExistsError:
+            print(f"lh_baseline: publication lock exists: {lock}", file=sys.stderr)
+            return 1
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix=".lh-publish-", dir=out_dir.parent
+            ) as publish:
+                replacement, backup = Path(publish) / "new", Path(publish) / "old"
+                if out_dir.exists():
+                    shutil.copytree(out_dir, replacement)
+                else:
+                    replacement.mkdir()
+                for old in replacement.glob("*.report.json"):
+                    old.unlink()
+                for generated in staged.iterdir():
+                    shutil.copy2(generated, replacement / generated.name)
+                if out_dir.exists():
+                    out_dir.rename(backup)
+                try:
+                    replacement.rename(out_dir)
+                except BaseException:
+                    if backup.exists():
+                        backup.rename(out_dir)
+                    raise
+        finally:
+            lock.rmdir()
     return 0
 
 
 def _summarize(raw_dir: Path, out_dir: Path) -> int:
-    grouped: dict = {}
-    expected = raw_dir / ".expected-slugs"
-    if expected.exists():
-        grouped = {slug: [] for slug in expected.read_text().splitlines() if slug}
+    try:
+        expected_runs = int((raw_dir / ".expected-runs").read_text().strip())
+        expected_preset = (raw_dir / ".expected-preset").read_text().strip()
+        route_lines = (raw_dir / ".expected-routes").read_text().splitlines()
+        if (
+            expected_runs < 1
+            or not route_lines
+            or expected_preset not in ("mobile", "desktop")
+        ):
+            raise ValueError("empty capture declaration")
+        expected_urls = {}
+        for line in route_lines:
+            slug, url = line.split("\t")
+            parsed = urlparse(url)
+            if (
+                not re.fullmatch(r"[a-zA-Z0-9._-]+", slug)
+                or slug in (".", "..")
+                or slug in expected_urls
+                or parsed.scheme not in ("http", "https")
+                or not parsed.hostname
+                or re.search(r"[\x00-\x20\x7f]", url)
+            ):
+                raise ValueError("invalid or duplicate route declaration")
+            expected_urls[slug] = url
+    except (OSError, ValueError) as exc:
+        print(f"lh_baseline: invalid capture declaration: {exc}", file=sys.stderr)
+        return 1
+    grouped = {slug: {} for slug in expected_urls}
+    digests = set()
+    semantic_digests = set()
+    capture_times = set()
+    capture_identity = None
     for f in sorted(raw_dir.glob("*.json")):
         m = re.match(r"^(.+)\.(\d+)\.json$", f.name)
-        if not m:
-            continue
+        if not m or m.group(1) not in grouped or str(int(m.group(2))) != m.group(2):
+            print(f"lh_baseline: undeclared capture {f.name}", file=sys.stderr)
+            return 1
+        run = int(m.group(2))
+        if run < 1 or run > expected_runs or run in grouped[m.group(1)]:
+            print(f"lh_baseline: invalid run index {f.name}", file=sys.stderr)
+            return 1
         try:
-            runs = grouped.setdefault(m.group(1), [])
-            candidate = json.loads(f.read_text())
-            if valid_report(candidate):
-                runs.append(candidate)
-            else:
-                print(f"lh_baseline: rejected invalid report {f.name}", file=sys.stderr)
+            payload = f.read_bytes()
+            digest = hashlib.sha256(payload).hexdigest()
+            if digest in digests:
+                raise ValueError("duplicate report bytes")
+            digests.add(digest)
+            candidate = json.loads(payload)
+            if (
+                not valid_report(candidate)
+                or candidate["requestedUrl"] != expected_urls[m.group(1)]
+                or candidate["configSettings"]["formFactor"] != expected_preset
+            ):
+                raise ValueError("invalid or redirected report")
+            semantic_digest = hashlib.sha256(
+                json.dumps(candidate, sort_keys=True).encode()
+            ).hexdigest()
+            if semantic_digest in semantic_digests:
+                raise ValueError("duplicate report content")
+            semantic_digests.add(semantic_digest)
+            captured_at = datetime.datetime.fromisoformat(
+                candidate["fetchTime"].replace("Z", "+00:00")
+            )
+            if captured_at in capture_times:
+                raise ValueError("duplicate capture time")
+            capture_times.add(captured_at)
+            identity = json.dumps(
+                {
+                    "engine": candidate["lighthouseVersion"],
+                    "browser": candidate["environment"]["hostUserAgent"],
+                    "settings": candidate["configSettings"],
+                },
+                sort_keys=True,
+            )
+            if capture_identity is None:
+                capture_identity = identity
+            elif identity != capture_identity:
+                raise ValueError("mixed capture identity")
+            grouped[m.group(1)][run] = candidate
         except (OSError, ValueError) as exc:
-            print(f"lh_baseline: skipping unreadable {f.name}: {exc}", file=sys.stderr)
+            print(f"lh_baseline: rejected {f.name}: {exc}", file=sys.stderr)
+            return 1
     rows = []
     form_factor = "mobile"
     for slug in sorted(grouped):
-        runs = grouped[slug]
-        if not runs:
-            print(f"lh_baseline: no usable capture for {slug}", file=sys.stderr)
+        if set(grouped[slug]) != set(range(1, expected_runs + 1)):
+            print(f"lh_baseline: incomplete capture for {slug}", file=sys.stderr)
             return 1
+        runs = [grouped[slug][i] for i in range(1, expected_runs + 1)]
         best = _median_run(runs)
         (out_dir / f"{slug}.report.json").write_text(json.dumps(best))
         form_factor = (best.get("configSettings") or {}).get("formFactor", form_factor)
@@ -183,8 +302,68 @@ def _summarize(raw_dir: Path, out_dir: Path) -> int:
         "",
     ]
     (out_dir / "SUMMARY.md").write_text("\n".join(lines))
+    report_hashes = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in out_dir.glob("*.report.json")
+    }
+    proof = {
+        "version": 1,
+        "expected_runs": expected_runs,
+        "routes": expected_urls,
+        "capture_identity": capture_identity,
+        "reports": report_hashes,
+        "summary_sha256": hashlib.sha256(
+            (out_dir / "SUMMARY.md").read_bytes()
+        ).hexdigest(),
+    }
+    (out_dir / ".capture-proof.json").write_text(json.dumps(proof, indent=2) + "\n")
     print(f"lh_baseline: {len(rows)} routes -> {out_dir}/SUMMARY.md")
     return 0
+
+
+def published_baseline_valid(base: Path) -> bool:
+    """Validate the durable declaration, not just whichever reports remain."""
+    try:
+        proof = json.loads((base / ".capture-proof.json").read_text())
+        if not isinstance(proof, dict) or proof.get("version") != 1:
+            return False
+        routes = proof.get("routes")
+        hashes = proof.get("reports")
+        if (
+            not isinstance(routes, dict)
+            or not routes
+            or not isinstance(hashes, dict)
+            or not isinstance(proof.get("expected_runs"), int)
+            or proof["expected_runs"] < 1
+            or set(hashes) != {slug + ".report.json" for slug in routes}
+            or set(hashes) != {path.name for path in base.glob("*.report.json")}
+        ):
+            return False
+        summary = base / "SUMMARY.md"
+        if hashlib.sha256(summary.read_bytes()).hexdigest() != proof.get(
+            "summary_sha256"
+        ):
+            return False
+        for name, digest in hashes.items():
+            payload = (base / name).read_bytes()
+            if hashlib.sha256(payload).hexdigest() != digest:
+                return False
+            report = json.loads(payload)
+            if not valid_report(report) or report["requestedUrl"] != routes[name[:-12]]:
+                return False
+            identity = json.dumps(
+                {
+                    "engine": report["lighthouseVersion"],
+                    "browser": report["environment"]["hostUserAgent"],
+                    "settings": report["configSettings"],
+                },
+                sort_keys=True,
+            )
+            if identity != proof.get("capture_identity"):
+                return False
+        return True
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
 
 
 def assertions(baseline_dir: Path, existing: dict = None) -> dict:
@@ -283,7 +462,11 @@ def enforce(config: Path) -> int:
     def walk(node):
         nonlocal changed
         if isinstance(node, list):
-            if len(node) == 2 and node[0] == "warn" and isinstance(node[1], dict):
+            if (
+                len(node) == 2
+                and node[0] == "warn"
+                and not isinstance(node[1], (list, tuple))
+            ):
                 node[0] = "error"
                 changed += 1
             for item in node:
@@ -299,7 +482,6 @@ def enforce(config: Path) -> int:
     config.write_text(json.dumps(data, indent=2) + "\n")
     print(f"lh_baseline: flipped {changed} warn -> error in {config}")
     return 0
-
 
 
 def normalize_hosts(hosts: list) -> list:
@@ -323,15 +505,47 @@ def validate_preview_url(url: str, hosts: list) -> None:
     if re.search(r"[\x00-\x20\x7f]", url):
         raise ValueError("preview URL contains whitespace or control characters")
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.username is not None or parsed.password is not None or parsed.fragment:
+    if (
+        parsed.scheme != "https"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
         raise ValueError("preview URL needs HTTPS with no credentials or fragment")
     host = (parsed.hostname or "").lower()
+    if len(host) > 253 or not all(
+        re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in host.split(".")
+    ):
+        raise ValueError("preview URL hostname has an invalid DNS label")
     if parsed.port not in (None, 443):
         raise ValueError("preview URL must use the HTTPS port")
-    if not any(host == pattern or (pattern.startswith("*.") and
-               host.endswith(pattern[1:]) and host != pattern[2:])
-               for pattern in normalize_hosts(hosts)):
+    if not any(
+        host == pattern
+        or (
+            pattern.startswith("*.")
+            and host.endswith(pattern[1:])
+            and host != pattern[2:]
+        )
+        for pattern in normalize_hosts(hosts)
+    ):
         raise ValueError("preview URL hostname is outside the allowed domains")
+
+
+def validate_preview_origin(url: str, hosts: list) -> str:
+    """Validate the workflow's base before writing it to an output file."""
+    validate_preview_url(url, hosts)
+    parsed = urlparse(url)
+    if (
+        parsed.path not in ("", "/")
+        or "?" in url
+        or "#" in url
+        or parsed.port is not None
+    ):
+        raise ValueError(
+            "preview base must be an origin without port, path, query or fragment"
+        )
+    return "https://" + parsed.hostname.lower()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -406,12 +620,17 @@ def main(argv=None) -> int:
     if args.cmd == "preview-check":
         try:
             hosts = json.loads(os.environ["ALLOWED_HOSTS_JSON"])
-            validate_preview_url(args.base_url, hosts)
+            origin = validate_preview_origin(args.base_url, hosts)
             if args.validate_only:
+                print(origin)
                 return 0
-            urls = preview_routes(args.base_url, Path("ops/lighthouse/baseline"),
-                                  Path(".lighthouserc.json"), hosts,
-                                  check_access=args.results_dir is None)
+            urls = preview_routes(
+                args.base_url,
+                Path("ops/lighthouse/baseline"),
+                Path(".lighthouserc.json"),
+                hosts,
+                check_access=args.results_dir is None,
+            )
             if args.results_dir:
                 check_results(args.results_dir, urls, hosts)
             else:
@@ -424,7 +643,11 @@ def main(argv=None) -> int:
         return summarize(args.raw_dir, args.out_dir)
     if args.cmd == "assertions":
         try:
-            existing = json.loads(args.out.read_text()) if args.out and args.out.exists() else None
+            existing = (
+                json.loads(args.out.read_text())
+                if args.out and args.out.exists()
+                else None
+            )
             text = json.dumps(assertions(args.baseline_dir, existing), indent=2) + "\n"
         except (OSError, ValueError) as exc:
             print(f"lh_baseline: {exc}", file=sys.stderr)

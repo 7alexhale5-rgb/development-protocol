@@ -2,6 +2,10 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-09-30T21:21:38-05:00
+
+- skill:audit-setup: source fingerprint recorded for drift monitoring; this is not a re-port
+
 ## 2026-09-29T21:01:33-05:00
 
 Public maintenance release 2.0.1 fixes confirmed release-review findings. These are changes to

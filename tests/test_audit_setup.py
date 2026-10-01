@@ -25,6 +25,10 @@ import lh_baseline  # noqa: E402
 def report(url, perf, a11y=1.0, bp=1.0, seo=1.0, form="mobile"):
     return {
         "requestedUrl": url,
+        "finalUrl": url,
+        "lighthouseVersion": "13.0.0",
+        "fetchTime": "2026-09-30T00:00:00Z",
+        "environment": {"hostUserAgent": "fixture-browser"},
         "configSettings": {"formFactor": form},
         "categories": {
             "performance": {"score": perf},
@@ -34,7 +38,9 @@ def report(url, perf, a11y=1.0, bp=1.0, seo=1.0, form="mobile"):
         },
         "audits": {
             "largest-contentful-paint": {"numericValue": 2100},
+            "first-contentful-paint": {"numericValue": 1000},
             "cumulative-layout-shift": {"numericValue": 0.01},
+            "total-blocking-time": {"numericValue": 50},
         },
     }
 
@@ -55,6 +61,14 @@ class Base(unittest.TestCase):
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
             result = fn(*a, **kw)
         return result, out.getvalue()
+
+    def capture_manifest(self, raw, routes, runs=1):
+        raw.mkdir(exist_ok=True)
+        (raw / ".expected-routes").write_text(
+            "".join(f"{slug}\t{url}\n" for slug, url in routes.items())
+        )
+        (raw / ".expected-runs").write_text(f"{runs}\n")
+        (raw / ".expected-preset").write_text("mobile\n")
 
 
 class DetectionTest(Base):
@@ -133,9 +147,11 @@ class BaselineTest(Base):
     def raw(self, slug, run, rep):
         d = self.root / "raw"
         d.mkdir(exist_ok=True)
+        rep["fetchTime"] = f"2026-09-30T00:00:{run:02d}Z"
         (d / f"{slug}.{run}.json").write_text(json.dumps(rep))
 
     def test_summarize_keeps_median_run(self):
+        self.capture_manifest(self.root / "raw", {"home": "http://x/"}, 3)
         for i, perf in enumerate((0.5, 0.9, 0.7), 1):
             self.raw("home", i, report("http://x/", perf))
         code, _ = self.quiet(
@@ -147,11 +163,87 @@ class BaselineTest(Base):
         self.assertIn("| `home` | 3 | 70 |", (self.root / "out/SUMMARY.md").read_text())
 
     def test_summarize_fails_loudly_with_no_runs(self):
-        (self.root / "raw").mkdir()
+        self.capture_manifest(self.root / "raw", {"home": "http://x/"}, 3)
         code, _ = self.quiet(
             lh_baseline.summarize, self.root / "raw", self.root / "out"
         )
         self.assertEqual(code, 1)
+
+    def test_capture_refuses_incomplete_duplicate_mixed_and_redirected_runs(self):
+        raw = self.root / "raw"
+        self.capture_manifest(raw, {"home": "https://x.test/"}, 3)
+        originals = [report("https://x.test/", score) for score in (0.7, 0.8, 0.9)]
+        for i, value in enumerate(originals, 1):
+            value["fetchTime"] = f"2026-09-30T00:00:{i:02d}Z"
+        for i, value in enumerate(originals, 1):
+            (raw / f"home.{i}.json").write_text(json.dumps(value))
+        out = self.root / "out"
+        self.assertEqual(self.quiet(lh_baseline.summarize, raw, out)[0], 0)
+        before = (out / "home.report.json").read_bytes()
+        cases = [
+            lambda items: items.pop(),
+            lambda items: items.__setitem__(1, items[0].copy()),
+            lambda items: items[1].update(finalUrl="https://x.test/login"),
+            lambda items: items[1].update(finalDisplayedUrl="https://x.test/login"),
+            lambda items: items[1]["audits"].pop("first-contentful-paint"),
+            lambda items: items[1]["audits"]["total-blocking-time"].update(
+                numericValue=float("nan")
+            ),
+            lambda items: items[1].update(lighthouseVersion="12.0.0"),
+            lambda items: items[1]["configSettings"].update(formFactor="desktop"),
+            lambda items: [
+                item["configSettings"].update(formFactor="desktop") for item in items
+            ],
+            lambda items: items[1].update(fetchTime=items[0]["fetchTime"]),
+            lambda items: items[1].update(fetchTime="invalid"),
+        ]
+        for mutate in cases:
+            with self.subTest(mutate=cases.index(mutate)):
+                for path in raw.glob("home.*.json"):
+                    path.unlink()
+                items = json.loads(json.dumps(originals))
+                mutate(items)
+                for i, value in enumerate(items, 1):
+                    (raw / f"home.{i}.json").write_text(
+                        json.dumps(value, sort_keys=(i == 2))
+                    )
+                self.assertEqual(self.quiet(lh_baseline.summarize, raw, out)[0], 1)
+                self.assertEqual((out / "home.report.json").read_bytes(), before)
+
+    def test_capture_refuses_missing_manifest_and_malformed_sibling(self):
+        raw = self.root / "raw"
+        raw.mkdir()
+        (raw / "home.1.json").write_text(json.dumps(report("https://x.test/", 0.8)))
+        self.assertEqual(
+            self.quiet(lh_baseline.summarize, raw, self.root / "out")[0], 1
+        )
+        self.capture_manifest(raw, {"home": "https://x.test/"}, 2)
+        (raw / "home.2.json").write_text("{bad")
+        self.assertEqual(
+            self.quiet(lh_baseline.summarize, raw, self.root / "out")[0], 1
+        )
+
+    def test_capture_refuses_stale_publication_lock(self):
+        raw = self.root / "raw"
+        self.capture_manifest(raw, {"home": "https://x.test/"})
+        (raw / "home.1.json").write_text(json.dumps(report("https://x.test/", 0.8)))
+        lock = self.root / ".out.publish-lock"
+        lock.mkdir()
+        self.assertEqual(
+            self.quiet(lh_baseline.summarize, raw, self.root / "out")[0], 1
+        )
+        self.assertTrue(lock.exists())
+
+    def test_enforce_scalar_warning_tuple(self):
+        path = self.root / "rc.json"
+        path.write_text(
+            json.dumps({"ci": {"assert": {"assertions": {"custom": ["warn", 0.8]}}}})
+        )
+        self.assertEqual(self.quiet(lh_baseline.enforce, path)[0], 0)
+        self.assertEqual(
+            json.loads(path.read_text())["ci"]["assert"]["assertions"]["custom"][0],
+            "error",
+        )
 
     def test_assertions_use_requested_url_and_floors(self):
         base = self.root / "b"
@@ -206,12 +298,27 @@ class BaselineTest(Base):
         self.assertIn("LH_TARGET_URL", text)
         self.assertIn("TARGET_URL=http://localhost:3000", text)
         self.assertTrue((self.root / "ops/lighthouse/lh_baseline.py").exists())
+        self.assertIn(".expected-routes", text)
+        self.assertIn(".expected-runs", text)
         self.assertEqual(subprocess.run(["sh", "-n", str(script)]).returncode, 0)
         self.assertEqual(
             subprocess.run(
                 ["sh", "-n", str(SKILL / "references/lh-bless.sh.tmpl")]
             ).returncode,
             0,
+        )
+
+    def test_rerun_files_preserve_custom_gitignore(self):
+        out = self.root / "ops/lighthouse"
+        out.mkdir(parents=True)
+        (out / ".gitignore").write_text("custom.tmp")
+        audit_kit.write_baseline_files(self.root, "https://x.test", "/", 3)
+        lines = (out / ".gitignore").read_text().splitlines()
+        self.assertIn("custom.tmp", lines)
+        self.assertEqual(lines.count("baseline/.raw/"), 1)
+        audit_kit.write_baseline_files(self.root, "https://x.test", "/", 3)
+        self.assertEqual(
+            (out / ".gitignore").read_text().splitlines().count("baseline/.raw/"), 1
         )
 
     def test_rerun_script_defends_against_shell_injection(self):
@@ -593,6 +700,77 @@ class ReviewRegressionTest(Base):
         (base / 'home.report.json').write_text(json.dumps(report('https://preview.vercel.app/', .9)))
         return base
 
+    def test_existing_baseline_requires_valid_report_and_current_helper(self):
+        self.pkg()
+        raw = self.root / "raw"
+        self.capture_manifest(raw, {"home": "https://preview.vercel.app/"})
+        (raw / "home.1.json").write_text(
+            json.dumps(report("https://preview.vercel.app/", 0.9))
+        )
+        base = self.root / "ops/lighthouse/baseline"
+        self.assertEqual(self.quiet(lh_baseline.summarize, raw, base)[0], 0)
+        helper = self.root / "ops/lighthouse/lh_baseline.py"
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_bytes((SKILL / "scripts/lh_baseline.py").read_bytes())
+        with patch.object(audit_kit, "require_node18"):
+            self.assertIsNone(self.quiet(audit_kit.setup_lighthouse, self.root)[0])
+            helper.write_text("stale helper")
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+            helper.write_bytes((SKILL / "scripts/lh_baseline.py").read_bytes())
+            broken = report("https://preview.vercel.app/", 0.9)
+            broken["finalUrl"] = "https://preview.vercel.app/login"
+            (base / "home.report.json").write_text(json.dumps(broken))
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+            (base / "home.report.json").write_text("{bad")
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+
+    def test_existing_baseline_refuses_deleted_or_mutated_report(self):
+        self.pkg()
+        raw = self.root / "raw"
+        self.capture_manifest(raw, {"home": "https://preview.vercel.app/"})
+        (raw / "home.1.json").write_text(
+            json.dumps(report("https://preview.vercel.app/", 0.9))
+        )
+        base = self.root / "ops/lighthouse/baseline"
+        self.assertEqual(self.quiet(lh_baseline.summarize, raw, base)[0], 0)
+        helper = self.root / "ops/lighthouse/lh_baseline.py"
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_bytes((SKILL / "scripts/lh_baseline.py").read_bytes())
+        report_path = base / "home.report.json"
+        original = report_path.read_bytes()
+        with (
+            patch.object(audit_kit, "require_node18"),
+            patch.object(audit_kit, "ensure_dev") as install,
+        ):
+            report_path.write_text(
+                json.dumps(report("https://preview.vercel.app/", 0.8))
+            )
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+            report_path.unlink()
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+            report_path.write_bytes(original)
+            (base / ".capture-proof.json").unlink(missing_ok=True)
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+        install.assert_not_called()
+
+    def test_ci_refuses_stale_owned_helper_before_workflow(self):
+        self.pkg()
+        self.baseline()
+        helper = self.root / "ops/lighthouse/lh_baseline.py"
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_text('"""Lighthouse baseline helper."""\n# preview-check\n')
+        with patch.object(audit_kit, "ensure_dev") as install:
+            with self.assertRaises(audit_kit.SetupError):
+                self.quiet(audit_kit.lighthouse_ci, self.root)
+        install.assert_not_called()
+        self.assertFalse((self.root / ".github/workflows/lighthouse-ci.yml").exists())
+
     def test_uninstall_dry_runs_preserve_files_and_scripts(self):
         self.pkg(scripts={'lhci': 'lhci autorun', 'lh:bless': 'sh .github/ci/lh-bless.sh'})
         paths = {'.github/workflows/ci.yml': audit_kit.QCI_SENTINEL,
@@ -639,21 +817,26 @@ class ReviewRegressionTest(Base):
         self.assertIsNone(re.search(pattern, 'https://search?q=term'))
 
     def test_complete_capture_replaces_obsolete_reports_and_preserves_other_files(self):
-        base = self.baseline(); (base / 'old.report.json').write_text(json.dumps(report('https://x/old', .9)))
-        (base / 'notes.txt').write_text('keep')
-        raw = self.root / 'raw'; raw.mkdir()
-        (raw / 'home.1.json').write_text(json.dumps(report('https://x/', .8)))
+        base = self.baseline()
+        (base / "old.report.json").write_text(json.dumps(report("https://x/old", 0.9)))
+        (base / "notes.txt").write_text("keep")
+        raw = self.root / "raw"
+        self.capture_manifest(raw, {"home": "https://x/"})
+        (raw / "home.1.json").write_text(json.dumps(report("https://x/", 0.8)))
         self.assertEqual(lh_baseline.summarize(raw, base), 0)
-        self.assertFalse((base / 'old.report.json').exists())
-        self.assertEqual((base / 'notes.txt').read_text(), 'keep')
+        self.assertFalse((base / "old.report.json").exists())
+        self.assertEqual((base / "notes.txt").read_text(), "keep")
 
     def test_invalid_report_does_not_replace_previous_capture(self):
-        base = self.baseline(); before = (base / 'home.report.json').read_bytes()
-        raw = self.root / 'raw'; raw.mkdir()
-        bad = report('https://x/', None); bad['runtimeError'] = {'code': 'NO_FCP'}
-        (raw / 'home.1.json').write_text(json.dumps(bad))
+        base = self.baseline()
+        before = (base / "home.report.json").read_bytes()
+        raw = self.root / "raw"
+        self.capture_manifest(raw, {"home": "https://x/"})
+        bad = report("https://x/", None)
+        bad["runtimeError"] = {"code": "NO_FCP"}
+        (raw / "home.1.json").write_text(json.dumps(bad))
         self.assertEqual(lh_baseline.summarize(raw, base), 1)
-        self.assertEqual((base / 'home.report.json').read_bytes(), before)
+        self.assertEqual((base / "home.report.json").read_bytes(), before)
 
     def test_partial_knip_is_missing(self):
         self.pkg(devDependencies={'knip': '^6'})
@@ -691,21 +874,60 @@ class ReviewRegressionTest(Base):
                 lh_baseline.validate_preview_url(url, ['*.vercel.app'])
         lh_baseline.validate_preview_url('https://preview.vercel.app/', ['*.vercel.app'])
 
-
     def test_capture_route_names_do_not_collide(self):
-        audit_kit.write_baseline_files(self.root, "https://x.test", "/ /home /docs/intro /docs-intro", 1)
-        binary = self.root / "bin"; binary.mkdir()
+        audit_kit.write_baseline_files(
+            self.root, "https://x.test", "/ /home /docs/intro /docs-intro", 1
+        )
+        binary = self.root / "bin"
+        binary.mkdir()
         stub = binary / "npx"
-        stub.write_text("#!/usr/bin/env python3\nimport sys,json,os\nargs=sys.argv[1:]\np=next(a.split('=',1)[1] for a in args if a.startswith('--output-path='))\nr=json.loads(os.environ['FIXTURE_REPORT'])\nr['requestedUrl']=args[2]\nopen(p,'w').write(json.dumps(r))\n")
+        stub.write_text(
+            "#!/usr/bin/env python3\nimport sys,json,os,hashlib\nargs=sys.argv[1:]\np=next(a.split('=',1)[1] for a in args if a.startswith('--output-path='))\nr=json.loads(os.environ['FIXTURE_REPORT'])\nr['requestedUrl']=args[2]\nr['finalUrl']=args[2]\nr['fetchTime']='2026-09-30T00:00:00.'+str(int(hashlib.sha256(args[2].encode()).hexdigest()[:6],16)%1000000).zfill(6)+'Z'\nopen(p,'w').write(json.dumps(r))\n"
+        )
         stub.chmod(0o755)
-        env = dict(os.environ, PATH=str(binary)+os.pathsep+os.environ['PATH'],
-                   CHROME_PATH=sys.executable, FIXTURE_REPORT=json.dumps(report('https://x/', .9)))
-        for key in ('LH_TARGET_URL', 'LH_ROUTES', 'LH_RUNS'):
+        env = dict(
+            os.environ,
+            PATH=str(binary) + os.pathsep + os.environ["PATH"],
+            CHROME_PATH=sys.executable,
+            FIXTURE_REPORT=json.dumps(report("https://x/", 0.9)),
+        )
+        for key in ("LH_TARGET_URL", "LH_ROUTES", "LH_RUNS"):
             env.pop(key, None)
-        result = subprocess.run(['sh', 'ops/lighthouse/run-baseline.sh'], cwd=self.root,
-                                env=env, capture_output=True, text=True)
+        result = subprocess.run(
+            ["sh", "ops/lighthouse/run-baseline.sh"],
+            cwd=self.root,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(audit_kit.baseline_count(self.root), 4)
+
+    def test_failed_capture_command_cannot_publish_written_report(self):
+        audit_kit.write_baseline_files(self.root, "https://x.test", "/", 1)
+        binary = self.root / "bin"
+        binary.mkdir()
+        stub = binary / "npx"
+        stub.write_text(
+            '#!/bin/sh\nfor arg do case "$arg" in --output-path=*) file=${arg#--output-path=}; printf "%s" "{}" > "$file";; esac; done\nexit 7\n'
+        )
+        stub.chmod(0o755)
+        env = dict(
+            os.environ,
+            PATH=str(binary) + os.pathsep + os.environ["PATH"],
+            CHROME_PATH=sys.executable,
+        )
+        for key in ("LH_TARGET_URL", "LH_ROUTES", "LH_RUNS"):
+            env.pop(key, None)
+        result = subprocess.run(
+            ["sh", "ops/lighthouse/run-baseline.sh"],
+            cwd=self.root,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(audit_kit.baseline_count(self.root), 0)
 
     def test_explicit_capture_arguments_override_environment(self):
         self.pkg()

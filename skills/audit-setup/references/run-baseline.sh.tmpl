@@ -47,12 +47,16 @@ RAW_DIR="$OUT_DIR/.raw"
 mkdir -p "$RAW_DIR"
 # Stale raw runs from an earlier capture would leak into the median.
 rm -f "$RAW_DIR"/*.json
-: > "$RAW_DIR/.expected-slugs"
+case "$RUNS" in ''|*[!0-9]*) echo "LH_RUNS must be a positive integer" >&2; exit 1;; esac
+[ "$RUNS" -ge 1 ] || { echo "LH_RUNS must be positive" >&2; exit 1; }
+printf '%s\n' "$RUNS" > "$RAW_DIR/.expected-runs"
+printf '%s\n' mobile > "$RAW_DIR/.expected-preset"
+: > "$RAW_DIR/.expected-routes"
 
 set -f # route glob characters are data, not filenames
 for route in $ROUTES; do
   slug="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' "$route")"
-  printf '%s\n' "$slug" >> "$RAW_DIR/.expected-slugs"
+  printf '%s\t%s\n' "$slug" "${TARGET_URL}${route}" >> "$RAW_DIR/.expected-routes"
   echo "[$slug] $route ($RUNS runs)"
   i=1
   while [ "$i" -le "$RUNS" ]; do
@@ -60,7 +64,7 @@ for route in $ROUTES; do
       --output=json --output-path="$RAW_DIR/$slug.$i.json" \
       --chrome-flags="--headless=new --no-sandbox" --quiet \
       --only-categories=performance,accessibility,best-practices,seo \
-      >/dev/null 2>&1 || echo "  run $i failed"
+      >/dev/null 2>&1 || { echo "  run $i failed" >&2; exit 1; }
     i=$((i + 1))
   done
 done
