@@ -30,7 +30,8 @@ brief that keeps things as simple as possible without restricting the build.
   `.devproto/evidence/alignment-<topic-slug>.md`, next to the research evidence, so the `research`
   row (owned by `/research-stack`) and the plan can cite it.
 
-The verifier only reads the evidence and rejects an empty revisions section. Review the failure
+The verifier requires the exact heading `## Top revisions to apply BEFORE building` and
+rejects an empty revisions section. It only reads the evidence. Review the failure
 chains and revisions against the plan before recording a pass; this structure check cannot judge
 their quality.
 

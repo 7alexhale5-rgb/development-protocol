@@ -394,10 +394,16 @@ def setup_lighthouse(
     runs: int = 3,
     force: bool = False,
 ) -> None:
+    base = root / "ops/lighthouse/baseline"
+    lock = base.parent / ".baseline.publish-lock"
+    if lock.exists() or lock.is_symlink():
+        raise SetupError(
+            f"Lighthouse publication lock needs manual recovery: {lock}. "
+            "Inspect the unfinished publication before retrying, including with --force."
+        )
     require_node_project(root)
     require_node18()
     n = baseline_count(root)
-    base = root / "ops/lighthouse/baseline"
     if (n or (base / ".capture-proof.json").exists()) and not force:
         helper = root / "ops/lighthouse/lh_baseline.py"
         if not lh_baseline.published_baseline_valid(base):
@@ -411,8 +417,6 @@ def setup_lighthouse(
             raise SetupError(
                 "existing Lighthouse helper is stale; recapture with --force"
             )
-        if (base.parent / ".baseline.publish-lock").exists():
-            raise SetupError("existing Lighthouse publication lock needs recovery")
         print(
             f"lighthouse: baseline already present ({n} routes). Use --force to recapture."
         )
@@ -511,17 +515,25 @@ def _validate_lighthouse_target_url(target_url: str) -> None:
         )
 
 
+def append_lighthouse_exclusions(directory: Path, patterns: tuple) -> None:
+    ignore = directory / ".gitignore"
+    existing = ignore.read_text() if ignore.exists() else ""
+    additions = [
+        pattern for pattern in patterns if pattern not in existing.splitlines()
+    ]
+    if additions:
+        prefix = existing + ("\n" if existing and not existing.endswith("\n") else "")
+        ignore.write_text(prefix + "\n".join(additions) + "\n")
+
+
 def backup_lighthouse_files(directory: Path, names: tuple) -> None:
     existing = [directory / name for name in names if (directory / name).exists()]
     if existing:
         backup = Path(tempfile.mkdtemp(prefix=".audit-setup-backup-", dir=directory))
         for source in existing:
             shutil.copy2(source, backup / source.name)
-        ignore = directory / ".gitignore"
-        text = ignore.read_text() if ignore.exists() else ""
-        if ".audit-setup-backup-*/" not in text.splitlines():
-            suffix = "\n" if text and not text.endswith("\n") else ""
-            ignore.write_text(text + suffix + ".audit-setup-backup-*/\n")
+        append_lighthouse_exclusions(directory, (".audit-setup-backup-*/",))
+        print(f"lighthouse: retained replaced files at {backup}")
 
 
 def write_baseline_files(root: Path, target_url: str, routes: str, runs: int) -> None:
@@ -551,21 +563,15 @@ def write_baseline_files(root: Path, target_url: str, routes: str, runs: int) ->
     script.write_text(text)
     script.chmod(0o755)
     shutil.copyfile(HERE / "lh_baseline.py", out / "lh_baseline.py")
-    ignore = out / ".gitignore"
-    existing = ignore.read_text() if ignore.exists() else ""
-    additions = [
-        pattern
-        for pattern in (
+    append_lighthouse_exclusions(
+        out,
+        (
             "baseline/.raw/",
             "baseline/*.report.html",
             "baseline/*.log",
             ".audit-setup-backup-*/",
-        )
-        if pattern not in existing.splitlines()
-    ]
-    if additions:
-        prefix = existing + ("\n" if existing and not existing.endswith("\n") else "")
-        ignore.write_text(prefix + "\n".join(additions) + "\n")
+        ),
+    )
 
 
 def render_axe_spec(starter: str, routes: list) -> str:

@@ -164,7 +164,11 @@ def check_structure(text):
         issues.append(f"WARN: only {words} words, possibly incomplete")
         score -= 2
     score = max(0, score)
-    status = "FAIL" if present != len(SECTIONS) or not tags else ("PASS" if score >= 7 else ("WARN" if score >= 4 else "FAIL"))
+    status = (
+        "FAIL"
+        if present != len(SECTIONS) or not tags
+        else ("PASS" if score >= 7 else ("WARN" if score >= 4 else "FAIL"))
+    )
     lines = [
         f"Structure: {status} ({score}/10)",
         f"  Sections: {present}/{len(SECTIONS)}",
@@ -343,7 +347,9 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-_SAFE_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SafeRedirectHandler)
+_SAFE_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), _SafeRedirectHandler
+)
 
 
 def _default_fetch(url, method, timeout):
@@ -359,8 +365,8 @@ def _default_fetch(url, method, timeout):
 def classify_citation(url, fetch=_default_fetch, timeout=10):
     """Return ('live' | 'dead' | 'unverified', detail).
 
-    Cannot-verify is not dead: an auth wall, a bot challenge, a throttle or a
-    server error says the page may exist, so it is reported, not failed.
+    An auth wall, bot challenge, throttle or server error is unverified, not dead.
+    The aggregate check still needs a live source and refuses any blocked fetch.
     """
     for method in ("HEAD", "GET"):
         try:

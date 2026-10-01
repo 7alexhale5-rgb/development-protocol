@@ -91,6 +91,39 @@ class RunVerifierTest(unittest.TestCase):
 
 
 class EvidenceSectionsTest(unittest.TestCase):
+    def test_bundled_premortem_template_verifies_only_with_real_revisions(self):
+        import subprocess
+        import tempfile
+
+        source = (ROOT / "skills/devilsadvocate/references/premortem.md").read_text()
+        template = (
+            source.split("## Output Template", 1)[1]
+            .split("```markdown\n", 1)[1]
+            .split("```", 1)[0]
+        )
+        title = "Top revisions to apply BEFORE building"
+        self.assertFalse(_shared.sections_have_content(template, [title]))
+        completed = template.replace(
+            "[most critical revision, from the top-impact chain]",
+            "Reject unsigned records before accepting a saved proof.",
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            evidence = Path(folder) / "premortem.md"
+            evidence.write_text(completed)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(_shared.__file__)),
+                    "--evidence",
+                    str(evidence),
+                    "--section",
+                    title,
+                ],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_empty_headings_fail(self):
         self.assertFalse(
             _shared.sections_have_content(

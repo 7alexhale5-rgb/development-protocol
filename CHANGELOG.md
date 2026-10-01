@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Premortem evidence uses verifier-compatible headings. Lighthouse publication locks refuse
+  capture before dependency work, including forced recapture. Replaced-file backups are reported
+  and their exclusions share one append path; all prior copies remain retained.
+- Ad-hoc review proof still needs a request-derived acceptance criterion. Citation validation
+  requires at least one live source and rejects safety-blocked fetches; unverified links remain
+  distinct from dead links. The skill guidance now states those proof requirements.
 - Lighthouse capture rejects incomplete, replayed, redirected and mixed reports, and records
   durable proof for fresh-clone validation. Setup checks existing proof and helper freshness,
   preserves replaced helpers and custom exclusions, and refuses stale publication locks.
