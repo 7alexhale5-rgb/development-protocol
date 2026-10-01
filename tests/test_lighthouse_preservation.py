@@ -135,6 +135,42 @@ class LighthousePreservationTest(Base):
         self.assertEqual(saved.read_bytes(), b"unique recovery capture")
         self.assertEqual((lock / "owner").read_text(), "unfinished publication")
 
+    def test_invalid_rerun_count_preserves_raw_capture(self):
+        self.pkg()
+        self.quiet(audit_kit.write_baseline_files, self.root, "https://source.test", "/", 1)
+        out = self.root / "ops/lighthouse"
+        raw = out / "baseline/.raw"; raw.mkdir(parents=True)
+        saved = raw / "retained.1.json"; saved.write_bytes(b"unique recovery capture")
+        for runs in ("wrong", "0", "-1"):
+            with self.subTest(runs=runs):
+                result = subprocess.run(["sh", str(out / "run-baseline.sh")], env=dict(os.environ, LH_RUNS=runs, CHROME_PATH="/fixture/chrome"), capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("must be", result.stderr)
+                self.assertEqual(saved.read_bytes(), b"unique recovery capture")
+
+    def test_preview_modes_apply_identical_origin_validation(self):
+        self.pkg(); base = self.published()
+        config = self.root / ".lighthouserc.json"
+        config.write_text(json.dumps(lh_baseline.assertions(base)))
+        for url in ("https://preview.vercel.app?", "https://preview.vercel.app:443"):
+            with self.subTest(url=url):
+                with self.assertRaisesRegex(ValueError, "origin"):
+                    lh_baseline.preview_routes(url, base, config, ["*.vercel.app"], False)
+        self.assertEqual(len(lh_baseline.preview_routes("https://preview.vercel.app", base, config, ["*.vercel.app"], False)), 2)
+
+    def test_legacy_ci_baseline_refuses_before_derivation_with_setup_exit(self):
+        self.pkg()
+        base = self.root / "ops/lighthouse/baseline"; base.mkdir(parents=True)
+        retained = base / "home.report.json"; original = json.dumps(report("https://source.test/", .9)).encode(); retained.write_bytes(original)
+        for force in (False, True):
+            with self.subTest(force=force), patch.object(lh_baseline, "assertions", wraps=lh_baseline.assertions) as derive, patch.object(audit_kit, "ensure_dev") as install:
+                command = ["lighthouse-ci", "--project-dir", str(self.root)] + (["--force"] if force else [])
+                code, output = self.quiet(audit_kit.main, command)
+                self.assertEqual(code, 1, output)
+                self.assertIn("lighthouse --force", output)
+                derive.assert_not_called(); install.assert_not_called()
+                self.assertEqual(retained.read_bytes(), original)
+
     def test_ci_and_direct_dry_run_refuse_locked_baseline(self):
         self.pkg()
         base = self.published()

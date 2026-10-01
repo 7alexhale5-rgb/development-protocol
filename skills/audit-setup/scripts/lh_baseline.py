@@ -560,10 +560,7 @@ def preview_routes(base: str, baseline: Path, config: Path, hosts: list,
                    check_access: bool = True) -> list:
     if not published_baseline_valid(baseline):
         raise ValueError("invalid published baseline; recapture before checking preview routes")
-    validate_preview_url(base, hosts)
-    origin = urlparse(base)
-    if origin.path not in ("", "/") or origin.query:
-        raise ValueError("preview base must be an origin without path or query")
+    base = validate_preview_origin(base, hosts)
     matrix = json.loads(config.read_text())["ci"]["assert"]["assertMatrix"]
     urls = []
     for path in sorted(baseline.glob("*.report.json")):

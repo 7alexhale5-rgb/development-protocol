@@ -124,6 +124,20 @@ class EvidenceSectionsTest(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_bundled_brainstorm_requires_filled_boundary(self):
+        import tempfile
+        import subprocess
+        source = (ROOT / "skills/brainstorm-stack/SKILL.md").read_text()
+        template = source.split("## Step 5: Generate the Context Document", 1)[1].split("```markdown\n", 1)[1].split("```", 1)[0]
+        decisions = template.replace("[Decision made during questioning, with rationale]", "Use a local SQLite file for saved records.")
+        completed = decisions.replace("[specific deliverables agreed during questioning]", "Local record storage only.").replace("[items explicitly excluded]", "No hosted service or external sends.")
+        for text, expected in ((decisions, 1), (completed, 0)):
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
+                evidence = Path(tmp) / "brainstorm.md"
+                evidence.write_text(text)
+                result = subprocess.run([sys.executable, str(Path(_shared.__file__)), "--evidence", str(evidence), "--section", "Key Decisions", "--section", "Project Boundary"], capture_output=True)
+                self.assertEqual(result.returncode, expected)
+
     def test_empty_headings_fail(self):
         self.assertFalse(
             _shared.sections_have_content(

@@ -191,11 +191,13 @@ def sections_have_content(text: str, sections: list[str]) -> bool:
             continue
         if active:
             value = re.sub(r"^(?:[-*+]\s*|\d+[.)]\s*)", "", stripped).strip()
+            substantive = re.sub(r"^\*\*[^*]*:\*\*\s*", "", value)
+            substantive = re.sub(r"\[[^\]]*\]", "", substantive)
             if (
                 value
                 and value.upper() not in ("TODO", "TBD")
                 and not re.fullmatch(r"\[.*\]", value)
-                and re.search(r"\w", value)
+                and re.search(r"\w", substantive)
             ):
                 bodies[active].append(value)
     return all(bodies.values())

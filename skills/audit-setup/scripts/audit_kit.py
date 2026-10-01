@@ -1002,6 +1002,14 @@ def lighthouse_ci(
         raise SetupError(
             "no Lighthouse baseline at ops/lighthouse/baseline/. Run /audit-setup --lighthouse-only first."
         )
+    if not lh_baseline.published_baseline_valid(root / "ops/lighthouse/baseline"):
+        raise SetupError("existing Lighthouse baseline is invalid; recapture with KIT lighthouse --force")
+    helper = root / "ops/lighthouse/lh_baseline.py"
+    current_helper = (HERE / "lh_baseline.py").read_bytes()
+    if helper.exists() and helper.read_bytes() != current_helper and not force:
+        if "Lighthouse baseline helper." not in helper.read_text(errors="replace"):
+            raise SetupError("unowned ops/lighthouse/lh_baseline.py; use --force")
+        raise SetupError("stale ops/lighthouse/lh_baseline.py; use --force to refresh")
     rerun = root / "ops/lighthouse/run-baseline.sh"
     if lighthouse_rerun_stale(root):
         print("warning: existing Lighthouse rerun is stale: publication lock guard missing.")
@@ -1047,12 +1055,6 @@ def lighthouse_ci(
         return
     patterns = lh_baseline.normalize_hosts(allow_hosts or ["*.vercel.app"])
     allowlist = json.dumps(patterns)
-    helper = root / "ops/lighthouse/lh_baseline.py"
-    current_helper = (HERE / "lh_baseline.py").read_bytes()
-    if helper.exists() and helper.read_bytes() != current_helper and not force:
-        if "Lighthouse baseline helper." not in helper.read_text(errors="replace"):
-            raise SetupError("unowned ops/lighthouse/lh_baseline.py; use --force")
-        raise SetupError("stale ops/lighthouse/lh_baseline.py; use --force to refresh")
     write_files = {
         f: clobber_guard(root, f, sentinel, force, "lighthouse-ci")
         for f, sentinel in owned
