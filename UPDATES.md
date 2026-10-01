@@ -2,6 +2,14 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-01T13:05:28-05:00
+
+- Repo layout: agent routing by the ICM folder method. A root `CLAUDE.md` router (with an
+  `AGENTS.md` symlink for Codex), a `CONTEXT.md` system map, and one `CONTEXT.md` contract each
+  for `skills/`, `docs/`, `tests/`, `sync/`, `.claude-plugin/` and `.github/`. No files moved,
+  nothing installed changes: `install.sh` copies only `skills/<name>/` folders that hold a
+  `SKILL.md`. Not a user-visible change, so no version bump.
+
 ## 2026-10-01T12:50:53-05:00
 
 - skill:research-stack: research-stack re-ported from v3 (focus lenses). Eleven lenses and the tag
