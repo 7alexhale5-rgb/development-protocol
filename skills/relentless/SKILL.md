@@ -148,10 +148,31 @@ verification. `verify` re-audits them; pruning or rotating them makes a fresh ve
 fail even when the ledger and project are unchanged. A past recorded pass remains historical
 evidence, not a replacement for missing proof.
 
-**Codex limitation.** `CODEX_THREAD_ID` binds ledger ownership, but this parser has no native
-Codex transcript adapter. A raw Codex session store is not a compatible receipt root. Until
-a producer supplies actual successful reads in the supported format, file sweeps remain
-open. Do not manufacture receipts or use `--force` to claim a verified close.
+### Strict Codex read proof (opt-in)
+
+`CODEX_THREAD_ID` binds ownership; it never proves a read. Enable the native output checker
+only for the command being checked:
+
+```text
+SWEEP_CODEX_READ_PROOF=1 python3 <relentless skill folder>/scripts/sweep.py close --slug <slug>
+```
+
+It finds exactly one canonical UUID transcript under `<home>/.codex/sessions/`
+(`SWEEP_CODEX_TRANSCRIPTS` overrides). All session metadata must match that UUID.
+It accepts this narrow `functions.exec` shape, with no other calls or options:
+
+```javascript
+const r=await tools.exec_command({cmd:"cat /absolute/canonical/file"});text(r)
+```
+
+The tool output must succeed and equal the current complete UTF-8 file bytes. Requests
+alone, failed or truncated results, arbitrary JavaScript, batched calls, conflicting
+session IDs, and changed or deleted targets cannot pass. The fixture contract matches
+Codex CLI 0.158.0-alpha.2.1; recheck real output if the host format changes.
+
+One successful read never grants dependency tracing or runtime depth. Do not backfill old
+visits, manufacture receipts, or use `--force` to claim a verified close. With this option
+unset, the existing Claude successful-result lane stays unchanged.
 
 ## Parallel work
 

@@ -2,6 +2,15 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-01T18:39:01-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+Portable re-port of the tested Codex read-proof parser and opt-in sweep integration.
+The Claude successful-result lane stays unchanged. Tests cover complete output, failures,
+truncation, conflicting sessions and changed targets. Read proof never grants runtime
+coverage. Both outside reviews and new exact-head cloud checks remain required.
+
 ## 2026-10-01T01:27:20-05:00
 
 Independent review follow-up: the premortem template matches its verifier; Lighthouse

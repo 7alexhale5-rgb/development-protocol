@@ -42,9 +42,9 @@ on every save, so the two can never drift apart.
 A checklist verifier can read a closed ledger without changing it:
 `sweep.py verify <ledger.json>` requires a close without --force and retained read proof.
 It re-audits visiting-session transcripts under the configured transcript root.
-Pruned transcripts prevent a fresh pass even when the ledger is unchanged. The parser
-supports Claude-format receipts; CODEX_THREAD_ID binds ownership but does not supply a
-Codex transcript adapter. File sweeps without compatible read proof remain open.
+Pruned transcripts prevent a fresh pass even when the ledger is unchanged. Claude reads
+require successful full results. SWEEP_CODEX_READ_PROOF=1 opts into exact-output Codex
+proof; CODEX_THREAD_ID alone binds ownership and never establishes a read.
 
 Exit codes:  0 ok  ·  1 refused (open items, bad args)  ·  2 could not measure
 
@@ -68,7 +68,10 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
+
+from read_proof import prove_reads
 
 # _shared.py is the development-protocol skill's, not this one's: locate it by
 # relative path (skills/<this>/scripts -> skills/development-protocol/scripts)
@@ -543,6 +546,45 @@ def _named_in(cmd: str, path_text: str) -> bool:
     )
 
 
+def codex_session_file(session: str) -> Path | None:
+    """Find one canonical UUID transcript; never interpolate unchecked ids."""
+    try:
+        if str(uuid.UUID(session)) != session:
+            return None
+    except (TypeError, ValueError):
+        return None
+    root = Path(
+        os.environ.get("SWEEP_CODEX_TRANSCRIPTS") or Path.home() / ".codex" / "sessions"
+    )
+    matches = list(root.rglob(f"*{session}.jsonl"))
+    if len(matches) != 1:
+        return None
+    try:
+        with matches[0].open(encoding="utf-8") as stream:
+            first = json.loads(stream.readline())
+    except (OSError, UnicodeError, ValueError):
+        return None
+    if (
+        not isinstance(first, dict)
+        or first.get("type") != "session_meta"
+        or not isinstance(first.get("payload"), dict)
+        or first["payload"].get("id") != session
+    ):
+        return None
+    return matches[0]
+
+
+def codex_session_proofs(session: str, targets: set[Path]) -> tuple[bool, set[Path]]:
+    """Scan one session through the exact current-output proof algorithm."""
+    transcript = codex_session_file(session)
+    if transcript is None:
+        return False, set()
+    result = prove_reads(
+        transcript, {path.resolve() for path in targets}, session_id=session
+    )
+    return True, result["proved_paths"]
+
+
 def audit_reads(data: dict) -> tuple[list[str], int]:
     """Items at L2+ that are files and were never opened in the transcript of the
     session that visited them. Returns (unverified ids, unauditable count).
@@ -551,6 +593,9 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
     project = Path(data.get("project") or ".")
     deferred = {d["id"] for d in data.get("deferred", [])}
     cache: dict[str, tuple[bool, set[str], list[tuple[str, str]]]] = {}
+    codex_cache: dict[str, tuple[bool, set[Path]]] = {}
+    codex_opt_in = os.environ.get("SWEEP_CODEX_READ_PROOF") == "1"
+    codex_origin: dict[str, bool] = {}
     unverified: list[str] = []
     unauditable = 0
     for it in data.get("universe", []):
@@ -558,12 +603,38 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
             continue
         p = Path(it["id"]) if os.path.isabs(it["id"]) else project / it["id"]
         session = it.get("session")
+        if codex_opt_in and session and session not in codex_origin:
+            codex_origin[session] = (
+                session == os.environ.get("CODEX_THREAD_ID")
+                or codex_session_file(session) is not None
+            )
+        is_codex = codex_origin.get(session, False)
         if not p.is_file():
             unauditable += 1
+            if is_codex:
+                unverified.append(it["id"])
             continue
         if not session:
             unauditable += 1
             unverified.append(it["id"])
+            continue
+        if is_codex:
+            if session not in codex_cache:
+                targets = {
+                    (
+                        Path(x["id"]) if os.path.isabs(x["id"]) else project / x["id"]
+                    ).resolve()
+                    for x in data.get("universe", [])
+                    if x.get("session") == session
+                    and int(x.get("depth", 0)) >= EVIDENCE_FROM
+                    and x["id"] not in deferred
+                }
+                codex_cache[session] = codex_session_proofs(session, targets)
+            found, proved = codex_cache[session]
+            if not found:
+                unauditable += 1
+            if p.resolve() not in proved:
+                unverified.append(it["id"])
             continue
         if session not in cache:
             cache[session] = session_reads(session)
@@ -1225,12 +1296,16 @@ def selftest() -> int:
             "SWEEP_SESSION_ID",
             "CLAUDE_CODE_SESSION_ID",
             "CODEX_THREAD_ID",
+            "SWEEP_CODEX_READ_PROOF",
+            "SWEEP_CODEX_TRANSCRIPTS",
         )
     }
     os.environ["SWEEP_HOME"] = str(tmp / "home")
     os.environ["SWEEP_TRANSCRIPTS"] = str(tmp / "transcripts")
     os.environ.pop("SWEEP_SESSION_ID", None)
     os.environ.pop("CODEX_THREAD_ID", None)
+    os.environ.pop("SWEEP_CODEX_READ_PROOF", None)
+    os.environ.pop("SWEEP_CODEX_TRANSCRIPTS", None)
     proj = tmp / "proj"
     proj.mkdir()
     fails: list[str] = []
