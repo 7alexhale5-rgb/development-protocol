@@ -70,6 +70,25 @@ class Base(unittest.TestCase):
         (raw / ".expected-runs").write_text(f"{runs}\n")
         (raw / ".expected-preset").write_text("mobile\n")
 
+    def publish_baseline(self, base, reports):
+        """Build a real capture declaration and durable proof for consumer fixtures."""
+        with tempfile.TemporaryDirectory() as temp:
+            raw = Path(temp)
+            self.capture_manifest(
+                raw, {slug: item["requestedUrl"] for slug, item in reports.items()}
+            )
+            first = next(iter(reports.values()))
+            (raw / ".expected-preset").write_text(
+                first["configSettings"]["formFactor"] + "\n"
+            )
+            for index, (slug, item) in enumerate(reports.items(), 1):
+                item = json.loads(json.dumps(item))
+                item["fetchTime"] = f"2026-09-30T00:00:{index:02d}Z"
+                (raw / f"{slug}.1.json").write_text(json.dumps(item))
+            self.assertEqual(self.quiet(lh_baseline.summarize, raw, base)[0], 0)
+        self.assertTrue(lh_baseline.published_baseline_valid(base))
+        return base
+
 
 class DetectionTest(Base):
     def test_dep_check_ignores_script_values(self):
@@ -247,9 +266,8 @@ class BaselineTest(Base):
 
     def test_assertions_use_requested_url_and_floors(self):
         base = self.root / "b"
-        base.mkdir()
-        (base / "docs-intro.report.json").write_text(
-            json.dumps(report("https://x.test/docs/intro", 0.95, seo=0.9))
+        self.publish_baseline(
+            base, {"docs-intro": report("https://x.test/docs/intro", 0.95, seo=0.9)}
         )
         cfg = lh_baseline.assertions(base)
         entry = cfg["ci"]["assert"]["assertMatrix"][0]
@@ -265,9 +283,8 @@ class BaselineTest(Base):
 
     def test_desktop_baseline_sets_desktop_preset(self):
         base = self.root / "b"
-        base.mkdir()
-        (base / "home.report.json").write_text(
-            json.dumps(report("https://x.test/", 0.9, form="desktop"))
+        self.publish_baseline(
+            base, {"home": report("https://x.test/", 0.9, form="desktop")}
         )
         self.assertEqual(
             lh_baseline.assertions(base)["ci"]["collect"]["settings"],
@@ -276,10 +293,7 @@ class BaselineTest(Base):
 
     def test_enforce_flips_warn_to_error(self):
         base = self.root / "b"
-        base.mkdir()
-        (base / "home.report.json").write_text(
-            json.dumps(report("https://x.test/", 0.9))
-        )
+        self.publish_baseline(base, {"home": report("https://x.test/", 0.9)})
         rc = self.root / ".lighthouserc.json"
         rc.write_text(json.dumps(lh_baseline.assertions(base)))
         self.quiet(lh_baseline.enforce, rc)
@@ -490,8 +504,7 @@ class QualityCiTest(Base):
 class LighthouseCiTest(Base):
     def baseline(self):
         d = self.root / "ops/lighthouse/baseline"
-        d.mkdir(parents=True)
-        (d / "home.report.json").write_text(json.dumps(report("https://x.test/", 0.9)))
+        return self.publish_baseline(d, {"home": report("https://x.test/", 0.9)})
 
     def test_needs_a_baseline(self):
         self.pkg(name="x")
@@ -695,10 +708,10 @@ if __name__ == "__main__":
 
 class ReviewRegressionTest(Base):
     def baseline(self):
-        base = self.root / 'ops/lighthouse/baseline'
-        base.mkdir(parents=True, exist_ok=True)
-        (base / 'home.report.json').write_text(json.dumps(report('https://preview.vercel.app/', .9)))
-        return base
+        base = self.root / "ops/lighthouse/baseline"
+        return self.publish_baseline(
+            base, {"home": report("https://preview.vercel.app/", 0.9)}
+        )
 
     def test_existing_baseline_requires_valid_report_and_current_helper(self):
         self.pkg()
@@ -810,11 +823,19 @@ class ReviewRegressionTest(Base):
 
     def test_query_assertion_matches_only_the_requested_route(self):
         base = self.baseline()
-        (base / 'home.report.json').write_text(json.dumps(report('https://x.test/search?q=term', .9)))
-        pattern = lh_baseline.assertions(base)['ci']['assert']['assertMatrix'][0]['matchingUrlPattern']
-        self.assertIsNotNone(re.search(pattern, 'https://preview.vercel.app/search?q=term'))
-        self.assertIsNone(re.search(pattern, 'https://preview.vercel.app/other/search?q=term'))
-        self.assertIsNone(re.search(pattern, 'https://search?q=term'))
+        self.publish_baseline(
+            base, {"home": report("https://x.test/search?q=term", 0.9)}
+        )
+        pattern = lh_baseline.assertions(base)["ci"]["assert"]["assertMatrix"][0][
+            "matchingUrlPattern"
+        ]
+        self.assertIsNotNone(
+            re.search(pattern, "https://preview.vercel.app/search?q=term")
+        )
+        self.assertIsNone(
+            re.search(pattern, "https://preview.vercel.app/other/search?q=term")
+        )
+        self.assertIsNone(re.search(pattern, "https://search?q=term"))
 
     def test_complete_capture_replaces_obsolete_reports_and_preserves_other_files(self):
         base = self.baseline()

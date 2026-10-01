@@ -262,7 +262,7 @@ def _validate_and_pin(host):
     try:
         infos = _real_getaddrinfo(host, None)
     except OSError as exc:
-        raise ValueError(f"could not resolve host {host}: {exc}") from exc
+        raise urllib.error.URLError(exc) from exc
     safe_ip = None
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
@@ -281,7 +281,9 @@ def _validate_and_pin(host):
         if safe_ip is None:
             safe_ip = str(ip)
     if safe_ip is None:
-        raise ValueError(f"no addresses for {host}")
+        raise urllib.error.URLError(
+            socket.gaierror(socket.EAI_NONAME, f"no addresses for {host}")
+        )
     _PINNED_ADDRS[_normalize_host(host)] = safe_ip
     return safe_ip
 
@@ -320,7 +322,8 @@ def _reject_unsafe_url(url):
     loopback, private, link-local, reserved, unspecified or multicast address
     (cloud metadata endpoints like 169.254.169.254 included). Raises
     ValueError; callers turn that into a "dead"/"BLOCKED" citation rather than
-    letting it escape as a crash.
+    letting it escape as a crash. Resolution errors use URLError so ordinary
+    DNS absence stays distinct from an unsafe destination.
 
     As a side effect, records the validated address for this host in
     _PINNED_ADDRS (keyed on its normalised form): see _dns_pinning and
@@ -381,6 +384,8 @@ def classify_citation(url, fetch=_default_fetch, timeout=10):
                 pass
         except urllib.error.URLError as e:
             reason = getattr(e, "reason", e)
+            if isinstance(reason, socket.gaierror) and reason.errno == socket.EAI_AGAIN:
+                return "unverified", f"DNS {url} (temporary resolution failure)"
             if isinstance(reason, ssl.SSLError):
                 return "unverified", f"TLS {url}"
             if isinstance(reason, (TimeoutError, socket.timeout)):

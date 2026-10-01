@@ -369,6 +369,8 @@ def published_baseline_valid(base: Path) -> bool:
 def assertions(baseline_dir: Path, existing: dict = None) -> dict:
     """LHCI config derived from the baseline. Reads each report's requestedUrl for the
     route path: rebuilding it from the file slug is lossy (/a/b and /a-b share a slug)."""
+    if not published_baseline_valid(baseline_dir):
+        raise ValueError("invalid published baseline; recapture before deriving assertions")
     reports = sorted(baseline_dir.glob("*.report.json"))
     if not reports:
         raise ValueError(f"no baseline reports in {baseline_dir}")
@@ -556,6 +558,8 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def preview_routes(base: str, baseline: Path, config: Path, hosts: list,
                    check_access: bool = True) -> list:
+    if not published_baseline_valid(baseline):
+        raise ValueError("invalid published baseline; recapture before checking preview routes")
     validate_preview_url(base, hosts)
     origin = urlparse(base)
     if origin.path not in ("", "/") or origin.query:

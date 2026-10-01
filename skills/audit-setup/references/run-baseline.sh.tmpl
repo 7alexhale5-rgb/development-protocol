@@ -26,6 +26,11 @@ RUNS="${LH_RUNS:-__RUNS__}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$HERE/../.."
 
+if [ -e "$HERE/.baseline.publish-lock" ] || [ -L "$HERE/.baseline.publish-lock" ]; then
+  echo "Lighthouse publication lock needs manual recovery: $HERE/.baseline.publish-lock" >&2
+  exit 1
+fi
+
 if [ -z "${CHROME_PATH:-}" ]; then
   if [ -d "/Applications/Google Chrome.app" ]; then
     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"

@@ -387,6 +387,15 @@ def url_up(url: str) -> bool:
         return False
 
 
+def require_unlocked_lighthouse(root: Path) -> None:
+    lock = root / "ops/lighthouse/.baseline.publish-lock"
+    if lock.exists() or lock.is_symlink():
+        raise SetupError(
+            f"Lighthouse publication lock needs manual recovery: {lock}. "
+            "Inspect the unfinished publication before retrying, including with --force."
+        )
+
+
 def setup_lighthouse(
     root: Path,
     target_url: str = "",
@@ -395,12 +404,7 @@ def setup_lighthouse(
     force: bool = False,
 ) -> None:
     base = root / "ops/lighthouse/baseline"
-    lock = base.parent / ".baseline.publish-lock"
-    if lock.exists() or lock.is_symlink():
-        raise SetupError(
-            f"Lighthouse publication lock needs manual recovery: {lock}. "
-            "Inspect the unfinished publication before retrying, including with --force."
-        )
+    require_unlocked_lighthouse(root)
     require_node_project(root)
     require_node18()
     n = baseline_count(root)
@@ -1198,6 +1202,12 @@ def run_all(
     if only == "quality-ci":
         quality_ci(root, force=force, dry_run=dry_run)
         return 0
+    if only in ("", "lighthouse", "ci"):
+        try:
+            require_unlocked_lighthouse(root)
+        except SetupError as exc:
+            print(f"!!! {exc}")
+            return 1
     s = status(root)
     print_status(s)
     print()

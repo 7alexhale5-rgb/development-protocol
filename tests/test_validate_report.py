@@ -1,12 +1,16 @@
 """Tests for research-stack validate_report. Run: python3 -m unittest discover tests"""
 
 import io
+import socket
 import sys
 import tempfile
 import unittest
 import urllib.error
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+from contextlib import nullcontext
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills/research-stack/scripts"))
@@ -207,13 +211,13 @@ class SsrfGuardTest(unittest.TestCase):
                 )
                 return FakeResp()  # pragma: no cover - unreachable if guard fires
 
-        orig = vr._SAFE_OPENER
-        vr._SAFE_OPENER = RedirectingOpener()
-        try:
-            with self.assertRaises(ValueError):
+        def resolve(host, port):
+            address = "10.0.0.5" if host == "10.0.0.5" else "93.184.216.34"
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 443))]
+
+        with patch.object(vr, "_real_getaddrinfo", side_effect=resolve), patch.object(vr, "_SAFE_OPENER", RedirectingOpener()):
+            with self.assertRaisesRegex(ValueError, "not a public address"):
                 vr._default_fetch("https://public.example.com/", "HEAD", 5)
-        finally:
-            vr._SAFE_OPENER = orig
 
 
 class DnsRebindingTest(unittest.TestCase):
@@ -442,6 +446,48 @@ class FixtureFileTest(unittest.TestCase):
         with redirect_stdout(out):
             code = vr.main(["structure", str(path)])
         self.assertEqual(code, 1, out.getvalue())
+
+
+class ResolverClassificationTest(unittest.TestCase):
+    def test_default_fetch_distinguishes_dns_failure_from_unsafe_destination(self):
+        for failure, expected in (
+            (socket.gaierror(socket.EAI_NONAME, "no such host"), "PASS"),
+            (socket.gaierror(socket.EAI_AGAIN, "temporary DNS failure"), "WARN"),
+            ("private", "FAIL"),
+            ("empty", "PASS"),
+        ):
+
+            def resolve(host, port):
+                if host == "live.test":
+                    address = "93.184.216.34"
+                elif isinstance(failure, OSError):
+                    raise failure
+                elif failure == "empty":
+                    return []
+                else:
+                    address = "10.0.0.5"
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 443))]
+
+            with (
+                self.subTest(failure=str(failure)),
+                patch.object(vr, "_real_getaddrinfo", side_effect=resolve),
+                patch.object(
+                    vr._SAFE_OPENER,
+                    "open",
+                    return_value=nullcontext(SimpleNamespace(status=200)),
+                ) as opener,
+            ):
+                status, details = vr.check_citations(
+                    "https://live.test/source https://missing.test/article"
+                )
+            self.assertEqual(status, expected, details)
+            self.assertEqual(opener.call_count, 1)
+            self.assertEqual(
+                opener.call_args.args[0].full_url, "https://live.test/source"
+            )
+            self.assertEqual(
+                any("BLOCKED " in detail for detail in details), failure == "private"
+            )
 
 
 class CliTest(unittest.TestCase):
