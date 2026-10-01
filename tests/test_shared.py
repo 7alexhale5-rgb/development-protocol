@@ -91,6 +91,38 @@ class RunVerifierTest(unittest.TestCase):
 
 
 class EvidenceSectionsTest(unittest.TestCase):
+    def test_labeled_todo_boundary_fails_the_evidence_cli(self):
+        import subprocess
+        import tempfile
+
+        for bold in (False, True):
+            for placeholder in ("TODO", "TBD", "todo", "tbd"):
+                label = "**In scope:**" if bold else "In scope:"
+                for content, expected in ((placeholder, 1), ("Local records only.", 0)):
+                    with (
+                        self.subTest(bold=bold, content=content),
+                        tempfile.TemporaryDirectory() as tmp,
+                    ):
+                        evidence = Path(tmp) / "brainstorm.md"
+                        evidence.write_text(
+                            "## Key Decisions\nUse SQLite.\n## Project Boundary\n"
+                            f"- {label} {content}\n"
+                        )
+                        result = subprocess.run(
+                            [
+                                sys.executable,
+                                str(Path(_shared.__file__)),
+                                "--evidence",
+                                str(evidence),
+                                "--section",
+                                "Key Decisions",
+                                "--section",
+                                "Project Boundary",
+                            ],
+                            capture_output=True,
+                        )
+                        self.assertEqual(result.returncode, expected)
+
     def test_plain_scope_labels_do_not_count_as_filled_content(self):
         for label in ("In scope", "Out of scope"):
             text = f"# Project Boundary\n- {label}: [deliverables]\n"

@@ -196,7 +196,7 @@ def sections_have_content(text: str, sections: list[str]) -> bool:
             substantive = re.sub(r"\[[^\]]*\]", "", substantive)
             if (
                 value
-                and value.upper() not in ("TODO", "TBD")
+                and substantive.strip().upper() not in ("TODO", "TBD")
                 and not re.fullmatch(r"\[.*\]", value)
                 and re.search(r"\w", substantive)
             ):
