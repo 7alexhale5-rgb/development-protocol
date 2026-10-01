@@ -396,6 +396,18 @@ def require_unlocked_lighthouse(root: Path) -> None:
         )
 
 
+def lighthouse_rerun_stale(root: Path) -> bool:
+    """Identify an existing rerun missing the current publication-lock guard."""
+    rerun = root / "ops/lighthouse/run-baseline.sh"
+    guard = '\n'.join([
+        'if [ -e "$HERE/.baseline.publish-lock" ] || [ -L "$HERE/.baseline.publish-lock" ]; then',
+        '  echo "Lighthouse publication lock needs manual recovery: $HERE/.baseline.publish-lock" >&2',
+        '  exit 1',
+        'fi',
+    ])
+    return rerun.is_file() and guard not in rerun.read_text(errors="replace")
+
+
 def setup_lighthouse(
     root: Path,
     target_url: str = "",
@@ -421,6 +433,8 @@ def setup_lighthouse(
             raise SetupError(
                 "existing Lighthouse helper is stale; recapture with --force"
             )
+        if lighthouse_rerun_stale(root):
+            raise SetupError("existing Lighthouse rerun is stale; recapture with --force")
         print(
             f"lighthouse: baseline already present ({n} routes). Use --force to recapture."
         )
@@ -978,12 +992,16 @@ def lighthouse_ci(
         else:
             print("lighthouse-ci: uninstalled. Baseline and @lhci/cli left in place.")
         return
+    require_unlocked_lighthouse(root)
     require_node_project(root)
     if baseline_count(root) == 0:
         raise SetupError(
             "no Lighthouse baseline at ops/lighthouse/baseline/. Run /audit-setup --lighthouse-only first."
         )
     rerun = root / "ops/lighthouse/run-baseline.sh"
+    if lighthouse_rerun_stale(root):
+        print("warning: existing Lighthouse rerun is stale: publication lock guard missing.")
+        print("         Recapture with --force before using the rerun or lh:bless.")
     if rerun.exists() and "LH_TARGET_URL" not in rerun.read_text():
         print(
             "warning: ops/lighthouse/run-baseline.sh is a legacy hand-written version; lh:bless will not work until"
@@ -1087,6 +1105,7 @@ def missing(root: Path, tool: str) -> bool:
             not lh_baseline.published_baseline_valid(root / "ops/lighthouse/baseline")
             or not helper.is_file()
             or helper.read_bytes() != (HERE / "lh_baseline.py").read_bytes()
+            or lighthouse_rerun_stale(root)
         )
     if tool == "axe":
         return not has_dep(root, "@axe-core/playwright") or not axe_spec_present(root)
@@ -1340,6 +1359,8 @@ def main(argv=None) -> int:
             return run_all(
                 root, a.only or "", a.force, a.dry_run, a.target_url, a.routes, a.runs
             )
+        if a.cmd == "lighthouse":
+            require_unlocked_lighthouse(root)
         if a.dry_run and a.cmd in ("lighthouse", "axe", "bundle", "knip"):
             print(
                 f"--dry-run: would set up {a.cmd}"

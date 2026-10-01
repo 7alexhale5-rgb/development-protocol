@@ -702,10 +702,6 @@ class ReviewDesignAuditTest(Base):
         self.assertEqual(code, 0, out)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ReviewRegressionTest(Base):
     def baseline(self):
         base = self.root / "ops/lighthouse/baseline"
@@ -994,3 +990,6 @@ class ReviewRegressionTest(Base):
         (raw / 'home.1.json').write_text(json.dumps(report('https://x/', .9)))
         self.assertEqual(lh_baseline.summarize(raw, base), 1)
         self.assertEqual((base / 'home.report.json').read_bytes(), old)
+
+if __name__ == "__main__":
+    unittest.main()

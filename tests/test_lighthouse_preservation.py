@@ -135,6 +135,46 @@ class LighthousePreservationTest(Base):
         self.assertEqual(saved.read_bytes(), b"unique recovery capture")
         self.assertEqual((lock / "owner").read_text(), "unfinished publication")
 
+    def test_ci_and_direct_dry_run_refuse_locked_baseline(self):
+        self.pkg()
+        base = self.published()
+        (base.parent / "lh_baseline.py").write_bytes(Path(lh_baseline.__file__).read_bytes())
+        (base.parent / ".baseline.publish-lock").mkdir()
+        for command in (
+            ["lighthouse", "--dry-run"],
+            ["lighthouse", "--dry-run", "--force"],
+            ["lighthouse-ci"],
+            ["lighthouse-ci", "--force"],
+            ["lighthouse-ci", "--dry-run"],
+            ["lighthouse-ci", "--regen-assertions-only"],
+            ["lighthouse-ci", "--enforce"],
+        ):
+            with self.subTest(command=command), patch.object(audit_kit, "ensure_dev") as install, patch.object(lh_baseline, "assertions", wraps=lh_baseline.assertions) as derive:
+                code, output = self.quiet(audit_kit.main, command + ["--project-dir", str(self.root)])
+                self.assertEqual(code, 1, output)
+                self.assertIn("manual recovery", output)
+                install.assert_not_called()
+                derive.assert_not_called()
+
+    def test_stale_existing_rerun_is_reported_without_overwrite(self):
+        self.pkg()
+        base = self.published()
+        (base.parent / "lh_baseline.py").write_bytes(Path(lh_baseline.__file__).read_bytes())
+        runner = base.parent / "run-baseline.sh"
+        original = b"#!/bin/sh\n# unique legacy rerun\n"
+        runner.write_bytes(original)
+        self.assertTrue(audit_kit.missing(self.root, "lighthouse"))
+        with patch.object(audit_kit, "require_node18"), patch.object(audit_kit, "ensure_dev") as install:
+            with self.assertRaisesRegex(audit_kit.SetupError, "rerun.*stale"):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
+        install.assert_not_called()
+        self.assertEqual(runner.read_bytes(), original)
+        with patch.object(audit_kit, "ensure_dev"):
+            _, output = self.quiet(audit_kit.lighthouse_ci, self.root, dry_run=True)
+        self.assertIn("rerun", output)
+        self.assertIn("publication lock", output)
+        self.assertEqual(runner.read_bytes(), original)
+
     def test_publication_lock_refuses_capture_before_any_dependency_work(self):
         for force in (False, True):
             for has_baseline in (False, True):
