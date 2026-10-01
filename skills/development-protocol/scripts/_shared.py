@@ -192,6 +192,7 @@ def sections_have_content(text: str, sections: list[str]) -> bool:
         if active:
             value = re.sub(r"^(?:[-*+]\s*|\d+[.)]\s*)", "", stripped).strip()
             substantive = re.sub(r"^\*\*[^*]*:\*\*\s*", "", value)
+            substantive = re.sub(r"^[^:\[\]]{1,40}:\s*", "", substantive)
             substantive = re.sub(r"\[[^\]]*\]", "", substantive)
             if (
                 value
