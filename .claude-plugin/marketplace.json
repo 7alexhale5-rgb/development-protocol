@@ -9,7 +9,7 @@
     {
       "name": "development-protocol",
       "description": "19 skills that take software work from idea to shipped, with an evidence-checked 17-row checklist.",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "source": "./",
       "category": "development"
     }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.0 (2026-10-01)
+
+- Research focus lens `comms` (voice, SMS and dialers), the 12th lens: `/research-stack --focus
+  comms` splits the phone system from the programmable layer, adds
+  RingCentral, Twilio, Telnyx, Aircall, Dialpad, CallRail and FCC, eCFR and CTIA rules to the
+  tool registry, and requires a "Telephony and messaging plan" section.
+- `data-infra` treats vercel.com, supabase.com and opentelemetry.io as authorities. `devtools`
+  also triggers on api, sdk, integration and webhook. The checklist suggests `comms` for
+  telephony goals.
+
 ## 2.1.0 (2026-10-01)
 
 - Research focus lenses: `/research-stack --focus <tags>` (or `#tag`) runs up to 4 of 11 lenses (seo,

@@ -133,9 +133,10 @@ FOCUS_HINTS = [
     ("a11y", r"\b(a11y|accessibility|accessible|wcag|screen readers?|aria|colou?r contrast|keyboard navigation)\b"),
     ("perf", r"\b(performance|perf|latency|core web vitals|cwv|lcp|inp|cls|bundle size|page ?speed|lighthouse|throughput)\b"),
     ("security", r"\b(security|vulnerabilit(y|ies)|cves?|owasp|authn?|secrets?|xss|csrf|ssrf|injection|supply chain|sbom|pentest|threat model)\b"),
-    ("devtools", r"\b(librar(y|ies)|frameworks?|sdks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b"),
+    ("devtools", r"\b(librar(y|ies)|frameworks?|sdks?|apis?|integrations?|webhooks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b"),
     ("ai-agents", r"\b(llms?|agents?|agentic|prompts?|rag|evals?|mcp|models?|fine-?tun\w*|embeddings?|claude|gpt|gemini)\b"),
     ("data-infra", r"\b(databases?|postgres|schema|warehouse|etl|pipelines?|queues?|kafka|cach(e|ing)|redis|infra|kubernetes|serverless|cdn)\b"),
+    ("comms", r"\b(dialers?|dialing|telephony|voip|phone systems?|softphones?|webrtc|sms|text messag\w*|ivr|call (center|centre|recording|tracking|routing|logging|queues?)|contact cent(er|re)|cold call\w*|click-to-call|voicemail|ringcentral|twilio|aircall|dialpad|telnyx|10dlc|caller id|cpaas|ucaas)\b"),
     ("legal", r"\b(legal|gdpr|ccpa|hipaa|compliance|regulations?|licen[cs]es?|terms of service|privacy policy|contracts?|ai act)\b"),
 ]
 FOCUS_RES = [(tag, re.compile(rx, re.I)) for tag, rx in FOCUS_HINTS]

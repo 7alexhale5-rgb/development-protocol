@@ -2,6 +2,19 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-01T18:46:20-05:00
+
+- skill:research-stack: re-ported the upstream comms lens (voice, SMS and dialers; CPaaS versus
+  UCaaS). New `references/focus/comms.md` and a 12th tag in `references/focus/tags.json` (between
+  `data-infra` and `legal`, addendum "Telephony and messaging plan"), plus 7 registry tools:
+  RingCentral, Twilio, Telnyx, Aircall, Dialpad, CallRail and FCC, eCFR and CTIA rules (83 tools).
+  `data-infra` authorities gain vercel.com, supabase.com and opentelemetry.io; `devtools`
+  triggers also match api, sdk, integration and webhook. The lens's pathway line points to
+  `/pathway`, as in the other lenses. Nothing dropped: the new entries hold no private material.
+- skill:development-protocol: `FOCUS_HINTS` in `devproto.py` mirrors the new and changed triggers.
+- tests: `test_focus.py` gains the upstream dialer-topic regression test.
+- Version 2.2.0.
+
 ## 2026-10-01T13:05:28-05:00
 
 - Repo layout: agent routing by the ICM folder method. A root `CLAUDE.md` router (with an
