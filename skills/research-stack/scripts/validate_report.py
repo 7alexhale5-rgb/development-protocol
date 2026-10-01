@@ -3,11 +3,16 @@
 
 Usage:
   validate_report.py structure <report.md>
+  validate_report.py focus     <report.md>
   validate_report.py citations <report.md> [--timeout 10] [--max 30]
   validate_report.py sources   <report.md>
   validate_report.py all       <report.md> [--offline]
 
 Each check prints a one-line verdict (PASS, WARN or FAIL) and detail lines.
+When the report's front matter declares `focus: [tag, ...]`, `structure` also
+runs the focus check: every tag must be known (focus/tags.json), its addendum
+section must be present, and the report should cite at least one source from
+that tag's stack.
 Exit 0 on PASS or WARN, 1 on FAIL, 2 on a usage error. The script only reads
 the report; it never writes to it, so it is safe as a checklist verifier.
 """
@@ -15,6 +20,8 @@ the report; it never writes to it, so it is safe as a checklist verifier.
 import argparse
 import contextlib
 import ipaddress
+import json
+import os
 import re
 import socket
 import ssl
@@ -45,7 +52,42 @@ TAGS = {
     "NB",
     "CACHE",
     "perspective",
+    "AUDIT",
+    "GM",
+    "GQ",
+    "L30",
+    "XS",
+    "PAR",
+    "KAGI",
 }
+
+
+def _find_manifest():
+    """Locate focus/tags.json: the standalone layout (../focus) or the ported one
+    (../references/focus). RESEARCH_STACK_FOCUS overrides both."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.environ.get("RESEARCH_STACK_FOCUS", ""),
+        os.path.join(here, "..", "focus", "tags.json"),
+        os.path.join(here, "..", "references", "focus", "tags.json"),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def load_manifest(path=None):
+    path = path or _find_manifest()
+    if not path:
+        return {"tags": {}, "bundles": {}}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+MANIFEST = load_manifest()
+for _lens in MANIFEST["tags"].values():
+    TAGS.update(_lens.get("source_tags", []))
 
 # (aliases, penalty). The first alias is the name printed when missing.
 SECTIONS = [
@@ -113,6 +155,17 @@ DOMAIN_MAP = [
     ("x.com", "social"),
     ("linkedin.com", "social"),
 ]
+# Each focus lens names the primary authorities for its area. They rank as
+# official unless the base map already says otherwise.
+_KNOWN = {d for d, _ in DOMAIN_MAP}
+for _lens in MANIFEST["tags"].values():
+    for _domain in _lens.get("authorities", []):
+        if _domain not in _KNOWN:
+            DOMAIN_MAP.append((_domain, "official"))
+            _KNOWN.add(_domain)
+
+FRONT_MATTER_RE = re.compile(r"\A\s*---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
+FOCUS_LINE_RE = re.compile(r"^focus:\s*(.*)$", re.MULTILINE)
 
 
 def read(path):
@@ -134,6 +187,29 @@ def extract_tags(text):
         if heads and all(h in TAGS for h in heads):
             found.extend(heads)
     return found
+
+
+def declared_focus(text):
+    """Return the focus tags named in the report's front matter, or []."""
+    m = FRONT_MATTER_RE.match(text)
+    if not m:
+        return []
+    line = FOCUS_LINE_RE.search(m.group(1))
+    if not line:
+        return []
+    raw = line.group(1).strip().strip("[]")
+    return [t.strip().strip("\"'").lstrip("#").lower() for t in raw.split(",") if t.strip()]
+
+
+def expand_focus(tags, manifest=None):
+    """Expand bundles and drop duplicates, keeping order. Unknown names pass through."""
+    manifest = manifest or MANIFEST
+    out = []
+    for tag in tags:
+        for t in manifest.get("bundles", {}).get(tag, [tag]):
+            if t not in out:
+                out.append(t)
+    return out
 
 
 def has_section(text, alias):
@@ -172,6 +248,34 @@ def check_structure(text):
         f"  Word count: {words}",
     ] + [f"  - {i}" for i in issues]
     return status, lines
+
+
+def check_focus(text, manifest=None):
+    """Focus addenda: one required section per declared tag, plus lens sources."""
+    manifest = manifest or MANIFEST
+    tags = expand_focus(declared_focus(text), manifest)
+    if not tags:
+        return "PASS", ["Focus: PASS (no focus declared)"]
+    lenses = manifest.get("tags", {})
+    issues, fail = [], False
+    used = set(extract_tags(text))
+    for tag in tags:
+        lens = lenses.get(tag)
+        if lens is None:
+            known = ", ".join(sorted(lenses)) or "none (manifest not found)"
+            issues.append(f"FAIL: unknown focus tag '{tag}' (known: {known})")
+            fail = True
+            continue
+        if not has_section(text, lens["addendum"]):
+            issues.append(f"FAIL: focus '{tag}' needs a '{lens['addendum']}' section")
+            fail = True
+        if not used.intersection(lens.get("source_tags", [])):
+            issues.append(
+                f"WARN: focus '{tag}' cites none of its stack "
+                f"({', '.join(lens.get('source_tags', []))}); say which tools were unavailable"
+            )
+    status = "FAIL" if fail else ("WARN" if issues else "PASS")
+    return status, [f"Focus: {status} ({', '.join(tags)})"] + [f"  - {i}" for i in issues]
 
 
 def classify_url(url):
@@ -416,7 +520,7 @@ def check_citations(text, fetch=_default_fetch, timeout=10, cap=30):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Validate a research-stack report.")
-    p.add_argument("check", choices=["structure", "citations", "sources", "all"])
+    p.add_argument("check", choices=["structure", "focus", "citations", "sources", "all"])
     p.add_argument("report")
     p.add_argument("--timeout", type=float, default=10)
     p.add_argument("--max", type=int, default=30, help="max URLs to check")
@@ -430,6 +534,8 @@ def main(argv=None):
     results = []
     if a.check in ("structure", "all"):
         results.append(check_structure(text))
+    if a.check in ("structure", "focus", "all") and (a.check == "focus" or declared_focus(text)):
+        results.append(check_focus(text))
     if a.check == "citations" or (a.check == "all" and not a.offline):
         results.append(check_citations(text, timeout=a.timeout, cap=a.max))
     if a.check in ("sources", "all"):

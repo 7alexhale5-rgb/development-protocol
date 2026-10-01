@@ -45,13 +45,17 @@ Under-planning a big one costs a rewrite.
 
 ## Step 2: run the lane, start to finish
 
-| Size                | Spec                                                           | Build                               | Verify                                          | Close                   |
-| ------------------- | -------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ----------------------- |
-| Trivial             | skip                                                           | just edit                           | run it and look                                 | `/commit`               |
-| Bug fix             | `/planning-stack`                                              | `/build-stack`                      | `/review-stack`                                 | `/commit`, then `/ship` |
-| Feature             | `/karpathy spec`                                               | `/build-stack`                      | `/karpathy verify`                              | `/closeout-stack`       |
-| Big or architecture | `/research-stack` then `/karpathy spec` then `/devilsadvocate` | `/build-stack --large`              | `/review-stack --audit`                         | `/closeout-stack`       |
-| UI or UX            | `/visual-spec` then `/design-stack`                            | `/design-stack` then `/build-stack` | `/design-stack --critique` then `/review-stack` | `/closeout-stack`       |
+| Size                | Spec                                                                                     | Build                               | Verify                                          | Close                   |
+| ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ----------------------- |
+| Trivial             | skip                                                                                     | just edit                           | run it and look                                 | `/commit`               |
+| Bug fix             | `/planning-stack`                                                                        | `/build-stack`                      | `/review-stack`                                 | `/commit`, then `/ship` |
+| Feature             | `/karpathy spec`                                                                         | `/build-stack`                      | `/karpathy verify`                              | `/closeout-stack`       |
+| Big or architecture | `/research-stack --focus devtools,security` then `/karpathy spec` then `/devilsadvocate` | `/build-stack --large`              | `/review-stack --audit`                         | `/closeout-stack`       |
+| UI or UX            | `/research-stack --focus ui-ux,a11y` then `/visual-spec` then `/design-stack`            | `/design-stack` then `/build-stack` | `/design-stack --critique` then `/review-stack` | `/closeout-stack`       |
+
+Focus tags aim research at one area. Add `data-infra` to the big lane when a schema or data store
+is involved. Launch work runs `/research-stack #launch` (seo, perf, a11y, content). When the
+research row turns on, the checklist suggests tags from the goal's words.
 
 ## The checklist
 

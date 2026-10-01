@@ -289,6 +289,9 @@ For `--deep`: after all rounds, review any unresolved technical questions and su
 > "There are [N] open technical questions. Want me to run `/research-stack` on any of these before
 > we plan?"
 
+Name the focus tags that fit each question (for example `--focus devtools,security` for a
+library pick, `--focus ui-ux,a11y` for a screen), so the research run is aimed.
+
 ---
 
 ## Step 5: Generate the Context Document
@@ -383,7 +386,8 @@ By depth:
 - `--quick`: "Context captured. Run `/planning-stack` when you're ready to plan."
 - default: "Run `/planning-stack` to turn this into an implementation plan." For a UI/UX, page,
   app or client build, add: "After planning, `/visual-spec` pins the visual half of the spec."
-- `--deep`: "Run `/research-stack` on the open questions, then `/planning-stack` for a full plan."
+- `--deep`: "Run `/research-stack --focus <tags>` on the open questions, then `/planning-stack`
+  for a full plan."
 
 If the goal is still fuzzy after this, `/karpathy spec` pins the decision this work drives before
 the plan is written. If `--for-plan` was set: "Context written to `.planning/CONTEXT.md`.

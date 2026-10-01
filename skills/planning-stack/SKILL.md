@@ -133,7 +133,9 @@ or in the background, do; otherwise run them back to back without waiting to ana
   `docs/adr*`, `ROADMAP.md`, `TODO.md`. Read at most 3.
 - **Source 4, research (conditional).** Skipped by `--no-research`, forced by `--research`,
   otherwise only when the goal holds unknowns (a new technology, an external service, a
-  third-party API).
+  third-party API). Pass focus tags through: `/research-stack --focus devtools,security` for a
+  library or architecture pick (add `data-infra` for schema work), `--focus ui-ux,a11y` for UI,
+  or the tags the checklist suggested.
 - **Source 5, best practices.** Skip entirely with `--no-research`. Otherwise two web searches: "<technology> <goal terms> best practices
   <year>" and "<technology> <goal terms> common mistakes pitfalls".
 

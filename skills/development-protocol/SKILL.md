@@ -94,7 +94,7 @@ with a reason; do not skip silently.
 | --- | ----------- | ----------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
 | 1   | pathway     | `/pathway`                    | always            | work brief with goal, user, owner, done condition, risk, one number; `grep -q "Done when" <brief>`               |
 | 2   | brainstorm  | `/brainstorm-stack`           | unless trivial    | decisions and open questions; grep for the decisions heading                                                     |
-| 3   | research    | `/research-stack`             | goal has unknowns | cited findings; grep for a sources section                                                                       |
+| 3   | research    | `/research-stack`             | goal has unknowns | cited report (pass the suggested `--focus` tags); `validate_report.py structure`                                 |
 | 4   | spec        | `/karpathy spec`              | unless trivial    | the failing acceptance test or spec file; run it and expect the planned failure; pass the test as `--instrument` |
 | 5   | planning    | `/planning-stack`             | unless trivial    | the plan with 3 to 5 phases, each with a gate number; grep for the phase table                                   |
 | 6   | visual-spec | `/visual-spec`                | UI work           | the spec pack; its check script exits 0                                                                          |
@@ -112,7 +112,10 @@ with a reason; do not skip silently.
 
 "Trivial" means the goal says typo, copy edit, one-line, trivial or tiny fix. UI words turn on
 visual-spec and design. Words like research, unknown, investigate, evaluate, compare, regulation or
-spike turn on research. Before each row, run `status` and act on `next_step`.
+spike turn on research. When research is on, `start` and `status` also suggest focus tags from the
+goal (for example `/research-stack --focus ui-ux,a11y` for UI work, `--focus devtools,security`
+for architecture, `#launch` for a launch); pass them through. Before each row, run `status` and act
+on `next_step`.
 
 **A local-only repo (no `origin` remote, no pull request) cannot reach 17/17 pass, by design.**
 `ship`'s verifier is a PR check (`gh pr checks <n>` or equivalent); with no remote there is no pass

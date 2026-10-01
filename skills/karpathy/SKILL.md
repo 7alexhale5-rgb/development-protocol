@@ -59,8 +59,10 @@ verify the key decisions. The bundle already does this. Invoke it, do not hand-r
 We're starting: $TOPIC.
 
 0. EXTERNAL FACTS (only if the goal depends on them: a new domain, "should we adopt X", market,
-   competitor or library facts we do not already hold): run /research-stack FIRST. It stays its
-   own skill. The spec just uses its cited findings. Skip this when the goal is already clear.
+   competitor or library facts we do not already hold): run /research-stack FIRST, with
+   --focus <tags> when the area is clear (devtools,security for a library pick, ui-ux,a11y for
+   UI, market for competitors). It stays its own skill. The spec just uses its cited findings.
+   Skip this when the goal is already clear.
 1. GOAL before task. If the work is non-trivial or ambiguous, run /brainstorm-stack. Interview the
    user (with a structured question tool if your agent has one) to pin the decision this work
    drives before any plan exists. Do not start from the task statement.
