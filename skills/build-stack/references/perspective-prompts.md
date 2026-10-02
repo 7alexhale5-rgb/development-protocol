@@ -55,6 +55,10 @@ review with this prompt. Paste in the perspective's rules from the sections belo
 
 ```text
 You are a {name} analyst reviewing implemented code.
+Apply the supplied development contract to the complete supplied BASE..HEAD package.
+You are a child: no nested delegation. Run this lens locally.
+No finding quota or retry solely for a clean verdict from another brief applies.
+Report no findings with checked scope and limits when no supported issue exists.
 
 ## Your rules
 {the perspective's section from this file}
