@@ -38,5 +38,8 @@ When a tool is missing, the fix to suggest is `/audit-setup --<tool>-only`:
 
 - Running `/audit-setup --all` twice in a row must be a no-op the second time (beyond reading
   `package.json`), and must not rewrite `ops/audit/STATUS.md`.
-- `/audit-setup --lighthouse-only` with a baseline present skips; `--force` recaptures.
+- Existing baselines skip only when the capture proof, report set and copied helper validate.
+  `--force` recaptures; old helpers and rerun scripts retain ignored private backups.
+- A failed, incomplete, replayed, redirected or mixed capture preserves the previous baseline.
+  A stale publication lock requires manual recovery. Hard-kill recovery is not automatic.
 - `/review-stack` never writes to these paths. One-way flow: audit-setup writes, review reads.

@@ -24,6 +24,22 @@ Every re-port, source baseline, and public maintenance change, newest first.
   re-record `skill:research-stack` after confirming this port.
 - Version 2.3.0.
 
+## 2026-10-02T11:59:38-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-02T11:50:35-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-02T11:32:52-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-02T10:53:05-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
 ## 2026-10-01T18:46:20-05:00
 
 - skill:research-stack: re-ported the upstream comms lens (voice, SMS and dialers; CPaaS versus
@@ -36,6 +52,15 @@ Every re-port, source baseline, and public maintenance change, newest first.
 - skill:development-protocol: `FOCUS_HINTS` in `devproto.py` mirrors the new and changed triggers.
 - tests: `test_focus.py` gains the upstream dialer-topic regression test.
 - Version 2.2.0.
+
+## 2026-10-01T18:39:01-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+Portable re-port of the tested Codex read-proof parser and opt-in sweep integration.
+The Claude successful-result lane stays unchanged. Tests cover complete output, failures,
+truncation, conflicting sessions and changed targets. Read proof never grants runtime
+coverage. Both outside reviews and new exact-head cloud checks remain required.
 
 ## 2026-10-01T13:05:28-05:00
 
@@ -59,6 +84,19 @@ Every re-port, source baseline, and public maintenance change, newest first.
   method could not be reproduced here (no plain SHA-256 of the source SKILL.md or any of its
   committed versions matches). The next drift check should re-record `skill:research-stack` and
   `skill:1pct` after confirming this port.
+
+## 2026-10-01T01:27:20-05:00
+
+Independent review follow-up: the premortem template matches its verifier; Lighthouse
+publication locks refuse capture early and retained backup paths are reported. Ad-hoc review
+and citation guidance now state their proof requirements. Read-audit guidance also states
+its retained-transcript requirement and missing native Codex transcript adapter. These are
+portable maintenance changes, not an upstream re-port; source fingerprints remain unchanged.
+
+## 2026-09-30T21:21:38-05:00
+
+- skill:audit-setup: source fingerprint recorded for drift monitoring; this is not a re-port
+
 
 ## 2026-09-29T21:01:33-05:00
 

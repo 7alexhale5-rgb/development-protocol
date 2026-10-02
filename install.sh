@@ -114,33 +114,40 @@ for d in "$here"/skills/*/; do
 done
 [[ ${#skills[@]} -gt 0 ]] || { echo "no skills found under $here/skills" >&2; exit 1; }
 
-# Resolve symlinked roots before ownership and containment checks. Two hosts
-# may share the same directory; process that physical directory only once.
+# Resolve symlinked roots and check every destination before touching state.
+# NUL-delimited roots preserve spaces and newlines. A temporary result file
+# keeps the Python preflight synchronous (Bash 3.2 can interrupt later writes
+# when an asynchronous process substitution exits).
 canonical_roots=()
-for root in "${roots[@]}"; do
-  resolved="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$root")"
-  duplicate=0
-  if [[ ${#canonical_roots[@]} -gt 0 ]]; then
-    for known in "${canonical_roots[@]}"; do
-      [[ "$resolved" == "$known" ]] && duplicate=1
-    done
-  fi
-  [[ $duplicate -eq 1 ]] || canonical_roots+=("$resolved")
-done
+preflight_file="$(mktemp "${TMPDIR:-/tmp}/devproto-preflight.XXXXXX")"
+trap 'rm -f -- "$preflight_file"' EXIT
+if ! python3 - "$here" "${#roots[@]}" "${roots[@]}" "${skills[@]}" > "$preflight_file" <<'PY'
+import os
+import sys
+
+repo = os.path.realpath(sys.argv[1])
+root_count = int(sys.argv[2])
+requested_roots = sys.argv[3:3 + root_count]
+skills = sys.argv[3 + root_count:]
+roots = list(dict.fromkeys(os.path.realpath(root) for root in requested_roots))
+for root in roots:
+    for skill in skills:
+        dest = os.path.realpath(os.path.join(root, skill))
+        source = os.path.realpath(os.path.join(repo, "skills", skill))
+        if any(os.path.commonpath([dest, path]) == dest for path in (repo, source)):
+            print("refusing: destination contains this repo or its source on disk. Clone elsewhere first.", file=sys.stderr)
+            sys.exit(1)
+sys.stdout.buffer.write(b"\0".join(os.fsencode(root) for root in roots) + b"\0")
+PY
+then
+  exit 1
+fi
+while IFS= read -r -d '' resolved; do
+  canonical_roots+=("$resolved")
+done < "$preflight_file"
+rm -f -- "$preflight_file"
+trap - EXIT
 roots=("${canonical_roots[@]}")
-for root in "${roots[@]}"; do
-  for s in "${skills[@]}"; do
-    if python3 -c '
-import os, sys
-dest, repo, source = map(os.path.realpath, sys.argv[1:])
-unsafe = any(os.path.commonpath([dest, p]) == dest for p in (repo, source))
-sys.exit(0 if unsafe else 1)
-' "$root/$s" "$here" "$here/skills/$s"; then
-      echo "refusing: destination contains this repo or its source on disk. Clone elsewhere first." >&2
-      exit 1
-    fi
-  done
-done
 
 # ---- confirm replacements -----------------------------------------------------
 existing=()
@@ -232,7 +239,7 @@ done
 
 if [[ $dry_run -eq 0 ]]; then
   echo
-  bash "$here/health-check.sh" --target "$target" || true
+  bash "$here/health-check.sh" --target "$target"
   echo
   echo "Done. Restart your agent, then try:"
   echo "  /development-protocol . \"<one sentence goal>\""

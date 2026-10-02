@@ -709,7 +709,10 @@ python3 "$skill_dir/scripts/validate_report.py" all "$report"
   free fallback ran).
 - **Citations:** each URL (up to 30) gets a HEAD request, then GET if HEAD is refused. An auth
   wall, bot challenge, throttle or server error counts as **unverified, not dead**: cannot-verify
-  is not the same as gone.
+  is not the same as gone. The aggregate check fails with no URLs, no verified live URL,
+  any safety-blocked fetch, or more than five dead URLs. A `BLOCKED` detail means the request
+  was refused, not that the source is gone. Other unverified sources, three to five dead URLs,
+  or URLs beyond the check cap produce a warning when at least one live source remains.
 - **Process (`--deep` only):** the dashboard must record the perspectives that ran (with
   counts), the attribution spot-check as `Attribution: N/N`, and the internal round (or why it was
   skipped). A missing record is a WARN: the steps may have happened, but nobody can tell. Never
@@ -741,6 +744,8 @@ Validation Gate
 **Decision matrix:**
 
 - All pass: deliver.
+- Citation fail: replace or re-source the affected claims before delivery. An entirely
+  paywalled or bot-blocked source set cannot establish verified liveness by itself.
 - More than 2 dead citations: flag them in the report and suggest re-running Round 3.
 - Source quality average below 5: warn the user that the sources are mostly informal.
 - Structure or focus fail: fix the report before delivery.

@@ -252,6 +252,11 @@ def status(root: Path) -> dict:
         "lighthouse_target": lighthouse_pkg(node),
         "lighthouse": "installed" if has_dep(root, "lighthouse") else "missing",
         "baseline": f"present ({n} routes)" if n else "missing",
+        "lighthouse_rerun": (
+            "missing" if not (root / "ops/lighthouse/run-baseline.sh").is_file()
+            else "stale (missing current publication lock guard)" if lighthouse_rerun_stale(root)
+            else "present (current publication lock guard)"
+        ),
         "axe": "installed" if has_dep(root, "@axe-core/playwright") else "missing",
         "axe_spec": "present" if axe_spec_present(root) else "missing",
         "playwright_test_dir": playwright_test_dir(root),
@@ -272,6 +277,7 @@ def print_status(s: dict) -> None:
         f"  node:           {s['node']}   (Lighthouse to install: {s['lighthouse_target']})"
     )
     print(f"  lighthouse:     {s['lighthouse']}   baseline: {s['baseline']}")
+    print(f"  lighthouse rerun: {s['lighthouse_rerun']}")
     print(
         f"  axe:            {s['axe']}   spec: {s['axe_spec']} (testDir {s['playwright_test_dir']})"
     )
@@ -359,8 +365,15 @@ def find_chrome(root: Path = None) -> str:
     if root is not None:
         try:
             probe = subprocess.run(
-                ["node", "-e", "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);"],
-                cwd=root, capture_output=True, text=True, timeout=10,
+                [
+                    "node",
+                    "-e",
+                    "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);",
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             candidate = probe.stdout.strip()
             if probe.returncode == 0 and candidate and Path(candidate).is_file():
@@ -380,6 +393,25 @@ def url_up(url: str) -> bool:
         return False
 
 
+def require_unlocked_lighthouse(root: Path) -> None:
+    lock = root / "ops/lighthouse/.baseline.publish-lock"
+    if lock.exists() or lock.is_symlink():
+        raise SetupError(
+            f"Lighthouse publication lock needs manual recovery: {lock}. "
+            "Inspect the unfinished publication before retrying, including with --force."
+        )
+
+
+def lighthouse_rerun_stale(root: Path) -> bool:
+    """Identify an existing rerun missing the current publication-lock guard."""
+    rerun = root / "ops/lighthouse/run-baseline.sh"
+    template = (REFS / "run-baseline.sh.tmpl").read_text()
+    guard = template.split("# audit-setup:publication-lock begin\n", 1)[1].split(
+        "# audit-setup:publication-lock end", 1
+    )[0].strip()
+    return rerun.is_file() and guard not in rerun.read_text(errors="replace")
+
+
 def setup_lighthouse(
     root: Path,
     target_url: str = "",
@@ -387,10 +419,26 @@ def setup_lighthouse(
     runs: int = 3,
     force: bool = False,
 ) -> None:
+    base = root / "ops/lighthouse/baseline"
+    require_unlocked_lighthouse(root)
     require_node_project(root)
     require_node18()
     n = baseline_count(root)
-    if n and not force:
+    if (n or (base / ".capture-proof.json").exists()) and not force:
+        helper = root / "ops/lighthouse/lh_baseline.py"
+        if not lh_baseline.published_baseline_valid(base):
+            raise SetupError(
+                "existing Lighthouse baseline is invalid; recapture with --force"
+            )
+        if (
+            not helper.is_file()
+            or helper.read_bytes() != (HERE / "lh_baseline.py").read_bytes()
+        ):
+            raise SetupError(
+                "existing Lighthouse helper is stale; recapture with --force"
+            )
+        if lighthouse_rerun_stale(root):
+            raise SetupError("existing Lighthouse rerun is stale; recapture with --force")
         print(
             f"lighthouse: baseline already present ({n} routes). Use --force to recapture."
         )
@@ -445,8 +493,13 @@ def setup_lighthouse(
                     f"local server did not answer on :3000 within 30s (log: {log.name}). Pass --target-url or set PREVIEW_URL."
                 )
         write_baseline_files(root, target_url.rstrip("/"), " ".join(route_list), runs)
-        env = dict(os.environ, CHROME_PATH=chrome, LH_TARGET_URL=target_url.rstrip("/"),
-                   LH_ROUTES=" ".join(route_list), LH_RUNS=str(runs))
+        env = dict(
+            os.environ,
+            CHROME_PATH=chrome,
+            LH_TARGET_URL=target_url.rstrip("/"),
+            LH_ROUTES=" ".join(route_list),
+            LH_RUNS=str(runs),
+        )
         r = subprocess.run(["sh", "ops/lighthouse/run-baseline.sh"], cwd=root, env=env)
         if r.returncode != 0 or baseline_count(root) == 0:
             raise SetupError(
@@ -484,6 +537,27 @@ def _validate_lighthouse_target_url(target_url: str) -> None:
         )
 
 
+def append_lighthouse_exclusions(directory: Path, patterns: tuple) -> None:
+    ignore = directory / ".gitignore"
+    existing = ignore.read_text() if ignore.exists() else ""
+    additions = [
+        pattern for pattern in patterns if pattern not in existing.splitlines()
+    ]
+    if additions:
+        prefix = existing + ("\n" if existing and not existing.endswith("\n") else "")
+        ignore.write_text(prefix + "\n".join(additions) + "\n")
+
+
+def backup_lighthouse_files(directory: Path, names: tuple) -> None:
+    existing = [directory / name for name in names if (directory / name).exists()]
+    if existing:
+        backup = Path(tempfile.mkdtemp(prefix=".audit-setup-backup-", dir=directory))
+        for source in existing:
+            shutil.copy2(source, backup / source.name)
+        append_lighthouse_exclusions(directory, (".audit-setup-backup-*/",))
+        print(f"lighthouse: retained replaced files at {backup}")
+
+
 def write_baseline_files(root: Path, target_url: str, routes: str, runs: int) -> None:
     """Commit-ready rerun kit: run-baseline.sh, a copy of lh_baseline.py (so reruns and CI never
     depend on where this skill is installed) and a .gitignore for raw runs."""
@@ -507,11 +581,18 @@ def write_baseline_files(root: Path, target_url: str, routes: str, runs: int) ->
         "|".join(re.escape(k) for k in subs), lambda m: subs[m.group(0)], text
     )
     script = out / "run-baseline.sh"
+    backup_lighthouse_files(out, ("run-baseline.sh", "lh_baseline.py"))
     script.write_text(text)
     script.chmod(0o755)
     shutil.copyfile(HERE / "lh_baseline.py", out / "lh_baseline.py")
-    (out / ".gitignore").write_text(
-        "baseline/.raw/\nbaseline/*.report.html\nbaseline/*.log\n"
+    append_lighthouse_exclusions(
+        out,
+        (
+            "baseline/.raw/",
+            "baseline/*.report.html",
+            "baseline/*.log",
+            ".audit-setup-backup-*/",
+        ),
     )
 
 
@@ -784,7 +865,9 @@ def quality_ci(
             t = t.replace(k, v)
         return re.sub(r"\n\n+(?=      - name)", "\n", t)
 
-    write_files = {f: clobber_guard(root, f, QCI_SENTINEL, force, "quality-ci") for f in files}
+    write_files = {
+        f: clobber_guard(root, f, QCI_SENTINEL, force, "quality-ci") for f in files
+    }
     ci_body, dam_body = (
         render("quality-ci.yml.tmpl"),
         render("dependabot-auto-merge.yml.tmpl"),
@@ -860,7 +943,9 @@ def lighthouse_ci(
         (root / ".lighthouserc.json", LHCI_SENTINEL),
     ]
     if uninstall and dry_run:
-        print("lighthouse-ci --dry-run: would remove owned files and unchanged package scripts")
+        print(
+            "lighthouse-ci --dry-run: would remove owned files and unchanged package scripts"
+        )
         return
     if uninstall:
         kept = []
@@ -911,12 +996,24 @@ def lighthouse_ci(
         else:
             print("lighthouse-ci: uninstalled. Baseline and @lhci/cli left in place.")
         return
+    require_unlocked_lighthouse(root)
     require_node_project(root)
     if baseline_count(root) == 0:
         raise SetupError(
             "no Lighthouse baseline at ops/lighthouse/baseline/. Run /audit-setup --lighthouse-only first."
         )
+    if not lh_baseline.published_baseline_valid(root / "ops/lighthouse/baseline"):
+        raise SetupError("existing Lighthouse baseline is invalid; recapture with KIT lighthouse --force")
+    helper = root / "ops/lighthouse/lh_baseline.py"
+    current_helper = (HERE / "lh_baseline.py").read_bytes()
+    if helper.exists() and helper.read_bytes() != current_helper and not force:
+        if "Lighthouse baseline helper." not in helper.read_text(errors="replace"):
+            raise SetupError("unowned ops/lighthouse/lh_baseline.py; use --force")
+        raise SetupError("stale ops/lighthouse/lh_baseline.py; use --force to refresh")
     rerun = root / "ops/lighthouse/run-baseline.sh"
+    if lighthouse_rerun_stale(root):
+        print("warning: existing Lighthouse rerun is stale: publication lock guard missing.")
+        print("         Recapture with: KIT lighthouse --force (or /audit-setup --lighthouse-only --force) before using the rerun or lh:bless.")
     if rerun.exists() and "LH_TARGET_URL" not in rerun.read_text():
         print(
             "warning: ops/lighthouse/run-baseline.sh is a legacy hand-written version; lh:bless will not work until"
@@ -936,15 +1033,20 @@ def lighthouse_ci(
         lh_baseline.enforce(rc)
         return
     config = (
-        json.dumps(lh_baseline.assertions(
-            root / "ops/lighthouse/baseline",
-            json.loads(rc.read_text()) if has_sentinel(rc, LHCI_SENTINEL) else None,
-        ), indent=2)
+        json.dumps(
+            lh_baseline.assertions(
+                root / "ops/lighthouse/baseline",
+                json.loads(rc.read_text()) if has_sentinel(rc, LHCI_SENTINEL) else None,
+            ),
+            indent=2,
+        )
         + "\n"
     )
     if regen_only:
         if rc.exists() and not has_sentinel(rc, LHCI_SENTINEL) and not force:
-            raise SetupError("refusing to replace unowned .lighthouserc.json; use --force")
+            raise SetupError(
+                "refusing to replace unowned .lighthouserc.json; use --force"
+            )
         if dry_run:
             print(config[:1500])
             return
@@ -953,12 +1055,10 @@ def lighthouse_ci(
         return
     patterns = lh_baseline.normalize_hosts(allow_hosts or ["*.vercel.app"])
     allowlist = json.dumps(patterns)
-    helper = root / "ops/lighthouse/lh_baseline.py"
-    if helper.exists() and 'Lighthouse baseline helper.' not in helper.read_text():
-        if not force:
-            raise SetupError("unowned ops/lighthouse/lh_baseline.py; use --force")
-    write_files = {f: clobber_guard(root, f, sentinel, force, "lighthouse-ci")
-                   for f, sentinel in owned}
+    write_files = {
+        f: clobber_guard(root, f, sentinel, force, "lighthouse-ci")
+        for f, sentinel in owned
+    }
     if dry_run:
         print(
             f"lighthouse-ci --dry-run: package manager {detect_pm(root)}, URL allowlist {allowlist}"
@@ -973,10 +1073,14 @@ def lighthouse_ci(
     (root / ".github/ci").mkdir(parents=True, exist_ok=True)
     wf.parent.mkdir(parents=True, exist_ok=True)
     bodies = {
-        wf: (REFS / "lighthouse-ci.yml.tmpl").read_text().replace("{{DOMAIN_ALLOWLIST}}", allowlist),
+        wf: (REFS / "lighthouse-ci.yml.tmpl")
+        .read_text()
+        .replace("{{DOMAIN_ALLOWLIST}}", allowlist),
         rc: config,
         root / ".github/ci/lh-bless.sh": (REFS / "lh-bless.sh.tmpl").read_text(),
-        root / ".github/ci/README.md": (REFS / "ci-readme.md.tmpl").read_text().replace("{{PM_RUN_LH_BLESS}}", pm_run(root, "lh:bless")),
+        root / ".github/ci/README.md": (REFS / "ci-readme.md.tmpl")
+        .read_text()
+        .replace("{{PM_RUN_LH_BLESS}}", pm_run(root, "lh:bless")),
     }
     for path, body in bodies.items():
         if write_files[path]:
@@ -984,7 +1088,8 @@ def lighthouse_ci(
             if path.name == "lh-bless.sh":
                 path.chmod(0o755)
     helper.parent.mkdir(parents=True, exist_ok=True)
-    if not helper.exists() or force or "preview-check" not in helper.read_text():
+    if not helper.exists() or force:
+        backup_lighthouse_files(helper.parent, (helper.name,))
         shutil.copyfile(HERE / "lh_baseline.py", helper)
     add_script(root, "lhci", "lhci autorun")
     add_script(root, "lh:bless", "sh .github/ci/lh-bless.sh")
@@ -1001,7 +1106,13 @@ def lighthouse_ci(
 
 def missing(root: Path, tool: str) -> bool:
     if tool == "lighthouse":
-        return baseline_count(root) == 0
+        helper = root / "ops/lighthouse/lh_baseline.py"
+        return (
+            not lh_baseline.published_baseline_valid(root / "ops/lighthouse/baseline")
+            or not helper.is_file()
+            or helper.read_bytes() != (HERE / "lh_baseline.py").read_bytes()
+            or lighthouse_rerun_stale(root)
+        )
     if tool == "axe":
         return not has_dep(root, "@axe-core/playwright") or not axe_spec_present(root)
     if tool == "bundle":
@@ -1010,21 +1121,33 @@ def missing(root: Path, tool: str) -> bool:
             for d in ("@next/bundle-analyzer", "rollup-plugin-visualizer", "size-limit")
         )
     if tool == "knip":
-        return (not has_dep(root, "knip")
-                or not any((root / n).exists() for n in ("knip.json", "knip.ts"))
-                or "dead-code" not in (read_pkg(root).get("scripts") or {}))
+        return (
+            not has_dep(root, "knip")
+            or not any((root / n).exists() for n in ("knip.json", "knip.ts"))
+            or "dead-code" not in (read_pkg(root).get("scripts") or {})
+        )
     if tool == "quality-ci":
-        return not all(has_sentinel(root / ".github/workflows" / n, QCI_SENTINEL)
-                       for n in ("ci.yml", "dependabot-auto-merge.yml"))
+        return not all(
+            has_sentinel(root / ".github/workflows" / n, QCI_SENTINEL)
+            for n in ("ci.yml", "dependabot-auto-merge.yml")
+        )
     if tool == "ci":
-        return (not has_dep(root, "@lhci/cli") or not all(
-            has_sentinel(root / n, sentinel) for n, sentinel in (
-                (".github/workflows/lighthouse-ci.yml", LHCI_SENTINEL),
-                (".github/ci/lh-bless.sh", LH_BLESS_SENTINEL),
-                (".github/ci/README.md", LHCI_SENTINEL),
-                (".lighthouserc.json", LHCI_SENTINEL),
-            )) or not (root / "ops/lighthouse/lh_baseline.py").is_file()
-            or not all(k in (read_pkg(root).get("scripts") or {}) for k in ("lhci", "lh:bless")))
+        return (
+            not has_dep(root, "@lhci/cli")
+            or not all(
+                has_sentinel(root / n, sentinel)
+                for n, sentinel in (
+                    (".github/workflows/lighthouse-ci.yml", LHCI_SENTINEL),
+                    (".github/ci/lh-bless.sh", LH_BLESS_SENTINEL),
+                    (".github/ci/README.md", LHCI_SENTINEL),
+                    (".lighthouserc.json", LHCI_SENTINEL),
+                )
+            )
+            or not (root / "ops/lighthouse/lh_baseline.py").is_file()
+            or not all(
+                k in (read_pkg(root).get("scripts") or {}) for k in ("lhci", "lh:bless")
+            )
+        )
     raise ValueError(tool)
 
 
@@ -1032,7 +1155,7 @@ def canary(root: Path, tool: str) -> str:
     """For a tool this run claims to have set up, confirm its artifact is on disk. Catches a
     step that returned success without producing output (install worked, config write failed)."""
     ok = {
-        "lighthouse": lambda: baseline_count(root) > 0,
+        "lighthouse": lambda: not missing(root, "lighthouse"),
         "axe": lambda: axe_spec_present(root),
         "bundle": lambda: not missing(root, "bundle"),
         "knip": lambda: (root / "knip.json").exists() or (root / "knip.ts").exists(),
@@ -1104,6 +1227,12 @@ def run_all(
     if only == "quality-ci":
         quality_ci(root, force=force, dry_run=dry_run)
         return 0
+    if only in ("", "lighthouse", "ci"):
+        try:
+            require_unlocked_lighthouse(root)
+        except SetupError as exc:
+            print(f"!!! {exc}")
+            return 1
     s = status(root)
     print_status(s)
     print()
@@ -1236,6 +1365,8 @@ def main(argv=None) -> int:
             return run_all(
                 root, a.only or "", a.force, a.dry_run, a.target_url, a.routes, a.runs
             )
+        if a.cmd == "lighthouse":
+            require_unlocked_lighthouse(root)
         if a.dry_run and a.cmd in ("lighthouse", "axe", "bundle", "knip"):
             print(
                 f"--dry-run: would set up {a.cmd}"

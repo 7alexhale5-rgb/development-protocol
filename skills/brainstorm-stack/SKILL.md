@@ -19,10 +19,11 @@ written the context document, record it:
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
   --id <work-id> --step brainstorm --result pass \
   --evidence .devproto/evidence/brainstorm.md \
-  --verify "grep -q '^## Key Decisions' .devproto/evidence/brainstorm.md && grep -q '^## Project Boundary' .devproto/evidence/brainstorm.md"
+  --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/evidence/brainstorm.md --section 'Key Decisions' --section 'Project Boundary'"
 ```
 
-The verifier only reads the file. Never let it rewrite the evidence.
+The verifier only reads the file and rejects empty sections. Review the decisions against the
+user's goal before recording a pass; nonempty text alone does not prove useful decisions.
 
 ---
 

@@ -128,7 +128,7 @@ re-run.
 
 | Tool       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| lighthouse | Installs Lighthouse as a devDependency (version by Node), finds Chrome, detects routes, picks the target URL (starts `build` then `start` if nothing is running, waits 30 seconds, stops the server after), writes `ops/lighthouse/run-baseline.sh`, copies `lh_baseline.py` beside it, then runs the script: N runs per route, the median run kept as `ops/lighthouse/baseline/<slug>.report.json`, plus `SUMMARY.md`. Fails if no report was produced. |
+| lighthouse | Installs Lighthouse as a devDependency (version by Node), finds Chrome, detects routes, picks the target URL (starts `build` then `start` if nothing is running, waits 30 seconds, stops the server after), writes `ops/lighthouse/run-baseline.sh`, copies `lh_baseline.py` beside it, then runs the script: N runs per route, the median run kept as `ops/lighthouse/baseline/<slug>.report.json`, plus `SUMMARY.md`. Fails unless every declared capture is complete and valid. |
 | axe        | Installs `@playwright/test` (if absent) and `@axe-core/playwright`, downloads Chromium (`npx playwright install chromium`, skips cached browsers), writes `playwright.config.ts` only when none exists, then writes `<testDir>/a11y/smoke.spec.ts` from `references/axe-playwright-starter.spec.ts` with the detected routes. An existing spec is kept unless `--force`.                                                                                 |
 | bundle     | Next.js: installs `@next/bundle-analyzer`, adds an `analyze` script (`ANALYZE=true <pm> build`), saves the config snippet to `ops/audit/bundle-analyzer-snippet.md` and prints it. Vite: installs `rollup-plugin-visualizer`, saves and prints its snippet. Astro and other builds: installs `size-limit` and `@size-limit/preset-app`, writes `.size-limit.json` (250 KB starter budget) if absent. No framework detected: skipped with a reason.       |
 | knip       | Installs knip, writes `knip.json` (the Next.js preset from `references/knip.example.json`, or a generic `src/` preset), adds a `dead-code` script.                                                                                                                                                                                                                                                                                                       |
@@ -212,8 +212,14 @@ Say plainly what failed or still needs a person (a config snippet to paste, a ru
 
 ### `--lighthouse-only`
 
-Just the baseline. Use it to set a performance watermark fast. With a baseline present it skips;
-`--force` recaptures.
+Just the baseline. Existing reports skip only after the saved capture proof, report bytes and
+copied helper pass validation. Legacy baselines or stale helpers need explicit `--force`
+recapture. Replaced helpers and rerun scripts are backed up in ignored, private folders.
+Custom `.gitignore` lines are preserved. A publication lock requires manual recovery, not a
+successful skip. An existing rerun lacking the current publication lock guard is stale;
+recapture with `KIT lighthouse --force` (or `/audit-setup --lighthouse-only --force`).
+The replaced script is backed up. Status reports this staleness before setup.
+Ordinary errors preserve the prior reports; hard-kill recovery remains manual.
 
 ### `--axe-only`
 
@@ -288,7 +294,10 @@ writes:
 
 The host allowlist defaults to `*.vercel.app`, matched at a domain boundary. Pass
 `--allow-host HOST` (repeatable), using an exact hostname or `*.example.com`. URLs must
-use HTTPS without credentials. Older HTTPS glob inputs are normalized to host boundaries.
+use HTTPS without credentials. The base must have no explicit port, nonroot path, query or
+fragment, including empty markers. Host labels must be valid. The workflow writes only the
+normalized allowed origin. Older HTTPS glob inputs are normalized to host boundaries. A stale
+copied helper refuses workflow generation until explicit `--force` refresh keeps a backup.
 
 **Assertions start warn-only.** Regressions show in the PR comment but do not fail the build
 until you flip `"warn"` to `"error"` in `.lighthouserc.json`, or run `--ci-only --enforce`.
@@ -298,7 +307,10 @@ redirect and audits the login page. Its path matches no assertion pattern, so ev
 skipped and the run reports success, including error-level ones. The workflow now requires
 a direct 2xx response for every route. All redirects fail before their targets are fetched.
 Use canonical routes that do not redirect. Every collected URL must match an assertion;
-post-capture checks reject changed final URLs and missing routes. Baseline refresh preserves
+post-capture checks reject either changed final URL and missing routes. Baseline capture
+requires every declared run, unique capture times, complete finite metrics, and consistent
+browser, Lighthouse version and settings. `.capture-proof.json` binds the exact saved reports
+and summary, so a fresh clone detects deleted or changed files without ignored raw reports. Baseline refresh preserves
 existing assertion levels and unrelated config, so enforced checks stay enforced.
 
 `--ci-only --uninstall` deletes only the owned files that still carry their own sentinel (the

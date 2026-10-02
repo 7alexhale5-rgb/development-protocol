@@ -52,10 +52,9 @@ ignore `.sweeps/**/.lock` and `.sweeps/**/*.tmp` either way. Closed and abandone
 move to `.sweeps/_closed/`.
 
 **Session ownership.** A ledger belongs to the session that last changed it. The id comes
-from `SWEEP_SESSION_ID` if you set it, else `CLAUDE_CODE_SESSION_ID`, which Claude Code
-sets for every session (its subagents share their parent's id). On an agent that exposes
-no session id, set `SWEEP_SESSION_ID` yourself, or work unbound: every command still
-works, and only the Stop hook and the read audit need an id.
+from `SWEEP_SESSION_ID`, then `CLAUDE_CODE_SESSION_ID`, then `CODEX_THREAD_ID`. Claude Code
+subagents share their parent's id. With no id, ownership is unbound and no Stop hook acts
+on the ledger; file-read proof is still required for a verified close.
 
 ## The loop
 
@@ -138,11 +137,46 @@ formats do not gain full coverage automatically. A visit with no full read behin
 the ledger is the proof the user relies on, and a false one is worse than an honest
 "partial".
 
-The read audit knows Claude Code's transcript format and location. Items it cannot audit
-(not a file, no recorded session, no transcript on disk, or another agent) are counted and
-shown at `close`, never passed silently. On an agent without readable transcripts, your
-evidence strings carry the whole weight, so make them specific. `SWEEP_TRANSCRIPTS` points
-the audit at another folder of transcripts in the same format.
+The read audit knows Claude Code's transcript format and location. `SWEEP_TRANSCRIPTS`
+points it at another root containing compatible `*/<session-id>.jsonl` receipts. File items
+without a visiting session or readable transcript make `close` and `verify` refuse; evidence
+strings alone cannot substitute for captured successful reads. Non-file items are counted
+as unauditable and reported separately.
+
+**Retain the proof.** Keep visiting-session transcripts while the ledger is used for current
+verification. `verify` re-audits them; pruning or rotating them makes a fresh verification
+fail even when the ledger and project are unchanged. A past recorded pass remains historical
+evidence, not a replacement for missing proof.
+
+### Strict Codex read proof (opt-in)
+
+`CODEX_THREAD_ID` binds ownership; it never proves a read. Enable the native output checker
+when recording each Codex file visit, then close the sweep:
+
+```text
+SWEEP_CODEX_READ_PROOF=1 python3 <relentless skill folder>/scripts/sweep.py visit --slug <slug> <file> --depth 2 --evidence "complete successful file output"
+SWEEP_CODEX_READ_PROOF=1 python3 <relentless skill folder>/scripts/sweep.py close --slug <slug>
+```
+
+It finds exactly one canonical UUID transcript under `<home>/.codex/sessions/`
+(`SWEEP_CODEX_TRANSCRIPTS` overrides). All session metadata must match that UUID.
+It accepts this narrow `functions.exec` shape, with no other calls or options:
+
+```javascript
+const r=await tools.exec_command({cmd:"cat /absolute/canonical/file"});text(r)
+```
+
+The tool output must succeed and equal the current complete UTF-8 file bytes. Requests
+alone, failed or truncated results, arbitrary JavaScript, batched calls, conflicting
+session IDs, and changed or deleted targets cannot pass. The fixture contract matches
+Codex CLI 0.158.0-alpha.2.1; recheck real output if the host format changes.
+
+One successful read never grants dependency tracing or runtime depth. Do not backfill old
+visits, manufacture receipts, or use `--force` to claim a verified close. With this option
+unset during a new Codex file visit, its provider stays unknown and close refuses.
+Enable it, perform a fresh complete read, and record a new real visit with `visit --force`
+(the revisit option, never `close --force`). Previously required Codex proof remains
+required after the flag is removed. The Claude successful-result lane stays unchanged.
 
 ## Parallel work
 
@@ -269,3 +303,12 @@ Read the one that fits before you enumerate:
 - `references/research.md`: sources on a topic, to saturation
 - `references/audits.md`: targets crossed with checks, against the live system
 - `references/migrations.md`: every reference to an old thing, until none remain
+
+### Retained read requirements
+
+Enumeration and visits retain `item_kind`; file visits also retain `proof_provider` and
+`read_proof_required`. Later checks use these requirements even after a session change
+or removal of the Codex opt-in flag. Missing required files or transcripts fail.
+A legacy visit without retained kind/provider is unverified until a new real visit
+records and proves it; verification never manufactures provenance. Explicit non-file
+items keep their domain evidence and do not require a file transcript.

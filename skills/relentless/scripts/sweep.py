@@ -28,8 +28,8 @@ in the transcript of the session that visited it. `--force` closes anyway and
 records which checks it overrode.
 
 OWNERSHIP. A ledger belongs to the session that last changed it. The session id
-comes from SWEEP_SESSION_ID if set, else CLAUDE_CODE_SESSION_ID (Claude Code sets
-it; its subagents share their parent's id). With neither, ledgers are unbound and
+comes from SWEEP_SESSION_ID if set, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
+Claude Code subagents share their parent's id. With none, ledgers are unbound and
 no Stop hook acts on them. The optional Stop hook (../hooks/relentless-stop.py)
 acts only on open ledgers the stopping session owns.
 
@@ -40,7 +40,11 @@ SWEEP_HOME overrides the whole store. Closed and abandoned sweeps move to
 on every save, so the two can never drift apart.
 
 A checklist verifier can read a closed ledger without changing it:
-`sweep.py verify <ledger.json>` exits 0 only for a sweep closed without --force.
+`sweep.py verify <ledger.json>` requires a close without --force and retained read proof.
+It re-audits visiting-session transcripts under the configured transcript root.
+Pruned transcripts prevent a fresh pass even when the ledger is unchanged. Claude reads
+require successful full results. SWEEP_CODEX_READ_PROOF=1 opts into exact-output Codex
+proof; CODEX_THREAD_ID alone binds ownership and never establishes a read.
 
 Exit codes:  0 ok  ·  1 refused (open items, bad args)  ·  2 could not measure
 
@@ -64,7 +68,10 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
+
+from read_proof import prove_reads
 
 # _shared.py is the development-protocol skill's, not this one's: locate it by
 # relative path (skills/<this>/scripts -> skills/development-protocol/scripts)
@@ -162,7 +169,7 @@ def all_ledgers(include_closed: bool = False) -> list[Path]:
 
 
 def current_session() -> str | None:
-    for key in ("SWEEP_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
+    for key in ("SWEEP_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
@@ -539,6 +546,66 @@ def _named_in(cmd: str, path_text: str) -> bool:
     )
 
 
+def codex_session_file(session: str) -> Path | None:
+    """Find one canonical UUID transcript; never interpolate unchecked ids."""
+    try:
+        if str(uuid.UUID(session)) != session:
+            return None
+    except (TypeError, ValueError):
+        return None
+    root = Path(
+        os.environ.get("SWEEP_CODEX_TRANSCRIPTS") or Path.home() / ".codex" / "sessions"
+    )
+    matches = list(root.rglob(f"*{session}.jsonl"))
+    if len(matches) != 1:
+        return None
+    try:
+        with matches[0].open(encoding="utf-8") as stream:
+            first = json.loads(stream.readline())
+    except (OSError, UnicodeError, ValueError):
+        return None
+    if (
+        not isinstance(first, dict)
+        or first.get("type") != "session_meta"
+        or not isinstance(first.get("payload"), dict)
+        or first["payload"].get("id") != session
+    ):
+        return None
+    return matches[0]
+
+
+def codex_session_proofs(session: str, targets: set[Path]) -> tuple[bool, set[Path]]:
+    """Scan one session through the exact current-output proof algorithm."""
+    transcript = codex_session_file(session)
+    if transcript is None:
+        return False, set()
+    result = prove_reads(
+        transcript, {path.resolve() for path in targets}, session_id=session
+    )
+    return True, result["proved_paths"]
+
+
+def item_path(data: dict, ident: str) -> Path:
+    return Path(ident) if os.path.isabs(ident) else Path(data.get("project") or ".") / ident
+
+
+def visit_provenance(data: dict, item: dict, session: str | None) -> dict:
+    """Retain requirements while evidence exists, never infer them at verify time."""
+    kind = item.get("item_kind", "unknown")
+    if item_path(data, item["id"]).is_file():
+        kind = "file"
+    # Absence cannot prove that a legacy item was never a file.
+    required = kind != "non-file"
+    provider = "unknown"
+    if session:
+        if session == os.environ.get("CODEX_THREAD_ID") and session != os.environ.get("CLAUDE_CODE_SESSION_ID"):
+            provider = "codex" if os.environ.get("SWEEP_CODEX_READ_PROOF") == "1" else "unknown"
+        else:
+            provider = "claude"
+    return {"item_kind": kind,
+            "proof_provider": provider, "read_proof_required": required}
+
+
 def audit_reads(data: dict) -> tuple[list[str], int]:
     """Items at L2+ that are files and were never opened in the transcript of the
     session that visited them. Returns (unverified ids, unauditable count).
@@ -547,21 +614,52 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
     project = Path(data.get("project") or ".")
     deferred = {d["id"] for d in data.get("deferred", [])}
     cache: dict[str, tuple[bool, set[str], list[tuple[str, str]]]] = {}
+    codex_cache: dict[str, tuple[bool, set[Path]]] = {}
     unverified: list[str] = []
     unauditable = 0
     for it in data.get("universe", []):
         if int(it.get("depth", 0)) < EVIDENCE_FROM or it["id"] in deferred:
             continue
-        p = Path(it["id"]) if os.path.isabs(it["id"]) else project / it["id"]
+        p = item_path(data, it["id"])
         session = it.get("session")
-        if not p.is_file() or not session:
+        kind = it.get("item_kind")
+        if kind == "non-file" and not p.is_file() and it.get("read_proof_required") is False:
             unauditable += 1
+            continue
+        if (kind != "file" or it.get("read_proof_required") is not True
+                or it.get("proof_provider") not in {"claude", "codex"} or not p.is_file()):
+            unauditable += 1
+            unverified.append(it["id"])
+            continue
+        is_codex = it["proof_provider"] == "codex"
+        if not session:
+            unauditable += 1
+            unverified.append(it["id"])
+            continue
+        if is_codex:
+            if session not in codex_cache:
+                targets = {
+                    (
+                        Path(x["id"]) if os.path.isabs(x["id"]) else project / x["id"]
+                    ).resolve()
+                    for x in data.get("universe", [])
+                    if x.get("session") == session
+                    and int(x.get("depth", 0)) >= EVIDENCE_FROM
+                    and x["id"] not in deferred
+                }
+                codex_cache[session] = codex_session_proofs(session, targets)
+            found, proved = codex_cache[session]
+            if not found:
+                unauditable += 1
+            if p.resolve() not in proved:
+                unverified.append(it["id"])
             continue
         if session not in cache:
             cache[session] = session_reads(session)
         found, reads, cmds = cache[session]
         if not found:
             unauditable += 1
+            unverified.append(it["id"])
             continue
         real = os.path.realpath(str(p))
         if real in reads:
@@ -851,6 +949,7 @@ def cmd_add(args) -> int:
                         "evidence": None,
                         "ts": None,
                         "session": None,
+                        "item_kind": "file" if item_path(data, i).is_file() else "non-file",
                     }
                 )
         if not new and not args.allow_empty:
@@ -894,6 +993,7 @@ def cmd_visit(args) -> int:
                 missing.append(ident)
                 continue
             if args.depth > int(it.get("depth", 0)) or args.force:
+                it.update(visit_provenance(data, it, me))
                 it.update(
                     depth=args.depth,
                     evidence=args.evidence,
@@ -914,6 +1014,8 @@ def cmd_visit(args) -> int:
                         "evidence": args.evidence,
                         "ts": now_iso(),
                         "session": me,
+                        **visit_provenance(data, {"id": m, "item_kind":
+                            "file" if item_path(data, m).is_file() else "non-file"}, me),
                     }
                 )
             data.setdefault("enumerations", []).append(
@@ -1190,6 +1292,9 @@ def verify_ledger(path: Path) -> tuple[int, str]:
         return 1, f"{line}\nnot closed ({data.get('status')})"
     if data.get("forced"):
         return 1, f"{line}\nclosed with --force past: {', '.join(data['forced'])}"
+    missing_reads, _ = audit_reads(data)
+    if missing_reads:
+        return 1, f"{line}\n{len(missing_reads)} file read(s) unauditable or unverified"
     return 0, f"{line}\nclosed with every check passed"
 
 
@@ -1212,11 +1317,17 @@ def selftest() -> int:
             "SWEEP_TRANSCRIPTS",
             "SWEEP_SESSION_ID",
             "CLAUDE_CODE_SESSION_ID",
+            "CODEX_THREAD_ID",
+            "SWEEP_CODEX_READ_PROOF",
+            "SWEEP_CODEX_TRANSCRIPTS",
         )
     }
     os.environ["SWEEP_HOME"] = str(tmp / "home")
     os.environ["SWEEP_TRANSCRIPTS"] = str(tmp / "transcripts")
     os.environ.pop("SWEEP_SESSION_ID", None)
+    os.environ.pop("CODEX_THREAD_ID", None)
+    os.environ.pop("SWEEP_CODEX_READ_PROOF", None)
+    os.environ.pop("SWEEP_CODEX_TRANSCRIPTS", None)
     proj = tmp / "proj"
     proj.mkdir()
     fails: list[str] = []
@@ -1364,6 +1475,7 @@ def selftest() -> int:
         )
         # From here each close attempt has exactly one reason to refuse, so each
         # check proves its own branch rather than riding on another one.
+        transcript("sess-a", reads=[fa])
         check("close refuses with open items", run("close", "--slug", "t") == 1)
 
         # --- the read audit ----------------------------------------------------
