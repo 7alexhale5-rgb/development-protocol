@@ -13,7 +13,7 @@ Every re-port, source baseline, and public maintenance change, newest first.
   active lenses' authorities as official, and reads `focus: none` as no focus; `focus_check.py`
   walks fallback chains and plans from a given lens folder; the `claude-subagent` and `jev`
   registry entries; the dashboard Gatherer line; the perf and seo lens wording. `tags.json` is
-  now byte-equal to upstream. `FOCUS_HINTS` in `devproto.py` already matched the upstream
+  now adapted from upstream with its private host pointer removed. `FOCUS_HINTS` in `devproto.py` already matched the upstream
   triggers, which did not change.
 - Left out on purpose: `references/power-tier.md` (local extras: Gemini CLI, Groq, NotebookLM,
   last30days, vault notes), as in the earlier port. The upstream research dossier and its run
