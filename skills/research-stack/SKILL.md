@@ -310,7 +310,8 @@ and writes. The full protocol is in `references/hunter-gatherer.md`.
 
 1. **Brief.** Write the Step 2 scope to `brief.json`: the decision, done-when, out of scope, the
    sub-questions, and `source_notes`.
-2. **Hunt.** Spawn one read-only hunter subagent per sub-question, all in one parallel block.
+2. **Hunt.** A root batches read-only hunters with at most two active children and explicit
+   sub-question ownership. A child hunts its assigned questions locally without agents.
    Each one runs this skill's rounds and lenses for its own sub-question, writes
    `cards-Qn.jsonl` and `raw-Qn.md`, and returns a one-line receipt.
 3. **Gather.** Score every card against the rubric (`scripts/gather.py`) in a fresh context.
@@ -557,11 +558,13 @@ CONTEXT_PAYLOAD:
   - contradictions_found: "{any already identified}"
 ```
 
-### 6.6c: Spawn in one parallel block
+### 6.6c: Run bounded perspective batches
 
-If your agent supports subagents, spawn each selected perspective in **one message**, in the
-background, on a small fast model, using the prompts in `references/perspectives.md`. If it does
-not, run each prompt yourself as a separate pass and keep its findings apart from your own.
+Follow the supplied governing development contract and task authorization. A root may
+batch independent perspective work with at most two active children and explicit ownership.
+A child runs its assigned lenses locally and never spawns agents. Select an actually
+available model appropriate to the task. Self-review is supporting evidence; missing
+required independent review stays a gap. Zero supported findings alone never requires retry.
 
 ### 6.6d: Collect (Step 6.7)
 
@@ -573,17 +576,15 @@ Collect every perspective's output before synthesis. If one is still running, wa
 to 60 seconds). Then apply the escalation check:
 
 ```text
-FOR each perspective result:
+FOR each result:
   IF empty or error:
-    -> log "{name}: failed, skipping"
-  ELIF "No findings." AND name == skeptic:
-    -> should not happen (the skeptic always returns at least one). Retry on a stronger model.
-  ELIF "No findings." AND compressed findings are substantial (5+ pages):
-    -> retry on a stronger model, adding "The first review found nothing. Look harder."
-  ELIF the retry also returns "No findings.":
-    -> accept as clean. Note "{name}: clean (verified 2x)".
+    record the failed check and missing coverage; do not count it as clean
+  ELIF required evidence or coverage is missing:
+    record the specific gap; retry only for a documented capability or evidence change
+  ELIF result is "No findings.":
+    accept the scoped clean result and retain coverage limits
   ELSE:
-    -> parse the findings into the synthesis context, tagged [perspective:{name}]
+    retain supported findings and tag their source
 ```
 
 Merge map:

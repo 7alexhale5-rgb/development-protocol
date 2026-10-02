@@ -99,11 +99,18 @@ When `--auto` is NOT set (default):
 git status                          # what changed
 git diff --stat                     # unstaged changes
 git diff --cached --stat            # staged changes
-git log --oneline main..HEAD        # branch commits (for --branch)
+git rev-parse HEAD                  # Candidate commit; resolve BASE below
 git rev-parse HEAD                  # the commit you are reviewing; goes in the report
 ```
 
-Collect the list of changed and created files. This is the **review surface**.
+Resolve BASE from the build row or `.devproto/evidence/build.md` and verify that it names
+a real commit. For `--branch`, if no build baseline exists, read the configured default
+branch (for example `git symbolic-ref refs/remotes/origin/HEAD`) and use its merge-base
+with HEAD. Do not assume `main`, use HEAD~1 or guess a missing baseline. If no default
+branch or baseline can be verified, retain the scope gap. For an uncommitted-only review,
+BASE is HEAD; inspect staged and unstaged diffs plus complete new-file contents separately.
+Record the source, BASE and candidate HEAD in the report. Supply the complete BASE..HEAD
+diff plus any current uncommitted changes. Collect changed and created files as the review surface.
 
 ### 1b: Detect project tooling
 
@@ -186,6 +193,11 @@ Build a summary for the perspectives. This is what they get instead of the whole
 
 ```text
 CONTEXT_PAYLOAD:
+  - governing_contract: "{supplied contract text or path}"
+  - recorded_base: "{verified BASE SHA and source}"
+  - candidate_head: "{verified HEAD SHA}"
+  - acceptance_evidence: "{criteria, receipts and coverage gaps}"
+  - return_budget: "{output and runtime limits}"
   - project_summary: "{language/framework}, {N} files changed, {additions}+ {deletions}-"
   - diff: "{full git diff from Step 1a}"
   - changed_files: "{changed file paths with full content}"
@@ -199,7 +211,7 @@ Use the templates in `references/perspectives.md`. Root reviewers may batch disj
 perspectives two at a time; child reviewers perform them locally. Supply the governing
 contract, recorded baseline, complete candidate diff, acceptance checks and return budget
 in every fresh-session prompt. Model and provider availability must be verified rather
-than inferred from an account label. Retain both required outside reviews separately.
+than inferred from an account label. Retain each outside review required by the goal or improvement contract separately.
 
 ### 2d: Go straight on to L1
 
@@ -595,10 +607,12 @@ Invocation examples: `references/output-templates.md` (section "Agent isolation"
 | Bundle analyzer        | Not configured                           | Read chunk sizes from the build output only                                                                                                               |
 | npm audit              | npm not available                        | Skip. Note it in the report                                                                                                                               |
 | Foundation lock        | No `.planning/*/foundation.yaml`         | Skip 4.5k. Exception: if the build looks new or multi-tenant, emit the `ff-no-lock` finding                                                               |
-| Helper agents          | Not supported                            | Run each perspective yourself as a separate pass, one lens at a time                                                                                      |
+| Helper agents          | Not supported                            | Run selected lenses locally as supporting evidence; record missing required independent review as a gap.                                                                                      |
 | Checklist tool         | `/development-protocol` not installed    | Still write `.devproto/evidence/review.md` and report in chat                                                                                             |
 
-**Minimum viable run:** read the changed files and analyze them. Everything else is enhancement.
+**Minimum useful review:** inspect the complete supplied scope and report findings and limits.
+This does not waive required evidence or independent reviews. Required gaps prevent a passing
+release verdict.
 
 ---
 

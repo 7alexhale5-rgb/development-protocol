@@ -53,9 +53,9 @@ Verification Report
 │  ├─ L3 Context: criteria {pass}/{total} | architecture {N} deviations
 │  ├─ L4 Runtime: {pass|fail|skipped|N/A}
 │  └─ L5 Regression: {pass|fail|skipped|N/A}
-├─ Perspectives: {N} run | {N} returned findings | {N} retried with a stronger model
-│  ├─ skeptic: {N} findings (always runs)
-│  ├─ {name}: {N} findings | "clean (2x)" | "failed" | "skipped"
+├─ Perspectives: {N} run | {N} returned findings | {N} incomplete
+│  ├─ skeptic: {N} findings | scope: {scope} | gaps: {gaps or none}
+│  ├─ {name}: {N} findings | "No findings." | "failed" | "skipped"
 │  └─ ...
 ├─ Findings: {critical_count} critical | {warn_count} warnings | {info_count} info
 ├─ Gate: {PASS | SOFT FAIL | HARD FAIL}
@@ -273,8 +273,15 @@ The same object is what Step 7.5 writes to `.devproto/review/latest-findings.jso
 Helper agent:
   instructions: |
     Run /review-stack --branch --plan {plan_path}
-    Review all changes on this branch against the plan.
-    Return the full verification output.
+    Apply the supplied governing development contract: {contract_text_or_path}.
+    Review recorded BASE {base_sha} through HEAD {head_sha}, the complete diff
+    and current changed files: {frozen_package_paths_and_hashes}.
+    Check acceptance criteria and evidence: {criteria_and_evidence}.
+    Run selected normal or audit lenses locally; spawn no children.
+    Accept supported zero findings; never retry solely for a clean result.
+    Report missing evidence and unavailable required independent reviews.
+    Return the full report, coverage, limitations and verdict.
+    Return budget: {budget}.
   model: a stronger model than the builder, or a different model family
   description: "Post-implementation review"
 ```

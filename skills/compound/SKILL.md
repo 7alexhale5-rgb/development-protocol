@@ -28,6 +28,9 @@ for "weekly retro", "what did we ship", "engineering retrospective" and "retro n
 
 ---
 
+`--improve` accepts the Step 0 scope flags and cannot be combined with `--metrics`.
+Reject that combination before gathering or spending.
+
 ## Step 0: Determine scope
 
 Ask, or detect from the request:
@@ -369,6 +372,13 @@ A report with zero learnings is valid if it says so under `### Learnings` ("None
 the work repeated known patterns"). An empty heading is not. Padding the list to look
 substantial is worse than an honest zero.
 
+For `--improve`, also require a nonempty `### Improvement status: unproved` or
+`### Improvement status: proved` section with candidate, evidence and remaining proof.
+A read-only heading check may verify report structure only; it cannot prove measured gains.
+If the goal, brief or owner request names adoption or promotion, use `--result blocked`
+until the reviewed measurement adapter proves the frozen contract. A `proved` word alone
+is insufficient. Otherwise the row may pass as a truthful retrospective with an unproved idea.
+
 If git was unreachable, or the window had no commits, record the row as `blocked` with the
 reason, not `pass`. Unknown is not pass.
 
@@ -387,10 +397,12 @@ compound runs remain report-only. Select one candidate from a confirmed defect, 
 rejected review, drift or measured cost. Preserve its hypothesis, baseline, frozen instruments,
 rejected attempts and unresolved proof needs in the existing learning report.
 
-The standalone package has no native improvement checker. Do not invoke absent host commands or
+The standalone package has no executable measurement validator. Do not invoke absent commands or
 treat the Step 7 heading check as proof of measured gains. The compound row may record a truthful
 retrospective saying the improvement remains unproved. If measured adoption is required by the
-work item's goal, keep the row blocked until a supported adapter proves that contract.
+goal, brief or explicit owner request naming adoption or promotion, keep the row blocked
+until a supported adapter proves that contract. Report `### Improvement status: unproved`
+until that proof exists; retain the candidate, evidence and next proof beneath it.
 
 Use the existing DEVPROTO step command with `--result blocked --reason` for missing required
 measurement capability. Do not create another ledger. A future adapter must preserve immutable

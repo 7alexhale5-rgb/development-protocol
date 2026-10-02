@@ -6,6 +6,9 @@ description: Runs an adaptive questioning session before planning, to pin the go
 # Brainstorm Stack: Adaptive Pre-Planning Questioning
 
 You are running an adaptive questioning session. The goal is to gather context, surface the
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 decisions that matter, and reduce rework before any plan exists. This replaces an open-ended
 "let's discuss" phase with a structured, conversational exploration that ends in a concrete
 context document.
@@ -141,15 +144,23 @@ CONTEXT_PAYLOAD:
 
 ### 3.5c: Run the perspectives
 
-If your agent supports subagents, spawn each perspective as a background subagent in one parallel
-block. A fast, cheap model is enough for these. If your agent has no subagents, run each
-perspective yourself as a separate, clearly labeled pass before you ask the first question. Do not
-blend them into your own view.
+Follow the supplied governing development contract and task authorization. A root may
+batch independent perspective work with at most two active children and explicit ownership.
+A child runs its assigned lenses locally and never spawns agents. Select an actually
+available model appropriate to the task. Self-review is supporting evidence; missing
+required independent review stays a gap. Zero supported findings alone never requires retry.
 
 **skeptic** (always):
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
+
 You are the skeptic reviewing a brainstorm session BEFORE deep questioning begins.
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 Follow the skeptic brief (references/skeptic.md): focus areas, output format, rules.
 
 ## Context
@@ -170,7 +181,14 @@ Start directly with the first finding.
 **scope-checker** (`--deep` only):
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
+
 You are checking whether a brainstorm topic has the right scope.
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Topic
 {TOPIC}
@@ -190,7 +208,14 @@ Return structured findings. No preamble.
 **first-principles** (`--deep` only):
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
+
 You are the first-principles analyst reviewing a brainstorm topic BEFORE deep questioning begins.
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 Follow the first-principles brief (references/first-principles.md): the 5-phase protocol
 (decompose, challenge axioms, ground truth, reconstruct, delta), the confabulation self-check,
 output format, and severity levels.
@@ -210,20 +235,15 @@ Return ONLY the self-check and findings as markdown. No preamble, no summary.
 Collect every perspective's output before questioning begins.
 
 ```text
-FOR each perspective result:
-  IF result is empty or an error:
-    -> Log "{name}: failed, skipping" and say so to the user.
-  ELIF result is "No findings." AND the perspective is the skeptic:
-    -> This should not happen. The skeptic always returns at least one finding.
-       Retry once with a stronger model.
-  ELIF the retry also returns "No findings.":
-    -> Accept it as clean. Note "{name}: clean (verified 2x)".
-  ELIF result has findings:
-    -> Weave them into the questioning plan:
-       - skeptic says "wrong problem"  -> add a question about the problem definition
-       - skeptic says "scope too big"  -> ask scope boundary questions early
-       - scope-checker says "split"    -> suggest splitting before you continue
-    -> Tag each finding you use: [perspective:{name}]
+FOR each result:
+  IF empty or error:
+    record the failed check and missing coverage; do not count it as clean
+  ELIF required evidence or coverage is missing:
+    record the specific gap; retry only for a documented capability or evidence change
+  ELIF result is "No findings.":
+    accept the scoped clean result and retain coverage limits
+  ELSE:
+    retain supported findings and tag their source
 ```
 
 ### Adjust the questioning plan

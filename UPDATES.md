@@ -2,6 +2,22 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-02T16:42:05-05:00
+
+- Version2.4.0: integrate all15 Superpowers methods within the existing protocol.
+  Behavior changes require red-green evidence, every class needs independent review, and
+  skipped required checks end with a blocked record. Bounded improvement reports distinguish
+  truthful learning from measured adoption; this package requires a reviewed measurement adapter.
+- Align canonical skeptic briefs and brainstorm, planning, research and review consumers with
+  evidence-backed clean results. Retain full baseline-to-head scope and coverage gaps.
+- Intentional note-only public divergence in `skills/research-stack/references/focus/tags.json`:
+  the metadata note uses a generic workflow-consumer description. Triggers, lenses and
+  `FOCUS_HINTS` are unchanged. This removes a private implementation pointer from current
+  public files; the earlier published history retains it and is not rewritten.
+- Source fingerprints are not reset merely to hide drift. Installation and review receipts
+  must bind this candidate before its release. No vendor package or measured gain is claimed.
+
+
 ## 2026-10-02T13:26:41-05:00
 
 - skill:research-stack: re-ported from upstream research-stack 3.2.1 (`3af6987`). New: hunter/gatherer
@@ -13,7 +29,7 @@ Every re-port, source baseline, and public maintenance change, newest first.
   active lenses' authorities as official, and reads `focus: none` as no focus; `focus_check.py`
   walks fallback chains and plans from a given lens folder; the `claude-subagent` and `jev`
   registry entries; the dashboard Gatherer line; the perf and seo lens wording. `tags.json` is
-  now adapted from upstream with its private host pointer removed. `FOCUS_HINTS` in `devproto.py` already matched the upstream
+  now byte-equal to upstream. `FOCUS_HINTS` in `devproto.py` already matched the upstream
   triggers, which did not change.
 - Left out on purpose: `references/power-tier.md` (local extras: Gemini CLI, Groq, NotebookLM,
   last30days, vault notes), as in the earlier port. The upstream research dossier and its run

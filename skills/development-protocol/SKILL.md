@@ -169,7 +169,7 @@ person. A fresh session runs `/development-protocol <repo> resume` and continues
 
 - **Unknown is not pass.** A check you could not run is `blocked` or open, with the reason. Tell the
   person "not verified". Do not round it up.
-- **Exceptions lower confidence; they do not create a pass.** Skipped tests, `--no-verify`, missing
+- **Missing required checks block completion and shipping. Exceptions never create a pass.** Skipped tests, `--no-verify`, missing
   CI or an unavailable third-party service each get a written reason, scope, owner and next proof in
   the handoff.
 - **Tie proof to the artifact.** Name the commit SHA, file, URL or environment.

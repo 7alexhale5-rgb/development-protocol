@@ -90,9 +90,9 @@ Research Stack report
 |- Compression: {n} pages | {self | subagent | hosted model name}
 |- Gatherer: {scorer} | {N} cards | keep {k} / drop {d} / requote {r} / escalate {e} / flagged {f} | re-hunt {list or "none"} | or "off (single context)"
 |- Synthesis assist: {model or subagent} | "skipped (not --deep)" | "unavailable"
-|- Perspectives: {N} run | {N} with findings | {N} escalated
-|  |- skeptic: {N} findings
-|  `- {name}: {N} findings | "clean (verified 2x)" | "failed" | "skipped"
+|- Perspectives: {N} run | {N} with findings | {N} incomplete
+|  |- skeptic: {N} findings | checked scope: {scope} | gaps: {gaps or none}
+|  `- {name}: {N} findings | "No findings." | "failed" | "skipped"
 |- Attribution: {N}/{N} spot-checked claims supported | "skipped (not --deep/--validate)"
 |- Validation: {PASS | WARN | FAIL | skipped}
 |- Cache: {path to the cache file}

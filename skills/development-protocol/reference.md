@@ -98,8 +98,8 @@ recovery path.
 ## Exceptions
 
 `--no-verify`, skipped tests, missing CI, and unavailable third-party smoke tests are exceptions.
-Write down the reason, scope, owner and next proof in the handoff. An exception lowers
-confidence. It does not create a pass.
+Write down the reason, scope, owner and next proof in the handoff. Missing required checks
+block completion and shipping. An exception never creates a pass.
 
 
 ## Verifier commands and commit receipts
@@ -150,7 +150,7 @@ Use vendor task-brief, review-package and progress helpers only when installed a
 they are not bundled here. Record the actual task baseline, not HEAD~1 for a multi-commit task.
 Retain complete test receipts and resume state. Helper output supports the existing checklist.
 Inspect duplicate plugin identities before changing either; evaluate vendor updates in isolation
-and use supported installation mechanisms, never cache edits. Evaluate upstream 6.4.2's lean
+and use supported installation mechanisms, never cache edits. Evaluate Superpowers 6.4.2's lean
 plans without implementation code; availability and reported benchmarks do not prove local benefit.
 
 Behavior changes and bug fixes require red-green-refactor. Start behavior-preserving refactors
@@ -180,13 +180,13 @@ readbacks. Reconcile all calls across revisions, judges and critics against a cu
 account budget. A fresh verified balance may replace an expired snapshot without changing
 sealed trials, reviews or costs. Unknown costs stay unmeasured; do not repeat spending on resume.
 
-**Standalone capability gap:** this package does not ship a host ledger engine, statistical scorer,
-validated critic runner or executable improvement checker. The native measurement checker is host-only until a
-supported adapter is proved. `devproto.py` records evidence and verifier results; it does not
-enforce this measurement contract or authorize adoption. Keep proposed improvements unproved
-until a reviewed adapter establishes the required bindings using the existing ledger. Do not
-add a parallel ledger or copy a private host engine. Ordinary retrospectives may still complete
-with truthful reports; a work item requiring measured adoption remains blocked without proof.
+**Measurement capability:** this package records evidence and verifier results using
+`devproto.py`; it does not include an executable measurement validator or authorize adoption.
+Measured adoption requires an adapter your team installs, independently reviews and proves
+against this contract using the existing checklist. Keep proposed improvements unproved
+until that adapter supplies the required bindings. Ordinary truthful retrospectives may
+complete; a goal, brief or owner request naming adoption or promotion requires proof and
+remains blocked without it. Do not create another status ledger.
 
 Review instruments independently before freezing them. Bind executable dependencies;
 unsupported closures remain unmeasured. A plan, statistical score or synthetic fixture is not
@@ -195,7 +195,7 @@ may be adopted. Sends, spending, permissions, secrets, production, destructive a
 defaults and vendor updates retain their existing rules. Verify the installed result and restore
 the retained baseline if its acceptance check fails.
 
-Run after verified closeout or through an existing weekly drift check. Preserve its cadence;
+Run after verified closeout or through a scheduled retrospective your team already runs. Preserve its cadence;
 never duplicate schedules. Track dated primary OpenAI, Google, Microsoft, GitHub, browser tools,
 Lighthouse and actual dependency sources. Record release date/channel, local availability,
 tested compatibility and measured benefit separately. A preview or announcement is not runtime proof.

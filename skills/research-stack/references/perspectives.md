@@ -1,10 +1,12 @@
 # Perspective prompts (Step 6.6)
 
-The prompts for the analysis perspectives that challenge findings before synthesis. Fire every
-selected perspective in **one parallel block** if your agent supports subagents: in the
-background, on a small fast model. Retry on a stronger model only as the Step 6.7 escalation
-check says. Without subagents, run each prompt yourself as a separate pass and keep its output
-apart from your own notes until the merge.
+The perspectives challenge findings before synthesis.
+
+Follow the supplied governing development contract and task authorization. A root may
+batch independent perspective work with at most two active children and explicit ownership.
+A child runs its assigned lenses locally and never spawns agents. Select an actually
+available model appropriate to the task. Self-review is supporting evidence; missing
+required independent review stays a gap. Zero supported findings alone never requires retry.
 
 Fill `{CONTEXT_PAYLOAD}` from SKILL.md Step 6.6b.
 
@@ -13,8 +15,7 @@ Fill `{CONTEXT_PAYLOAD}` from SKILL.md Step 6.6b.
 ## `skeptic` (always fires)
 
 The skeptic is the built-in devil's advocate. Its job is to push back on what everyone else would
-accept. It **always returns at least one finding.** If the work is genuinely good, the finding is
-info-level and names the most likely point of future friction. For the full claim-by-claim
+accept. Evidence-backed zero findings is valid. For the full claim-by-claim
 triage of a research output, run `/devilsadvocate` afterwards.
 
 **Canonical brief:** `brainstorm-stack/references/skeptic.md` is the one copy of the skeptic's
@@ -23,7 +24,14 @@ and what the skeptic is not). The prompt below points a subagent at it directly,
 research-format frame skeptic.md already defines, rather than repeating the doctrine here.
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
+
 You are the skeptic analyst reviewing research findings before synthesis.
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Context
 {CONTEXT_PAYLOAD}
@@ -53,10 +61,10 @@ from a paid tool presented without its date and provider? Did the run guess wher
 was unavailable?
 
 ## Rules
-- 1 to 5 findings, most severe first. Always at least 1.
+- Up to 5 supported findings, most severe first, or scoped "No findings." with coverage limits.
 - Research quality only, not code style.
 - Every criticism names the better alternative.
-- Return ONLY the findings as markdown. No preamble, no summary.
+- Include the requested self-check, then supported findings or a scoped clean statement.
 - Max output: 2000 tokens.
 ```
 
@@ -65,7 +73,14 @@ was unavailable?
 ## `cross-source-validator` (default and `--deep`)
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
+
 You are validating research findings by checking cross-source corroboration.
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Confabulation self-check (do this BEFORE the analysis)
 Name your own biases in 2-3 sentences:
@@ -90,7 +105,14 @@ Return structured findings only. No preamble. If there is truly nothing, return 
 ## `gap-detector` (`--deep` only)
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
+
 You are detecting gaps in research coverage.
+Apply the supplied governing development contract and task authorization.
+Run assigned lenses locally; spawn no children. Report checked scope and gaps.
+Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Confabulation self-check (do this BEFORE the analysis)
 Name your own biases in 2-3 sentences:

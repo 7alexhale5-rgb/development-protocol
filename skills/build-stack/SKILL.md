@@ -79,7 +79,8 @@ From the user's input, extract:
     `/review-stack --audit --auto`). Includes runtime checks, accessibility, bundle analysis and a
     remediation report. Implies `--review`.
   - `--tdd`: enforce test-driven development. Write tests first (red), implement to pass (green),
-    then refactor. Sets `IS_TDD` to true. Needs a test framework, found in Step 3.
+    then refactor. Sets `IS_TDD` to true. Detect tooling in Step 3; use an isolated executable
+    regression check or retain a required-proof gap when a framework is absent.
 - **PLAN SOURCE**: where the plan lives (found in Step 1).
 
 Keep GOAL and FLAGS for the whole run.
@@ -179,7 +180,10 @@ that the implementation exists.
 
 ## Step 2: Classify the work
 
-If the plan gives a classification, use it. Otherwise detect it:
+Use risk, coupling and acceptance proof to classify work. File counts below are signals,
+not limits. Escalate cross-system, data-loss, permission or money risks to a larger method
+when their proof needs exceed the proposed class. Honor an approved classification only
+while its assumptions still hold.
 
 | Classification | Criteria                                                                |
 | -------------- | ----------------------------------------------------------------------- |
@@ -250,6 +254,10 @@ Report the scaffold:
 ## Step 5: Execute
 
 Pick the path that matches the classification.
+
+If `--no-verify` is set, finish only the authorized implementation scope, then go to
+Steps 7a and 7b. Record the build row as blocked with reason "built with --no-verify",
+remaining checks, scope, owner and next proof. Do not run skipped review stages or claim completion.
 
 ### BUGFIX path
 
@@ -466,7 +474,7 @@ A fast loop that catches type errors and lint violations early.
 | Lint  | `npm run lint`, `npx eslint .` or `ruff check .`      | If `CAN_LINT`      |
 
 **Speed:** about 5 to 15 seconds.
-**When:** after each batch (MEDIUM), or after the fix (BUGFIX).
+**When:** after each MEDIUM batch. BUGFIX uses its regression check and Full Verify.
 
 ### Full Verify
 
@@ -539,12 +547,16 @@ code. It does not need a new checklist entry unless the tool's output file chang
 
 ---
 
-## Step 6.5: Review gate (`--review`, `--audit`, or LARGE)
+## Step 6.5: Independent review for every classification
 
 **Skip if `--no-verify` is set.**
 
-After Full Verify passes, run `/review-stack` for a full independent review. The agent that wrote
-the code must not be the only one to review it.
+After Full Verify, reuse the independently executed Step 5.5 reviews when they cover the complete
+recorded BASE..HEAD and acceptance evidence. BUGFIX needs an independent skeptic pass; SMALL
+needs skeptic and code-quality lenses. MEDIUM needs its selected lenses. Run them in a child
+or fresh session; self-review supplies supporting evidence only. Record missing independent
+review as a required gap. A full `/review-stack` runs with `--review`, `--audit`, or LARGE.
+The agent that wrote the code must not be the only reviewer. Do not duplicate review seats.
 
 ### Standard review (`--review` or LARGE)
 
@@ -583,7 +595,8 @@ also return READY TO SHIP or SHIP WITH CAVEATS.
 
 ## Step 7: Complete
 
-After all tasks are done and all required verification passes:
+After implementation, when required verification passes or its gaps are explicitly recorded
+as blocked, produce the summary and checklist record. Only the passing path is complete:
 
 ### 7a: Summary report
 
@@ -634,8 +647,8 @@ an honest remaining-scope report. Missing required proof blocks completion.
 
 | Classification | Checkpoints     | Full Verify     | Context gate     | Perspectives                                   | Audit preflight             | Helper agents | Est. time    |
 | -------------- | --------------- | --------------- | ---------------- | ---------------------------------------------- | --------------------------- | ------------- | ------------ |
-| BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (idempotent) | No            | 1 to 5 min   |
-| SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (idempotent) | No            | 5 to 15 min  |
+| BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (idempotent) | Independent reviewer | Scope-dependent |
+| SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (idempotent) | Independent reviewer | Scope-dependent |
 | MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (idempotent) | No            | 15 to 45 min |
 | LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (idempotent) | Yes           | 30 to 90 min |
 

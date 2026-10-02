@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Review handoffs retain complete task scope and explicit gaps; no finding quotas or clean-result retries.
+
+## 2.4.0 (2026-10-02)
+
+- Route all15 Superpowers methods through the existing development checklist. Prove behavior
+  changes with red-green checks, retain independent review for every work size, and record
+  skipped required checks as blocked.
+- Add bounded improvement reports with frozen comparisons, held-out cases, independent reviews
+  and rollback. Actual measured adoption needs a reviewed adapter; no measured gain is claimed.
+
+
 - Read-audit guidance states its retained-transcript requirement and the missing native Codex
   transcript adapter. Session ownership does not establish whole-file read proof.
 - Premortem evidence uses verifier-compatible headings. Lighthouse publication locks refuse

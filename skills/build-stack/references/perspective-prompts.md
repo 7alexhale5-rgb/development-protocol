@@ -40,7 +40,7 @@ To keep the build context small, run the review in a fresh helper agent or a fre
 
 ```text
 Helper agent (or new session):
-  instructions: "Read skills/development-protocol/reference.md and apply its development and review contract. Run /review-stack --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Required outside reviews remain separate."
+  instructions: "Read skills/development-protocol/reference.md and apply its development and review contract. Run /review-stack --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Outside reviews required by the goal or improvement contract remain separate."
   model: a stronger model than the one that built the code, or a different model family
   description: "Post-implementation review"
 ```
