@@ -594,7 +594,10 @@ def visit_provenance(data: dict, item: dict, session: str | None) -> dict:
     is_file = item.get("item_kind") == "file" or item_path(data, item["id"]).is_file()
     provider = "unknown"
     if session:
-        provider = "codex" if session == os.environ.get("CODEX_THREAD_ID") and session != os.environ.get("CLAUDE_CODE_SESSION_ID") else "claude"
+        if session == os.environ.get("CODEX_THREAD_ID") and session != os.environ.get("CLAUDE_CODE_SESSION_ID"):
+            provider = "codex" if os.environ.get("SWEEP_CODEX_READ_PROOF") == "1" else "unknown"
+        else:
+            provider = "claude"
     return {"item_kind": "file" if is_file else "non-file",
             "proof_provider": provider, "read_proof_required": is_file}
 

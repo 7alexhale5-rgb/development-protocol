@@ -151,9 +151,10 @@ evidence, not a replacement for missing proof.
 ### Strict Codex read proof (opt-in)
 
 `CODEX_THREAD_ID` binds ownership; it never proves a read. Enable the native output checker
-only for the command being checked:
+when recording each Codex file visit, then close the sweep:
 
 ```text
+SWEEP_CODEX_READ_PROOF=1 python3 <relentless skill folder>/scripts/sweep.py visit --slug <slug> <file> --depth 2 --evidence "complete successful file output"
 SWEEP_CODEX_READ_PROOF=1 python3 <relentless skill folder>/scripts/sweep.py close --slug <slug>
 ```
 
@@ -172,7 +173,10 @@ Codex CLI 0.158.0-alpha.2.1; recheck real output if the host format changes.
 
 One successful read never grants dependency tracing or runtime depth. Do not backfill old
 visits, manufacture receipts, or use `--force` to claim a verified close. With this option
-unset, the existing Claude successful-result lane stays unchanged.
+unset during a new Codex file visit, its provider stays unknown and close refuses.
+Enable it, perform a fresh complete read, and record a new real visit with `visit --force`
+(the revisit option, never `close --force`). Previously required Codex proof remains
+required after the flag is removed. The Claude successful-result lane stays unchanged.
 
 ## Parallel work
 

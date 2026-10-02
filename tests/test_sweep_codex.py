@@ -197,6 +197,11 @@ class CodexSweepTests(unittest.TestCase):
         self.transcript.unlink()
         self.assertEqual(sweep.verify_ledger(ledger)[0], 1)
 
+    def test_initial_codex_visit_requires_explicit_opt_in(self):
+        self.write_transcript(receipt(self.target))
+        os.environ.pop("SWEEP_CODEX_READ_PROOF")
+        self.assertEqual(self.run_cli("close", "--slug", self.make_ledger()), 1)
+
     def test_file_kind_survives_deletion_before_visit(self):
         self.write_transcript(receipt(self.target))
         self.assertEqual(
