@@ -7,7 +7,7 @@ house-only tooling. A private-data scanner enforces it.
 
 ## Where to go
 
-This repo follows ICM (Jake Van Clief's folder method): this file routes, each room's
+This repo follows the ICM folder method: this file routes, each room's
 `CONTEXT.md` holds its contract.
 
 | Task                                                        | Go to             | Read                                                   | Skills |
