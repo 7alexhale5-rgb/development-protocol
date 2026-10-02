@@ -4,6 +4,8 @@ Every re-port, source baseline, and public maintenance change, newest first.
 
 ## 2026-10-02T16:42:05-05:00
 
+- Ship and closeout now block outward release when required review or verification is missing.
+  Intake captures the work baseline before planning commits; review binds the complete candidate.
 - Version 2.4.0: integrate all 15 Superpowers methods within the existing protocol.
   Behavior changes require red-green evidence, every class needs independent review, and
   skipped required checks end with a blocked record. Bounded improvement reports distinguish

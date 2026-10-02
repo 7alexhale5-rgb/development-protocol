@@ -220,6 +220,7 @@ listed as "not verified".
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "base": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "work_id": "<work-id>",
+  "candidate_sha256": "<complete reviewed candidate snapshot SHA256>",
   "scope": { "files": 6, "additions": 142, "deletions": 23 },
   "layers": {
     "l1": {
@@ -274,7 +275,7 @@ The same object is what Step 7.5 writes to `.devproto/review/latest-findings.jso
 ```text
 Helper agent:
   instructions: |
-    Run /review-stack --branch --plan {plan_path}
+    Run /review-stack --work-id {work_id} --branch --plan {plan_path}
     Apply the supplied governing development contract: {contract_text_or_path}.
     Review recorded BASE {base_sha} through HEAD {head_sha}, the complete diff
     and current changed files: {frozen_package_paths_and_hashes}.

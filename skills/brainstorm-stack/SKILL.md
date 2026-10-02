@@ -417,3 +417,6 @@ the plan is written. If `--for-plan` was set: "Context written to `.planning/CON
 
 Reasoning effort: for `--deep`, use the highest reasoning effort your agent offers. Default and
 `--quick` run at your normal high setting.
+
+Without subagents, run each selected perspective locally as a separate labeled pass.
+This supplies supporting evidence and cannot replace required independent review.

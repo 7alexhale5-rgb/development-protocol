@@ -61,6 +61,7 @@ From the user's input, extract:
   - `--audit`: full audit. L1 to L4 plus the remediation report. Includes everything in
     `--deep` plus runtime checks.
 - **FLAGS**:
+  - `--work-id <id>`: binds a work review to the retained intake baseline.
   - `--plan path/to/plan.md`: the plan to check against.
   - `--gate hard`: treat all L1 failures as blocking (default: advisory).
   - `--no-criteria`: skip comparison against a plan; still record a request-derived criterion with evidence.
@@ -108,10 +109,16 @@ For a work-id review, resolve BASE exclusively from
 --files. Its work-id must match and its base must resolve to a commit. Missing or malformed
 baseline remains a required scope gap; never use a merge-base fallback or overwrite it.
 Review the complete BASE..HEAD diff plus staged, unstaged and new files. File filters may
-focus a lens but cannot reduce the final work review scope. Record `base` and `work_id` in
-review.json and retain the baseline as an evidence instrument. The verifier checks both.
+focus a lens but cannot reduce the final work review scope. Record `base`, `work_id` and `candidate_sha256` in review.json. Obtain the candidate
+hash before dispatch with `python3 <review-stack skill folder>/scripts/verify_review.py
+--snapshot --project <repo>`, and freeze the complete package for reviewers. Retain the
+baseline as an evidence instrument. Verification compares the current complete candidate
+with the reviewed hash, including committed, staged, unstaged and new files, excluding
+only `.devproto/` supporting evidence. Unsupported submodules remain a proof gap.
+Use this read-only verifier again before ship; a changed file invalidates prior review.
+Never refresh the report hash without a new review of those bytes.
 
-Only an ad-hoc review without a work-id or any recorded work baseline may use the configured default branch merge-base
+Only an ad-hoc review without a work-id or any open/unknown recorded work baseline may use the configured default branch merge-base
 for --branch, or HEAD for uncommitted-only scope. If no configured branch is verifiable,
 retain the scope gap. Label this narrower scope explicitly; it cannot satisfy a work review.
 Record the source, BASE and candidate HEAD in both reports.

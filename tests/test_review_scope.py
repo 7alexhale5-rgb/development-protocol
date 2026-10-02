@@ -1,5 +1,4 @@
 """A work review cannot lose its recorded pre-build scope."""
-import importlib.util
 import json
 import subprocess
 import sys
@@ -24,13 +23,52 @@ class ReviewScopeTests(unittest.TestCase):
         self.proof.parent.mkdir(parents=True)
         self.proof.write_text(f"base {self.base}\nwork-id job\n")
         self.data = {"commit": self.head, "base": self.base, "work_id": "job", "verdict": "SHIP_IT", "gate": "PASS", "findings": [], "criteria": [{"verdict": "PASS", "evidence": "executed behavior test"}]}
+    def seal_snapshot(self):
+        result = subprocess.run([sys.executable, str(SCRIPT), "--snapshot", "--project", str(self.repo)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.data["candidate_sha256"] = result.stdout.strip()
     def run_check(self, scoped=True):
-        report = self.repo / "review.json"
+        if "candidate_sha256" not in self.data:
+            self.seal_snapshot()
+        report = self.proof.parent / "review.json"
         report.write_text(json.dumps(self.data))
         args = [sys.executable, str(SCRIPT), str(report), "--commit", self.head, "--project", str(self.repo)]
         if scoped:
             args += ["--work-id", "job"]
         return subprocess.run(args, capture_output=True, text=True)
+    def test_uncommitted_change_invalidates_review(self):
+        reviewed = self.repo / "implementation.py"
+        reviewed.write_text("answer = 1\n")
+        first = self.run_check()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        reviewed.write_text("answer = 2\n")
+        self.assertNotEqual(self.run_check().returncode, 0)
+    def test_all_supported_work_id_prefixes(self):
+        for identifier in ("_repair", ".repair", "-repair"):
+            with self.subTest(identifier=identifier):
+                self.proof.unlink()
+                self.proof = self.proof.parent / f"{identifier}-build-base.txt"
+                self.proof.write_text(f"base {self.base}\nwork-id {identifier}\n")
+                self.data["work_id"] = identifier
+                self.seal_snapshot()
+                report = self.proof.parent / "review.json"
+                report.write_text(json.dumps(self.data))
+                r = subprocess.run([sys.executable, str(SCRIPT), str(report), "--commit", self.head, "--project", str(self.repo), "--work-id=" + identifier], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+    def test_same_head_with_uncommitted_work_is_a_valid_scope(self):
+        self.proof.write_text(f"base {self.head}\nwork-id job\n")
+        self.data["base"] = self.head
+        (self.repo / "new.py").write_text("answer = 1\n")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+    def test_unrelated_baseline_commit_fails(self):
+        subprocess.run(["git", "-C", str(self.repo), "checkout", "--orphan", "unrelated"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "unrelated"], check=True)
+        unrelated = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        subprocess.run(["git", "-C", str(self.repo), "checkout", "--detach", self.head], check=True, capture_output=True)
+        self.proof.write_text(f"base {unrelated}\nwork-id job\n")
+        self.data["base"] = unrelated
+        self.assertNotEqual(self.run_check().returncode, 0)
     def test_complete_recorded_scope_passes(self):
         r = self.run_check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -59,6 +97,13 @@ class ReviewScopeTests(unittest.TestCase):
         self.data.pop("base")
         self.data.pop("work_id")
         self.assertNotEqual(self.run_check(scoped=False).returncode, 0)
+    def test_completed_work_does_not_prevent_new_ad_hoc_review(self):
+        record = self.repo / ".devproto/job.json"
+        record.write_text(json.dumps({"work_id": "job", "steps": [{"step_id": "closeout", "status": "passed"}]}))
+        self.data.pop("base")
+        self.data.pop("work_id")
+        r = self.run_check(scoped=False)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
     def test_genuine_ad_hoc_review_passes(self):
         self.proof.unlink()
         self.data.pop("base")

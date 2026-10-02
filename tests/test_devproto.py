@@ -767,3 +767,25 @@ class DevprotoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IntakeBaselineTest(unittest.TestCase):
+    def test_planning_commits_do_not_move_intake_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            subprocess.run(["git", "init", "-q", directory], check=True)
+            def commit(message):
+                subprocess.run(["git", "-C", directory, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", message], check=True)
+                return subprocess.check_output(["git", "-C", directory, "rev-parse", "HEAD"], text=True).strip()
+            base = commit("intake")
+            devproto.start(project, TRIVIAL, "work")
+            baseline = project / ".devproto/evidence/work-build-base.txt"
+            self.assertTrue(baseline.is_file())
+            original = baseline.read_bytes()
+            commit("planning changed project")
+            devproto.start(project, TRIVIAL, "work")
+            self.assertEqual(baseline.read_bytes(), original)
+            self.assertIn(base, original.decode())
+            baseline.unlink()
+            devproto.start(project, TRIVIAL, "work")
+            self.assertFalse(baseline.exists(), "resume must not invent missing intake evidence")

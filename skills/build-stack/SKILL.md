@@ -38,7 +38,7 @@ When the build is done and Full Verify passes, save the diff and record the row:
 
 Capture a complete snapshot before recording the row:
 
-1. Before the first edit, record `git rev-parse HEAD` as a commit SHA in
+1. Consume the intake baseline created by `DEVPROTO start` before any phase edits, in
    `.devproto/evidence/<work-id>-build-base.txt`, using exactly `base <sha>` and
    `work-id <work-id>` lines. This is supporting evidence, not another ledger.
    On resume read this file and verify its work ID and commit; never overwrite its
@@ -124,10 +124,11 @@ If you find more than one, read them and pick the most recent by file date or co
 
 A plan is only in force once the person who owns the work has approved its exact text. Record
 that approval in `.devproto/evidence/plan-approval.md` using the existing planning-stack
-record format. Resolve the plan path and compute its SHA256 at approval:
+record format. Resolve a project-relative plan path from the repository root, and compute its SHA256
+at approval. Preserve that path and hash when an unchanged checkout moves:
 
 ```text
-plan: <absolute plan path>
+plan: <project-relative plan path, or absolute path for a plan outside the project>
 sha256: <SHA256 of the exact approved bytes>
 approved_by: <owner>
 approved_at: <timestamp>
@@ -140,7 +141,7 @@ Pass the planning row with the plan as an instrument and the existing read-only 
 DEVPROTO --project <repo> step --id <work-id> --step planning --result pass \
   --evidence .devproto/evidence/plan-approval.md \
   --verify "python3 <planning-stack skill folder>/scripts/plan_approval_check.py .devproto/evidence/plan-approval.md" \
-  --instrument <absolute plan path>
+  --instrument <plan path>
 ```
 
 Before building, run `status`:
@@ -158,7 +159,9 @@ A plan's age is not approval. Preserve approval evidence for its exact text.
 
 If the plan folder has an `AMENDMENTS.md`, treat it the same way. An amendment is only in force
 once the owner's approval of its exact text is recorded in the same format, with its own
-path, hash and approval record checked by plan_approval_check.py. Stop if it changed or has no approval.
+path, hash and approval record checked by plan_approval_check.py. Stop if it changed or has no approval. Re-record the planning row with both the plan
+and AMENDMENTS.md as instruments, and a verifier executing both approval-record checks.
+A later amendment edit must reopen the row.
 
 Never edit the approved plan file during the build. Progress goes to a `STATE.md` next to the
 plan. Amendments go to `AMENDMENTS.md` and need the owner's approval.
@@ -545,7 +548,9 @@ complete, ship it or pass its proof row. Record the missing proof and next check
 
 **Skip if `--no-verify` is set.**
 
-After Full Verify passes and before the review gate, run `/audit-setup`. It prepares the audit
+Run `/audit-setup` before final Full Verify and independent reviews. If it runs later
+or changes files, invalidate those receipts and rerun Full Verify and reviews on the
+complete new candidate before completion. It prepares the audit
 tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
 accessibility library for Playwright, Playwright's browser dependencies, performance budgets, and
 CI gate scaffolding. It is idempotent: a re-run detects a fresh baseline and skips the work when
@@ -573,8 +578,9 @@ code. It does not need a new checklist entry unless the tool's output file chang
 
 **Skip if `--no-verify` is set.**
 
-After Full Verify, reuse the independently executed Step 5.5 reviews when they cover the complete
-recorded BASE..HEAD and acceptance evidence. BUGFIX needs an independent skeptic pass; SMALL
+After Full Verify, reuse independently executed Step 5.5 reviews only when the retained
+complete candidate snapshot still matches all committed, staged, unstaged and new files,
+and the package covers recorded BASE..HEAD and acceptance evidence. BUGFIX needs an independent skeptic pass; SMALL
 needs skeptic and code-quality lenses. MEDIUM needs its selected lenses. Run them in a child
 or fresh session; self-review supplies supporting evidence only. Record missing independent
 review as a required gap. A full `/review-stack` runs with `--review`, `--audit`, or LARGE.
@@ -583,7 +589,7 @@ The agent that wrote the code must not be the only reviewer. Do not duplicate re
 ### Standard review (`--review` or LARGE)
 
 ```text
-/review-stack --branch --plan <plan path from Step 1>
+/review-stack --work-id <work-id> --branch --plan <plan path from Step 1>
 ```
 
 To keep the build conversation's context small, run it in a fresh helper agent or a fresh
@@ -595,7 +601,7 @@ invocation").
 If `--audit` is set, run the full audit pipeline instead:
 
 ```text
-/review-stack --audit --auto --branch --plan <plan path from Step 1>
+/review-stack --work-id <work-id> --audit --auto --branch --plan <plan path from Step 1>
 ```
 
 This runs all review layers (static, pattern, context, runtime) with all 8 perspectives,
@@ -656,7 +662,7 @@ it on the summary. If it fails, the tree summary stands. Skip this for BUGFIX an
 | `package.json` scripts | No build, test or lint scripts | Use documented project commands; record required missing checks as gaps. |
 | TypeScript             | No `tsconfig.json`                    | Skip type checking                                      |
 | Test framework | No applicable test runner | Use meaningful isolated regression proof or keep required verification blocked. |
-| Helper agents          | Not supported, for LARGE              | Fall back to the MEDIUM path (sequential batches)       |
+| Helper agents          | Not supported, any classification              | Implement sequentially; independent review remains required       |
 | Checklist tool         | `/development-protocol` not installed | Keep the evidence files anyway and report in chat       |
 | `/audit-setup`         | Not installed                         | Skip Step 6.4. Note that `--audit` reviews will degrade |
 
@@ -671,7 +677,7 @@ an honest remaining-scope report. Missing required proof blocks completion.
 | -------------- | --------------- | --------------- | ---------------- | ---------------------------------------------- | --------------------------- | ------------- | ------------ |
 | BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (idempotent) | Independent reviewer | Scope-dependent |
 | SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (idempotent) | Independent reviewer | Scope-dependent |
-| MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (idempotent) | No            | 15 to 45 min |
+| MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (idempotent) | Independent reviewer | 15 to 45 min |
 | LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (idempotent) | Yes           | 30 to 90 min |
 
 The audit preflight (Step 6.4) runs for every classification, so `/review-stack` always has a

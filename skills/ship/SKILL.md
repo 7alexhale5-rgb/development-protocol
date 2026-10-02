@@ -45,6 +45,18 @@ git log --oneline -3
 - On `main` or `master`: "You're on the base branch. Create a feature branch first."
 - No commits ahead of base: "Nothing to ship. Your branch has no new commits."
 
+Before push, release, or PR creation for a protocol work item, run:
+
+```text
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> check --id=<work-id> --through review
+python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>
+```
+
+A nonzero result blocks shipping before any outward action. Report open rows and retain
+resume evidence. Never reinterpret a missing work ID as permission to bypass an existing
+work item. Re-run these checks after a sync changes the commit or candidate; stale reviews
+must be renewed. An ad-hoc release still needs the declared checks and independent review.
+
 ### 0b: Detect the base branch
 
 ```bash

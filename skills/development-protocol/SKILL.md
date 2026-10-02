@@ -196,3 +196,9 @@ DEVPROTO --project <repo> doctor
 Every `PASS` line should pass. `WARN skill_installed:<name>` means a stack skill is not installed
 beside this one; install the full repo. `WARN project_is_git_repo` means the folder is not a git
 repository; the checklist still works, but ship and closeout need other verifiers.
+
+At intake, `DEVPROTO start` captures the current Git commit in
+`.devproto/evidence/<work-id>-build-base.txt` before any task phase changes project files.
+Planning, setup and build consume that same baseline. Resume never recreates a missing
+baseline; legacy work without sufficient provenance remains a required scope gap.
+Ordinary non-Git work may start, but cannot claim a Git review or release proof.

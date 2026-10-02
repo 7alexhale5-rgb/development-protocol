@@ -15,6 +15,9 @@ This skill satisfies the `compound` row of the development-protocol checklist. T
 reusable learning before closeout. Pass it with the learning report as evidence and a verifier
 that only reads that report (see Step 7).
 
+Before dispatch, reject --improve combined with --metrics in either order. Neither
+mode gathers or spends until flag validation succeeds.
+
 ## Modes
 
 | You type                         | What runs                                                                                               |
@@ -425,5 +428,5 @@ approval of unchanged scope. Proved adoption still requires applicable authoriza
 acceptance checks. Keep unauthorized boundary changes and external reports as local drafts.
 
 The structural command above proves a retained unproved report only. This package supplies
-no pass command for a proved heading; measured adoption needs the reviewed adapter’s own
+no pass command for a proved heading; measured adoption needs the reviewed adapter's own
 verifier and the full comparison evidence.

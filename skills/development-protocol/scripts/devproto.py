@@ -313,6 +313,17 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
                 record["rule_notes"] = notes
                 save(path, record)
             return summary(project, record)
+        identity = git_identity(project)
+        if identity is not None:
+            baseline = project / STORE_DIR / 'evidence' / f'{work_id}-build-base.txt'
+            baseline.parent.mkdir(parents=True, exist_ok=True)
+            expected = f"base {identity['head']}\nwork-id {work_id}\n"
+            try:
+                with baseline.open('x') as out:
+                    out.write(expected)
+            except FileExistsError:
+                if baseline.read_text() != expected:
+                    raise ValueError('existing intake baseline conflicts; preserve it and recover provenance')
         record = {
             "work_id": work_id,
             "goal": goal,

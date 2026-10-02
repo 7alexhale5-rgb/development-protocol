@@ -165,11 +165,13 @@ Look back through the conversation for a `/review-stack` verdict (or any indepen
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | SHIP IT / READY TO SHIP            | Proceed normally.                                                                                                                   |
 | FIX THEN SHIP / SHIP WITH CAVEATS  | Proceed. Put the remediation items under Blockers in the resume prompt.                                                             |
-| NEEDS WORK or BLOCKED (unresolved) | **Warn**: "The review returned NEEDS WORK / BLOCKED. Continuing closeout anyway, but the resume prompt will carry it as a blocker." |
-| No review found, MODE=ship         | **Soft warn**: "No review detected before ship. Consider /review-stack first. Continue? (y/n)"                                      |
+| NEEDS WORK or BLOCKED (unresolved) | Block Step 4 shipping; retain the blocker and continue saving evidence, handoff and learning. |
+| No review found, MODE=ship         | Block Step 4 shipping until required independent review is verified.                                      |
 | No review found, MODE=eod or pivot | Proceed silently.                                                                                                                   |
 
-Do not block the pipeline on this check. Surface the signal and let the resume prompt carry it.
+Missing or failed required review blocks `/ship`, push and release. Continue the
+persistence steps so evidence and the resume prompt are saved; never mark this closeout
+shipped. Passing headlines with unresolved required findings also remain blocked.
 
 ---
 

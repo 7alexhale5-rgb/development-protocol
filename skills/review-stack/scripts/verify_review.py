@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Read-only validation of the canonical review result before a checklist pass."""
 import argparse
+import hashlib
+import os
 import json
 import re
 import subprocess
@@ -39,12 +41,59 @@ def validate(data, commit):
             raise ValueError('acceptance criterion lacks passing evidence')
 
 
+def candidate_snapshot(project):
+    """Hash the complete nonignored candidate without modifying the user's Git index."""
+    project = project.resolve()
+    def git(*args):
+        result = subprocess.run(['git', '-C', str(project), *args], capture_output=True)
+        if result.returncode:
+            raise ValueError('candidate Git state cannot be read')
+        return result.stdout
+    if Path(os.fsdecode(git('rev-parse', '--show-toplevel')).strip()).resolve() != project:
+        raise ValueError('--project must name the repository root')
+    names = set(git('ls-tree', '-rz', '--name-only', 'HEAD').split(b'\0'))
+    names.update(git('ls-files', '-z', '-co', '--exclude-standard').split(b'\0'))
+    digest = hashlib.sha256()
+    for name in sorted(names - {b''}):
+        if name == b'.devproto' or name.startswith(b'.devproto/'):
+            continue
+        path = project / os.fsdecode(name)
+        digest.update(name + b'\0')
+        if path.is_symlink():
+            kind, content = b'symlink', os.fsencode(os.readlink(path))
+        elif not path.exists():
+            kind, content = b'deleted', b''
+        elif path.is_file():
+            kind = b'executable' if path.stat().st_mode & 0o111 else b'file'
+            content = path.read_bytes()
+        else:
+            raise ValueError('candidate includes an unsupported directory or submodule')
+        digest.update(kind + b'\0' + hashlib.sha256(content).digest())
+    return digest.hexdigest()
+
+
+def has_open_baseline(project):
+    for baseline in (project.resolve() / '.devproto' / 'evidence').glob('*-build-base.txt'):
+        identifier = baseline.name.removesuffix('-build-base.txt')
+        try:
+            record = json.loads((project.resolve() / '.devproto' / f'{identifier}.json').read_text())
+            rows = record.get('steps')
+            if (record.get('work_id') == identifier and isinstance(rows, list) and rows
+                    and any(row.get('step_id') == 'closeout' and row.get('status') == 'passed' for row in rows)
+                    and all(row.get('status') in {'passed', 'not-applicable'} for row in rows)):
+                continue
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        return True
+    return False
+
+
 def validate_scope(data, project, work_id):
     if work_id is None:
-        if data.get('work_id') or any((project.resolve() / '.devproto' / 'evidence').glob('*-build-base.txt')):
+        if data.get('work_id') or has_open_baseline(project):
             raise ValueError('a work review requires --work-id and its recorded baseline')
         return
-    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', work_id):
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+', work_id):
         raise ValueError('invalid work ID')
     baseline = project.resolve() / '.devproto' / 'evidence' / f'{work_id}-build-base.txt'
     fields = {}
@@ -62,21 +111,38 @@ def validate_scope(data, project, work_id):
                             capture_output=True, text=True)
     if result.returncode or result.stdout.strip() != 'commit':
         raise ValueError('recorded baseline commit cannot be verified')
+    ancestor = subprocess.run(['git', '-C', str(project.resolve()), 'merge-base', '--is-ancestor', base, data['commit']], capture_output=True)
+    if ancestor.returncode:
+        raise ValueError('recorded baseline is not an ancestor; retain the scope gap')
     if data.get('base') != base or data.get('work_id') != work_id:
         raise ValueError('review must cover the recorded baseline and work ID')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('result', type=Path)
-    parser.add_argument('--commit', required=True)
+    parser.add_argument('result', type=Path, nargs='?')
+    parser.add_argument('--snapshot', action='store_true')
+    parser.add_argument('--commit')
     parser.add_argument('--project', type=Path, default=Path.cwd())
     parser.add_argument('--work-id')
     args = parser.parse_args()
+    if args.snapshot:
+        if args.result or args.commit or args.work_id:
+            parser.error('--snapshot accepts only --project')
+        try:
+            print(candidate_snapshot(args.project))
+            return 0
+        except (OSError, ValueError) as exc:
+            print(f'review snapshot: FAIL: {exc}')
+            return 1
+    if not args.result or not args.commit:
+        parser.error('result and --commit are required for review verification')
     try:
         data = json.loads(args.result.read_text())
         validate(data, args.commit)
         validate_scope(data, args.project, args.work_id)
+        if data.get('candidate_sha256') != candidate_snapshot(args.project):
+            raise ValueError('reviewed candidate snapshot changed or is missing')
     except (OSError, ValueError, TypeError) as exc:
         print(f'review proof: FAIL: {exc}')
         return 1

@@ -15,6 +15,11 @@ whole conversation.
 
 ```text
 CONTEXT_PAYLOAD:
+  - recorded_base: "{verified intake BASE SHA}"
+  - candidate_head: "{current HEAD SHA}"
+  - baseline_file: "{work-id baseline path}"
+  - review_package: "{full candidate snapshot, complete BASE..HEAD and uncommitted diff, files with paths and SHA256}"
+  - acceptance_evidence: "{executed checks and required gaps}"
   - goal: "{GOAL}"
   - classification: "{BUGFIX|SMALL|MEDIUM|LARGE}"
   - files_modified: "{files changed, with a one-line summary of each change}"
@@ -45,7 +50,7 @@ To keep the build context small, run the review in a fresh helper agent or a fre
 
 ```text
 Helper agent (or new session):
-  instructions: "Read {resolved_contract_path} and apply its development and review contract. Run /review-stack --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Outside reviews required by the goal or improvement contract remain separate."
+  instructions: "Read {resolved_contract_path} and apply its development and review contract. Run /review-stack --work-id {work_id} --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Outside reviews required by the goal or improvement contract remain separate."
   model: a stronger model than the one that built the code, or a different model family
   description: "Post-implementation review"
 ```

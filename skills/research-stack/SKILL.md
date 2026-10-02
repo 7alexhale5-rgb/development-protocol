@@ -871,3 +871,6 @@ list the probe results, and stop. Never fill the report from memory.
 Finish with the report, then a short plain summary: the decision answer in one line, what was
 covered and how well, which sources and lens tools were down or skipped, what is still unknown,
 and where the cache file was written.
+
+Without subagents, run each selected perspective locally as a separate labeled pass.
+This supplies supporting evidence and cannot replace required independent review.

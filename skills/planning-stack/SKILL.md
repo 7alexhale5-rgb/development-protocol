@@ -423,3 +423,6 @@ Every run is deep:
 | Specialist lenses | 5 always on plus up to 5 keyword-gated, capped at 8                                                        |
 
 If your agent has a reasoning-effort setting, use its high setting for this skill.
+
+Without subagents, run each selected perspective locally as a separate labeled pass.
+This supplies supporting evidence and cannot replace required independent review.
