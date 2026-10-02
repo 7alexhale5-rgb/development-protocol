@@ -19,13 +19,14 @@ Or paste yesterday's resume prompt into a fresh session and run `/development-pr
 
 ## By task size
 
-| Task                  | Do this                                                                            |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| Typo, one line        | edit, run it, `/commit`                                                            |
-| Bug fix               | `/development-protocol . "Fix <bug>"` (it skips what a small fix does not need)    |
-| Feature               | `/development-protocol . "<feature>"`                                              |
-| Big or risky          | `/research-stack` first, then `/development-protocol`                              |
-| A screen or component | the protocol turns on `/visual-spec` and `/design-stack` from UI words in the goal |
+| Task                  | Do this                                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Typo, one line        | edit, run it, `/commit`                                                                                                               |
+| Bug fix               | `/development-protocol . "Fix <bug>"` (it skips what a small fix does not need)                                                       |
+| Feature               | `/development-protocol . "<feature>"`                                                                                                 |
+| Big or risky          | `/research-stack --focus devtools,security` first (add `data-infra` for schema work), then `/development-protocol`                    |
+| A screen or component | `/research-stack --focus ui-ux,a11y` for patterns; the protocol turns on `/visual-spec` and `/design-stack` from UI words in the goal |
+| A launch              | `/research-stack #launch` (seo, perf, a11y, content), then `/development-protocol`                                                    |
 
 ## Running several things at once
 

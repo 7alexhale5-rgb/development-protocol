@@ -39,6 +39,18 @@ State these first. This keeps silent bias out of the triage.
 Follow the skeptic brief at brainstorm-stack/references/skeptic.md: the five core questions,
 the hallucination and assumption patterns, the simplicity filter, and what the skeptic is not.
 Use its Research format for output (Source Concern / Challenge / Recommendation).
+If that file is not installed, apply these five questions instead:
+1. Is the research over-complicated? Would a simpler option get 80% of the value?
+2. Are the sources credible, primary and current, or vendor claims and reposts?
+3. Which claims rest on one source, or on several sources that quote one original?
+4. Which "facts" are model memory or LLM analysis presented as findings?
+5. What would make the decision answer wrong?
+
+## Focus (when focus tags are active)
+For each active lens, also check: does every addendum row carry a specific and a source tag?
+Do the sources come from the lens's Authorities, or only from blogs about them? Is any number
+from a paid tool presented without its date and provider? Did the run guess where a lens tool
+was unavailable?
 
 ## Rules
 - 1 to 5 findings, most severe first. Always at least 1.
@@ -99,5 +111,7 @@ State these first.
 2. What would a domain expert still ask after reading this?
 3. Which stakeholder views are missing (users, developers, business, security, operations)?
 4. Temporal gaps: only recent material with no history, or only old material with nothing current?
+5. Focus lenses (if active): which lens sub-questions are thin, which addendum rows are empty or
+   unsourced, and which lens tools were skipped that would have closed a gap?
 Return structured findings only. No preamble. If there is truly nothing, return "No findings."
 ```

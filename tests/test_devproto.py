@@ -243,6 +243,66 @@ class DevprotoTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already has recorded steps"):
             self.start(optional=["research"])
 
+    # ---- research focus hints -------------------------------------------
+
+    def test_focus_hints_mirror_the_research_stack_manifest(self):
+        manifest = json.loads(
+            (ROOT / "skills/research-stack/references/focus/tags.json").read_text()
+        )
+        expected = [(tag, lens["triggers"]) for tag, lens in manifest["tags"].items()]
+        self.assertEqual(devproto.FOCUS_HINTS, expected)
+        self.assertEqual(devproto.MAX_FOCUS, manifest["limits"]["max_tags"])
+
+    def test_focus_tags_rank_by_distinct_matches_then_manifest_order(self):
+        goal = "research the auth library for the checkout dashboard"
+        # ui-ux matches checkout and dashboard (2); security and devtools tie at 1.
+        self.assertEqual(devproto.focus_tags(goal), ["ui-ux", "security", "devtools"])
+        many = (
+            "research seo keywords, wcag aria, cve auth, latency lcp, postgres redis, "
+            "gdpr compliance, npm packages, pricing competitors"
+        )
+        self.assertEqual(len(devproto.focus_tags(many)), devproto.MAX_FOCUS)
+        self.assertEqual(devproto.focus_tags("research the release date"), [])
+
+    def test_research_row_suggests_focus_tags(self):
+        out = devproto.start(
+            self.project, "Research which auth library to pick for the checkout", "f1"
+        )
+        hint = "/research-stack --focus ui-ux,security,devtools"
+        self.assertIn(f"research focus suggested from the goal: {hint}", out["rule_notes"])
+        self.assertEqual(out["research_focus"], hint)
+        self.close_until_for("f1", "research")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            devproto.main(["--project", str(self.project), "status", "--id", "f1"])
+        text = buf.getvalue()
+        self.assertIn(f"Next step: research  (run {hint})", text)
+        self.assertIn(f"suggested: {hint}", text)
+        devproto.step(self.project, "f1", "research", "pass", "ev.md", "true")
+        self.assertNotIn("research_focus", devproto.status(self.project, "f1"))
+
+    def test_no_focus_hint_without_a_match_or_without_research(self):
+        out = devproto.start(self.project, "Research the release date", "f2")
+        self.assertTrue(self.rows(out)["research"]["required"])
+        self.assertNotIn("research_focus", out)
+        self.assertFalse(any("focus" in n for n in out["rule_notes"]))
+        # A lens word with research off gives no hint either.
+        out = devproto.start(self.project, "Add a checkout dashboard", "f3")
+        self.assertFalse(self.rows(out)["research"]["required"])
+        self.assertNotIn("research_focus", out)
+        self.assertFalse(any("focus" in n for n in out["rule_notes"]))
+
+    def close_until_for(self, work_id, target):
+        for s in devproto.status(self.project, work_id)["steps"]:
+            if s["step_id"] == target:
+                return
+            if s["required"]:
+                devproto.step(self.project, work_id, s["step_id"], "pass", "ev.md", "true")
+            else:
+                devproto.step(
+                    self.project, work_id, s["step_id"], "na", reason="not needed"
+                )
+
     # ---- order and results ----------------------------------------------
 
     def test_cannot_skip_ahead(self):

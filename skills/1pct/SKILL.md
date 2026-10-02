@@ -247,6 +247,19 @@ move is to settle it in the same turn: search yourself, or send a scoped subagen
 agent supports them. Not to ask the user. A scout costs cents. A user round-trip costs
 minutes and momentum.
 
+**External unknowns go to research, not to the user.** When a narrow fact outside the repo
+blocks an approved plan (a library choice, an API limit, a CVE status, a standard's current
+version), run `/research-stack --no-ask --focus <tag>` and keep executing the unblocked steps.
+If your agent supports background subagents, hand the research to one. If not, run it inline,
+then continue.
+
+- "Is library X maintained, which version do we pin?" goes to `--focus devtools`.
+- "Does this dependency have a known CVE?" goes to `--focus security`.
+- "Which WCAG version is current for the contrast check?" goes to `--focus a11y`.
+
+Research settles facts, not decisions the user owns. Fold the answer in with a one-line
+deviation log. If the result changes the approved plan's scope, that is a stop sign: surface it.
+
 **Rejection as signal.** If a tool call is rejected or a question pushed back, that is
 evidence the question was out of bounds. Do not rephrase the same question. Change approach
 or proceed with the obvious next plan step.

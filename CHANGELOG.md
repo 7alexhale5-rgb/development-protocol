@@ -16,6 +16,35 @@
 - Preview workflow output accepts only valid allowed origins. Warning tuples, including
   scalar thresholds, become errors when enforcement is requested.
 
+## 2.3.0 (2026-10-02)
+
+- Research Stack 3.2.1: hunter/gatherer mode (`--deep` or 4+ sub-questions) splits hunting, scoring
+  and writing into separate contexts, with `scripts/gather.py` scoring evidence cards against a
+  rubric. The validator warns when a `--deep` report skips the perspectives, the attribution
+  check or the internal round, and only the active lenses' authorities rank as official.
+
+## 2.2.0 (2026-10-01)
+
+- Research focus lens `comms` (voice, SMS and dialers), the 12th lens: `/research-stack --focus
+  comms` splits the phone system from the programmable layer, adds
+  RingCentral, Twilio, Telnyx, Aircall, Dialpad, CallRail and FCC, eCFR and CTIA rules to the
+  tool registry, and requires a "Telephony and messaging plan" section.
+- `data-infra` treats vercel.com, supabase.com and opentelemetry.io as authorities. `devtools`
+  also triggers on api, sdk, integration and webhook. The checklist suggests `comms` for
+  telephony goals.
+
+## 2.1.0 (2026-10-01)
+
+- Research focus lenses: `/research-stack --focus <tags>` (or `#tag`) runs up to 4 of 11 lenses (seo,
+  content, market, ui-ux, a11y, perf, security, devtools, ai-agents, data-infra, legal), each with
+  its own sub-questions, tool stack, authorities, audit mode and required report section. Bundles:
+  `#launch`, `#ship-audit`, `#competitive`, `#build-pick`.
+- `validate_report.py structure` enforces the focus addenda a report declares. New
+  `focus_check.py` lints lenses against the tool registry and suggests, plans and probes tools.
+- The checklist suggests focus tags from the goal when the research row turns on. Lane docs and
+  the planning, spec, brainstorm, pathway and design skills pass tags through.
+- `/1pct` sends external unknowns that block an approved plan to focused research, not the user.
+
 ## 2.0.1 (2026-09-29)
 
 - Release proof rejects failed pipelines, stale concurrent results, unknown Git identity,

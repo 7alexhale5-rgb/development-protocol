@@ -9,7 +9,7 @@ The full sequence, one line per row, for copy-paste when a session needs the who
 ```text
 /pathway <project> go
 /brainstorm-stack
-/research-stack <unknowns>
+/research-stack <unknowns> --focus <tags>
 /planning-stack --deep
 /visual-spec
 /design-stack

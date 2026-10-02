@@ -11,6 +11,7 @@ Placeholders: `{Q}` is a URL-encoded query built from one sub-question. `{TOPIC}
 - Round 1: web search, answer engine, cache
 - Round 2: LLM analysis, Hacker News, community, academic, scraping, index search, self-hosted
   metasearch, code docs, legal, notebooks
+- Step 4F: focus lens tools (pointer)
 - Step 4.5: YouTube
 - Step 6: compression
 - Step 6.5: synthesis assist
@@ -180,6 +181,9 @@ empty shell or when a paid scraper's credits would be out of proportion.
 
 - Ask for markdown and main content only. Dated lesson: one scraper's `formats` parameter had to
   be a JSON array (`["markdown"]`), not a string; a string failed the call.
+- Dated lesson (2026-02): Firecrawl deprecated its `v1/deep-research` endpoint in favour of
+  `/v2/search`, which returns results and full page content in one call and takes source
+  categories (`github`, `research`, `pdf`). Use `/v2/search` for discovery plus content.
 - The autonomous agent mode has unpredictable cost (15 to 500 credits per run in 2026-07). Use it
   only on `--deep`, only with URLs already found in Rounds 1 and 2, and only for a narrow
   extraction goal ("compare the pricing tiers on these pages"). Never run it open-ended. If it
@@ -187,7 +191,7 @@ empty shell or when a paid scraper's credits would be out of proportion.
 
 ## Round 2: independent index search (optional, paid or free tier)
 
-Services such as Brave Search, Exa and Tavily run their own web index. Use one when a
+Services such as Brave Search, Exa, Tavily and Parallel run their own web index. Use one when a
 sub-question needs results from a second index, when a claim needs corroboration because the
 first sources agreed suspiciously fast, or (for Exa-style neural search) to "find things like
 this".
@@ -199,7 +203,11 @@ this".
 - Prefer an endpoint that returns extracted page text ranked for LLM grounding when the service
   has one: one call then replaces a search plus a scrape.
 - Missing key or exhausted quota: skip quietly; web search covers it.
-- Tag `[BR]`, `[EXA]` or `[TV]`.
+- Tag `[BR]`, `[EXA]`, `[TV]` or `[PAR]`.
+- Dated notes (2026): Brave removed its free tier (2026-02) and now meters every call against a
+  small monthly credit. Exa's MCP added `agent_run` for list-building and enrichment (2026-07).
+  Parallel's Search MCP is free and its Task API is priced per processor tier, so pick the tier
+  explicitly. Tavily was acquired by Nebius (2026-02); the API is unchanged so far.
 
 ## Round 2: self-hosted metasearch (optional, free)
 
@@ -218,14 +226,31 @@ connected, use it for current API syntax. Tag `[CODE]`.
 ## Round 2: legal and regulatory (free first)
 
 Go to the statute, the regulator's own site, or the court record. If your team has a legal
-database tool with verifiable citations, use it and follow its citation rules. Tag `[LEX]`.
+database tool with verifiable citations, use it and follow its citation rules. Tag `[LDH]` for Legal Data Hunter and `[LEX]` for any other legal source.
 Weight Highest for legal claims. A blog never outranks a statute.
+
+## Round 2: social (optional, paid)
+
+Reddit closed self-service API keys and unauthenticated JSON now returns 403. X moved to
+pay-per-read in 2026-02. Default to site-scoped web search for both (`site:reddit.com {Q}`,
+`site:x.com {Q}`). If `XAI_API_KEY` is set and `--free` is off, xAI's `x_search` tool returns
+recent X posts with engagement for less than the X API. Tag `[XS]`, or `[X:likes]` per post.
 
 ## Round 2: grounded notebook (optional)
 
 If your team keeps a grounded notebook tool (one that answers only from sources you loaded into
 it), query it when a notebook matches the topic. Reading is safe; adding sources is a write, so
 do it only when the user asks. Tag `[NB]`.
+
+---
+
+## Step 4F: focus lens tools
+
+Each lens in `references/focus/<tag>.md` lists its tools by registry id, in tier order, with
+when to use and skip each one. `references/tool-registry.json` has, for every id: how to detect
+it (MCP prefixes, env vars, CLIs), its cost class, its source tag and its free fallback. `python3
+scripts/focus_check.py plan <tags>` prints the tool plan, and `probe <tags>` checks keys and CLIs.
+Call domain APIs with structured inputs (keywords, domains, package@version, URL), not prose.
 
 ---
 
@@ -329,3 +354,11 @@ Tag every finding with every source behind it. Combine tags in one bracket with 
 | `[CACHE]`               | Finding reused from the research cache                    |
 | `[LLM-analysis]`        | Model analysis of gathered material. Never a fact source. |
 | `[perspective:name]`    | Finding from a Step 6.6 perspective pass                  |
+| `[PAR]`                 | Parallel Search or Task                                   |
+| `[XS]`                  | xAI `x_search` over X posts                               |
+| `[AUDIT:tool]`          | Live measurement of the `--target` (Step 4F audit mode)   |
+
+**Focus tags.** Each lens adds its own tags (`[DFS]`, `[SPY]`, `[MOB]`, `[FP]`, `[OSV]`, `[GHSA]`,
+`[C7]` and so on). The full list is the `source_tags` field of each tag in
+`references/focus/tags.json` and the `source_tag` field in `references/tool-registry.json`. The
+validator loads both, so a tag that is not in either is not counted.

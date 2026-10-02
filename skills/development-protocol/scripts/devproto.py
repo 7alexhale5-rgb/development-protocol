@@ -122,6 +122,42 @@ RESEARCH_RE = re.compile(
     r"\b(research|unknown|investigate|evaluate|compare|regulation|spike)\b", re.I
 )
 
+# Focus lenses for /research-stack. Source of truth: research-stack focus/tags.json (bundled as
+# skills/research-stack/references/focus/tags.json). These are its `triggers`, copied in tags.json
+# order; tests/test_devproto.py fails if they drift. Order breaks ties between equal matches.
+FOCUS_HINTS = [
+    ("seo", r"\b(seo|serp|keywords?|rankings?|backlinks?|search console|schema markup|structured data|rich results?|geo|aeo|ai overviews?|llm visibility|organic traffic)\b"),
+    ("content", r"\b(content|copywriting|blog|newsletter|ad creatives?|ads|creative|hooks?|social posts?|short-form|video|campaign|landing copy)\b"),
+    ("market", r"\b(market|competitors?|competitive|pricing|tam|vendors?|landscape|funding|positioning|alternatives)\b"),
+    ("ui-ux", r"\b(ui|ux|onboarding|user flows?|screens?|layout|design patterns?|figma|components?|dashboard|checkout|usability)\b"),
+    ("a11y", r"\b(a11y|accessibility|accessible|wcag|screen readers?|aria|colou?r contrast|keyboard navigation)\b"),
+    ("perf", r"\b(performance|perf|latency|core web vitals|cwv|lcp|inp|cls|bundle size|page ?speed|lighthouse|throughput)\b"),
+    ("security", r"\b(security|vulnerabilit(y|ies)|cves?|owasp|authn?|secrets?|xss|csrf|ssrf|injection|supply chain|sbom|pentest|threat model)\b"),
+    ("devtools", r"\b(librar(y|ies)|frameworks?|sdks?|apis?|integrations?|webhooks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b"),
+    ("ai-agents", r"\b(llms?|agents?|agentic|prompts?|rag|evals?|mcp|models?|fine-?tun\w*|embeddings?|claude|gpt|gemini)\b"),
+    ("data-infra", r"\b(databases?|postgres|schema|warehouse|etl|pipelines?|queues?|kafka|cach(e|ing)|redis|infra|kubernetes|serverless|cdn)\b"),
+    ("comms", r"\b(dialers?|dialing|telephony|voip|phone systems?|softphones?|webrtc|sms|text messag\w*|ivr|call (center|centre|recording|tracking|routing|logging|queues?)|contact cent(er|re)|cold call\w*|click-to-call|voicemail|ringcentral|twilio|aircall|dialpad|telnyx|10dlc|caller id|cpaas|ucaas)\b"),
+    ("legal", r"\b(legal|gdpr|ccpa|hipaa|compliance|regulations?|licen[cs]es?|terms of service|privacy policy|contracts?|ai act)\b"),
+]
+FOCUS_RES = [(tag, re.compile(rx, re.I)) for tag, rx in FOCUS_HINTS]
+MAX_FOCUS = 4
+
+
+def focus_tags(goal: str) -> list[str]:
+    """Up to MAX_FOCUS lens tags whose triggers match the goal: most distinct matches first."""
+    hits = []
+    for order, (tag, rx) in enumerate(FOCUS_RES):
+        words = {m.group(0).lower() for m in rx.finditer(goal)}
+        if words:
+            hits.append((-len(words), order, tag))
+    return [tag for _, _, tag in sorted(hits)[:MAX_FOCUS]]
+
+
+def research_hint(goal: str) -> str:
+    """The /research-stack call to suggest for this goal, or "" when no lens matches."""
+    tags = focus_tags(goal)
+    return f"/research-stack --focus {','.join(tags)}" if tags else ""
+
 
 def slug(text: str) -> str:
     words = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
@@ -209,6 +245,9 @@ def required_steps(goal: str, force=(), optional=()) -> tuple[set[str], list[str
     required -= set(optional)
     notes += [f"{s} required by --require" for s in sorted(force)]
     notes += [f"{s} made optional by --optional" for s in sorted(optional)]
+    hint = research_hint(goal) if "research" in required else ""
+    if hint:
+        notes.append(f"research focus suggested from the goal: {hint}")
     if notes:
         notes.append("change a row at start with --require <step> or --optional <step>")
     return required, notes
@@ -403,7 +442,7 @@ def refresh(project: Path, record: dict) -> bool:
 
 def summary(project: Path, record: dict) -> dict:
     open_steps = [s["step_id"] for s in record["steps"] if s["status"] not in TERMINAL]
-    return {
+    out = {
         "ok": True,
         "work_id": record["work_id"],
         "goal": record["goal"],
@@ -414,6 +453,11 @@ def summary(project: Path, record: dict) -> dict:
         "rule_notes": record.get("rule_notes", []),
         "steps": record["steps"],
     }
+    research = next(s for s in record["steps"] if s["step_id"] == "research")
+    hint = research_hint(record["goal"])
+    if hint and research["required"] and research["status"] not in TERMINAL:
+        out["research_focus"] = hint
+    return out
 
 
 def status(project: Path, work_id: str, through: str = "") -> dict:
@@ -712,11 +756,18 @@ def print_human(result: dict) -> None:
             line += f"  ({s['reason']})"
         elif s["status"] == "passed":
             line += f"  verified by: {s['verify_command']}"
+        elif s["step_id"] == "research" and result.get("research_focus"):
+            line += f"  suggested: {result['research_focus']}"
         print(line.rstrip())
     if result.get("error"):
         print(f"ERROR: {result['error']}")
     scope = f" through {result['through']}" if result.get("through") else ""
-    print(f"READY{scope}." if result["ready"] else f"Next step: {result['next_step']}")
+    if result["ready"]:
+        print(f"READY{scope}.")
+    elif result["next_step"] == "research" and result.get("research_focus"):
+        print(f"Next step: research  (run {result['research_focus']})")
+    else:
+        print(f"Next step: {result['next_step']}")
 
 
 def main(argv=None) -> int:
