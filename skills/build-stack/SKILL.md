@@ -17,6 +17,10 @@ work, write the code directly.
 `--no-verify` as an exception with a reason. A build is done when its result is readable,
 repeatable and tied to the files or commit it claims to prove. A command that ran is not proof.
 
+The method and bounded-improvement contract in `../development-protocol/reference.md` governs
+this skill and its perspective templates. Choose execution from dependencies and risk, not
+file count alone. Preserve approval of unchanged work and existing authorization.
+
 For UI work, read the "Design and UI proof" section of the `/development-protocol` skill's
 `reference.md`. It sets the fidelity floor and how to measure the result. Scale the measurement to
 the task.
@@ -66,8 +70,8 @@ From the user's input, extract:
 
 - **GOAL**: the implementation objective (everything except flags).
 - **FLAGS**:
-  - `--no-verify`: skip all checkpoints (trust the code). This is an exception. Write the reason,
-    scope, owner and next proof in the handoff.
+  - `--no-verify`: record skipped checks with reason, scope, owner and next proof. The work
+    remains unverified and cannot be marked complete or shipped.
   - `--large`: force the helper-agent path, whatever the file count.
   - `--no-handoff`: skip handoff doc generation when context runs low.
   - `--review`: run a full review with `/review-stack` after the build. Auto-on for LARGE.
@@ -127,20 +131,14 @@ DEVPROTO --project <repo> step --id <work-id> --step planning --result pass \
 Before building, run `status`:
 
 - The `planning` row is passed and unchanged: proceed.
-- The `planning` row reopened: the plan changed after it was approved. STOP. Show the owner what
-  changed (`git diff` on the plan file), get re-approval in chat, update the approval file, and
-  pass the row again.
+- The `planning` row reopened: inspect which evidence or instrument changed. Restore valid
+  proof for unchanged approved scope without requesting approval again. If scope changed, show
+  the change and obtain any authorization that change requires.
 - No approval on record: if the owner approved this plan in the current conversation, write the
   approval file now (quote their message) and pass the row. Otherwise STOP until they approve,
   whatever the plan's age.
 
-Two dated lessons sit behind this rule:
-
-- 2026-09-18: the rule used to be "warn and continue" when no approval was on record. A review
-  found builds running on plans nobody had approved. It now stops.
-- 2026-09-21: a carve-out let any plan written before a cutoff date continue without approval. It
-  was removed. A plan's age is not an approval. The carve-out was a standing free pass with no
-  expiry. An older plan costs one "yes", recorded once against its exact text.
+A plan's age is not approval. Preserve approval evidence for its exact text.
 
 If the plan folder has an `AMENDMENTS.md`, treat it the same way. An amendment is only in force
 once the owner's approval of its exact text is recorded. Stop if it changed or has no approval.
@@ -196,7 +194,7 @@ Report the classification in one line:
 
 Or for simpler work:
 
-> "Classified as **BUGFIX** (1 file). Implementing directly with a light check."
+> "Classified as **BUGFIX**. Reproducing the defect, adding a failing behavior check, then Full Verify."
 
 ---
 
@@ -209,23 +207,17 @@ Before writing code, find out which checks this project can actually run. Probe 
 | `CAN_BUILD`     | `package.json` has a `build` script (or the language's build tool is configured, for example `cargo`, `go build`, `mvn`)                                                    |
 | `CAN_TYPECHECK` | `tsconfig.json` exists at the root (or `mypy`/`pyright` is configured for Python)                                                                                           |
 | `CAN_LINT`      | An `eslint.config.*`, `.eslintrc*`, `biome.json`, `ruff.toml` or `.ruff.toml` exists at the root, or `package.json` has a `lint` script                                     |
-| `CAN_TEST`      | JS/TS: test files (`*.test.*`, `*.spec.*`) exist AND the root `package.json` has a `test` script. Python: a root `pytest.ini`, or a root `pyproject.toml` that names pytest |
+| `CAN_TEST` | The intended package documents an executable test command, including standard-library tests, with applicable test cases. |
 
 Search for test files at most 4 folders deep, and skip `node_modules`, `.git`, `dist`, `build`,
 `.next`, `.venv`, `venv`, `__pycache__`, `coverage` and archive folders.
 
-A test runner must exist **at the project root**. Test-shaped files somewhere below the root are
-not enough. A nested plugin or a vendored package with its own tests must not make the root look
-test-capable. Nested test folders caused exactly this false positive in real use.
+Use the repository's documented commands and intended package scope. Unrelated vendored tests
+do not prove the project works. Retain evidence for each capability flag.
 
-Keep the evidence for each flag (the script names you saw, a sample of test files, the lint
-config paths) so you can pick exact commands later.
-
-Set `IS_TDD` to true when the `--tdd` flag was passed (if `CAN_TEST` is false, warn and fall back
-as the TDD section says), or when `CAN_TEST` is true AND the plan mentions tests.
-
-Only run checks that exist. Skip checks that are not configured. Do not install tooling in the
-middle of a build.
+Set `IS_TDD` for features, behavior changes and bug fixes, or explicit `--tdd`. Missing required
+tooling is an unmeasured gap; use an isolated executable regression check where suitable.
+Conditional checks may be not applicable with a reason. Required missing checks block completion.
 
 ---
 
@@ -261,13 +253,10 @@ Pick the path that matches the classification.
 
 ### BUGFIX path
 
-1. Make the fix directly.
-2. Run the **Light Checkpoint** (types and lint only).
-3. If it passes, continue through the mandatory skeptic, Steps 6.4 and 6.5
-   as applicable, and Full Verify before Step 7. Honor explicit `--review` and `--audit`.
-4. If it fails, auto-fix deterministic issues (type errors, lint violations, under 5 lines).
-5. Re-run the Light Checkpoint (at most 2 retries).
-6. If it still fails, show the user the error details and stop.
+1. Reproduce the defect and trace its cause with systematic debugging.
+2. Add a focused regression check and observe the intended failure.
+3. Implement the minimum correction; pass that check and Full Verify.
+4. Continue through independent review and retain gaps. Types and lint alone do not prove a fix.
 
 ### SMALL path
 
@@ -276,7 +265,8 @@ Pick the path that matches the classification.
 3. After the last task, run **Full Verify**.
 4. If Full Verify fails:
    - Auto-fix type errors and lint issues (under 5 lines, deterministic).
-   - Surface test failures and build errors to the user. They need judgment.
+   - Investigate test failures and build errors; fix confirmed defects within scope. Retain the
+     original failure. Ask the owner only for missing access or decisions.
 5. Continue through applicable perspectives, audit and review stages before Step 7.
 
 ### MEDIUM path
@@ -287,7 +277,8 @@ For each batch:
 2. **Mark** the tasks complete.
 3. Run the **Light Checkpoint** (types and lint).
    - If it fails and the fix is under 5 lines and deterministic, auto-fix and re-check.
-   - If it fails and the fix is complex, surface it to the user and pause the batch.
+   - Investigate complex failures and repair confirmed defects within scope. Ask only for
+     missing access or decisions.
 4. Run the **Context Gate** (Step 6).
 5. Move to the next batch.
 
@@ -295,9 +286,11 @@ After all batches, run **Full Verify** and handle failures by the SMALL path rul
 
 ### LARGE path
 
-1. If your agent supports helper agents (subagents), split the task list across them. Run
-   independent tasks in parallel and dependent tasks in order. If it does not, fall back to the
-   MEDIUM path (sequential batches).
+1. Use at most two children for independent isolated tasks with disjoint ownership; no nested
+   delegation. Run dependent tasks sequentially. If helpers are unavailable, use native sequential
+   execution. Every child receives the shared testing and review contract. Light-check templates
+   cannot waive behavior tests. Interrupt completed children.
+
 2. Give each helper its tasks plus the verification instruction in
    `references/perspective-prompts.md` (section "LARGE path: helper verification instruction").
 3. Collect results from every helper.
@@ -316,8 +309,8 @@ Use it when:
 - The plan is a standalone build with an exit condition a machine can check (every checkbox is
   checked, the main-journey test is green).
 - The plan is about 40 to 80 discrete tasks that fit a checkbox roadmap.
-- You accept 30 to 60 minutes or more of unattended running, with the agent approving its own
-  tool calls.
+- The user explicitly requested unattended work within existing permissions. All phase proof
+  and spending limits still apply; do not enable permission bypass.
 - The build is new enough that mid-loop changes of direction are unlikely.
 
 Do not use it when:
@@ -332,32 +325,24 @@ Workflow: write `PRD.md` and a checkbox `ROADMAP.md` (40 to 80 items). Set the c
 context. Review the diff before merging. Do not run both the goal loop and the helper fan-out for
 the same plan.
 
-### TDD override (`--tdd`)
+### TDD cycle
 
-When `--tdd` is set, wrap the chosen path (SMALL, MEDIUM or LARGE) in a red-green-refactor cycle.
-This changes how tasks run, not which path is used.
+Apply this cycle when `IS_TDD` is true, including features, behavior changes and bug fixes
+without a flag. A missing framework is a gap, not permission to skip proof.
 
-**Prerequisite:** `CAN_TEST` must be true. If no test framework is found, warn and run normally.
+1. RED: run a meaningful behavior check and observe its intended failure.
+2. GREEN: implement the minimum correction and pass the check.
+3. REFACTOR: simplify while keeping checks green.
+4. Verify acceptance cases, error paths and the original regression. Coverage guides investigation;
+   there is no blanket percentage requirement.
 
-**Cycle per task:**
+For behavior-preserving refactors, run characterization checks before editing and verify
+invariants afterward. Copy edits, generated output, nonbehavioral configuration and throwaway
+probes use the smallest meaningful validator; record why behavior tests do not apply.
 
-1. **RED.** Write the test first. Run the tests. Expect failures. A failing run confirms the test
-   means something.
-2. **GREEN.** Write the least code that makes the tests pass. Run the tests. Expect all green.
-3. **REFACTOR.** Clean up without changing behavior. Run the tests. Confirm still green.
-4. **Coverage check.** Run coverage (for example `npm run test -- --coverage` or
-   `pytest --cov`). Target at least 80% on new code.
-
-**Iteration rules:**
-
-- One atomic change per iteration. Otherwise you cannot tell which change helped.
-- Tests pass and coverage is 80% or more: keep it and move to the next task.
-- Tests fail after GREEN: fix the implementation (at most 3 attempts), then surface to the user.
-- Coverage under 80%: add edge-case tests and re-run (at most 2 attempts).
-- Commit after each GREEN phase. That gives a clean rollback point.
-
-**For MEDIUM and LARGE with TDD:** apply the cycle inside each batch. The batch structure stays
-the same. TDD only wraps how each task inside the batch is built.
+Keep one atomic change per iteration. After three unsuccessful fixes, reassess the cause and
+approach. Continue authorized investigation. Preserve existing work and failed evidence; never
+delete work to reconstruct a test-first history.
 
 ---
 
@@ -369,10 +354,9 @@ the same. TDD only wraps how each task inside the batch is built.
 After Full Verify (end of Step 5), get independent reviews of the implementation from different
 angles before you call it complete. These catch problems static checks miss.
 
-If your agent supports helper agents, run each perspective as a separate helper with only the
-context payload, in parallel, in one message. If it does not, run each perspective yourself as a
-separate pass, one at a time, reading only the payload and the perspective's rules. The point is
-that each pass looks at the work through one lens only.
+Run perspectives in bounded batches with at most two children and no nested delegation. Reuse
+final independent reviews rather than duplicate seats. Without helpers, self-review can support
+the work but cannot replace required independent review.
 
 ### 5.5a: Pick perspectives by classification
 
@@ -384,7 +368,7 @@ that each pass looks at the work through one lens only.
 | LARGE          | skeptic, code-quality, test-coverage, security | plan-conformance (if a plan exists) |
 
 The **skeptic** always runs. It asks whether the code is sloppy and whether it matches the stated
-intent. It always returns at least one finding. Its rules are in
+intent. Evidence-backed no-findings is valid. Its rules are in
 `references/perspective-prompts.md`.
 
 ### 5.5b: Prepare the context payload
@@ -395,9 +379,8 @@ status, plan summary and the diff.
 
 ### 5.5c: Run the perspectives
 
-Run every selected perspective at once. The prompt templates, including each perspective's focus
-list and output format, are in `references/perspective-prompts.md`. Use a fast, cheap model for
-the first pass if your agent lets you choose.
+Run selected perspectives in batches of at most two. The focus lists and output formats are in
+`references/perspective-prompts.md`. Verify model availability and preserve evidence.
 
 ---
 
@@ -406,22 +389,11 @@ the first pass if your agent lets you choose.
 Collect each perspective's output. If one is still running, wait. They should finish in 30 to 60
 seconds.
 
-### Escalation check
+### Review disposition
 
-```text
-FOR each perspective result:
-  IF result is empty or an error:
-    Log: "{name}: failed, skipping"
-  ELIF result is "No findings." AND the perspective always runs (skeptic):
-    Retry with a stronger model.
-  ELIF result is "No findings." AND the diff is 50 lines or more:
-    Retry with a stronger model, adding: "The first review found nothing. Look harder."
-  ELIF the retry also returns "No findings.":
-    Accept as clean. Note: "{name}: clean (checked 2x)"
-  ELSE:
-    Parse the findings and show them to the user.
-    Tag each finding with its source: [perspective:{name}]
-```
+An empty or failed review is an unmeasured gap. Verify substantive findings against source and
+behavior. Accept evidence-backed no-findings without retrying merely to obtain criticism. Fix
+material defects; retain reasons for dismissals and optional deferrals.
 
 ### Present findings
 
@@ -430,7 +402,7 @@ If any perspective returned findings:
 > **Perspective analysis** ({N} findings from {N} perspectives):
 > {findings, grouped by severity}
 >
-> These are advisory. Fix them now or before committing.
+> Fix confirmed material defects before completion. Retain optional findings with their disposition.
 
 If every perspective is clean:
 
@@ -510,8 +482,8 @@ A complete check that everything works together.
 
 **The UI journey check degrades loudly, never silently.** If you cannot run it (no browser tool,
 no running app), write "UI journey: not run, because <reason>" in the Full Verify output and in
-the handoff. It is a "cannot verify", which never blocks the build, but it must never vanish. In
-the LARGE path, run it in the main loop after collecting helper results, never inside a helper.
+the handoff. Implementation may continue, but missing required runtime proof blocks completion
+and shipping. Run the aggregate journey in the root after collecting helper results.
 
 Save the test output to a file (for example `.devproto/evidence/full-verify.log`) so the verify
 and review rows have something real to point at.
@@ -531,12 +503,11 @@ and review rows have something real to point at.
 | `console.log` or `print` in production code | Yes       | Remove if `CAN_LINT` and the file is not a debug or dev file. Otherwise surface it |
 | `any` or `unknown` type usage               | No        | Surface to the user. Proper typing needs judgment                                  |
 | Dead code (unreachable, unused exports)     | No        | Surface to the user. It may be intended public API                                 |
-| Test failure                                | No        | Always surface to the user                                                         |
+| Test failure | Investigate | Fix confirmed defects within scope; ask only for missing access or decisions. |
 | Build error                                 | Maybe     | Auto-fix if it is clearly a type or import issue. Otherwise surface                |
 
-**If `--no-verify` is set:** skip all checkpoints and verification. Implement everything, mark it
-complete, and go to Step 7. Record the build row as `blocked` with the reason "built with
---no-verify", or leave it open. Do not record a pass.
+**If `--no-verify` is set:** skipped required checks leave work unverified. Do not mark it
+complete, ship it or pass its proof row. Record the missing proof and next check.
 
 ---
 
@@ -602,17 +573,17 @@ an auto-fix manifest and a going-public readiness checklist.
 The review returns a verdict: SHIP IT, FIX THEN SHIP, NEEDS WORK or BLOCKED. For an audit it can
 also return READY TO SHIP or SHIP WITH CAVEATS.
 
-- **SHIP IT / READY TO SHIP:** go to Step 7.
-- **FIX THEN SHIP / SHIP WITH CAVEATS:** go to Step 7 and list the remediation items.
-- **NEEDS WORK:** show the findings to the user. Offer to fix the auto-fixable ones, then
-  re-verify.
-- **BLOCKED:** stop. Show the blocking findings. The user must resolve them before you continue.
+- **SHIP IT / READY TO SHIP:** proceed only when required checks pass.
+- **FIX THEN SHIP:** fix confirmed defects, rerun checks and obtain updated independent review.
+- **SHIP WITH CAVEATS:** only optional gaps may remain.
+- **NEEDS WORK / BLOCKED:** investigate and repair within authority; ask only for missing access
+  or decisions.
 
 ---
 
 ## Step 7: Complete
 
-After all tasks are done and verification passes (or was skipped with a recorded reason):
+After all tasks are done and all required verification passes:
 
 ### 7a: Summary report
 
@@ -647,15 +618,15 @@ it on the summary. If it fails, the tree summary stands. Skip this for BUGFIX an
 | ---------------------- | ------------------------------------- | ------------------------------------------------------- |
 | Context meter          | Agent does not report context left    | Treat as Moderate and continue                          |
 | Task-list tool         | Not available                         | Track progress in `STATE.md` next to the plan           |
-| `package.json` scripts | No build, test or lint scripts        | Skip the matching checks. Say which were skipped        |
+| `package.json` scripts | No build, test or lint scripts | Use documented project commands; record required missing checks as gaps. |
 | TypeScript             | No `tsconfig.json`                    | Skip type checking                                      |
-| Test framework         | No test runner at the root            | Skip test verification. Say so in the summary           |
+| Test framework | No applicable test runner | Use meaningful isolated regression proof or keep required verification blocked. |
 | Helper agents          | Not supported, for LARGE              | Fall back to the MEDIUM path (sequential batches)       |
 | Checklist tool         | `/development-protocol` not installed | Keep the evidence files anyway and report in chat       |
 | `/audit-setup`         | Not installed                         | Skip Step 6.4. Note that `--audit` reviews will degrade |
 
-**Minimum viable run:** read the plan, check its approval, implement the code, report completion
-honestly. Everything else is enhancement.
+**Minimum viable run:** a bounded change, executed meaningful checks, readable evidence and
+an honest remaining-scope report. Missing required proof blocks completion.
 
 ---
 
@@ -663,7 +634,7 @@ honestly. Everything else is enhancement.
 
 | Classification | Checkpoints     | Full Verify     | Context gate     | Perspectives                                   | Audit preflight             | Helper agents | Est. time    |
 | -------------- | --------------- | --------------- | ---------------- | ---------------------------------------------- | --------------------------- | ------------- | ------------ |
-| BUGFIX         | 1 light         | No (light only) | No               | skeptic only                                   | `/audit-setup` (idempotent) | No            | 1 to 5 min   |
+| BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (idempotent) | No            | 1 to 5 min   |
 | SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (idempotent) | No            | 5 to 15 min  |
 | MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (idempotent) | No            | 15 to 45 min |
 | LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (idempotent) | Yes           | 30 to 90 min |

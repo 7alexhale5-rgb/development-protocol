@@ -56,6 +56,11 @@ The builder does not grade its own work. Options, strongest first:
 Ask the reviewer for findings ranked by severity, each with a concrete failure case. Record every
 finding and what happened to it: fixed, rejected with a reason, or deferred with an owner.
 
+An evidence-backed no-findings review is valid. Never demand findings or retry merely because
+a review is clean. Fix confirmed material defects and obtain an updated independent review
+after a substantive correction. Bind reviews to the complete recorded baseline-to-candidate
+diff. Changed evidence requires fresh proof, not automatic reapproval of unchanged scope.
+
 ## Evaluation standard
 
 Use this whenever the work claims one version is better than another (a prompt, a model, a
@@ -67,6 +72,8 @@ ranking, an agent loop).
 - Freeze the task set, grader, rubric and scoring code before the final run.
 - Keep a holdout set and a negative control. Drop cases that cannot tell the versions apart.
 - When a judge compares two outputs, hide which is which and swap their order.
+- Calibrate semantic judges against independent labels. Bind calibration and scored judgments
+  to the same observed judge model, rubric and complete judgment configuration.
 - If the instrument, rubric, prompt or scorer changes, the old comparison is void. Re-run it.
 - Missing output, timeout, refusal and malformed output are outcomes. Never count them as passes.
 
@@ -109,3 +116,86 @@ Status and check reopen those rows after either changes. Earlier plan and build
 rows remain valid unless their evidence or instruments change. Record commit proof
 after committing, with a verifier that only reads the commit. Old Git release
 receipts without this binding must be verified again. Non-Git folders remain usable.
+
+## Optional Superpowers methods
+
+These methods support the existing rows. Load installed skills on demand. Availability is
+optional; missing required proof remains a gap. This contract governs conflicting vendor menus,
+finding quotas, fan-out, cleanup and skipped final reviews.
+
+| Method | Existing row or interval | Use and evidence |
+| --- | --- | --- |
+| using-superpowers | pathway | Select methods once; record execution choice and existing authority. |
+| brainstorming | brainstorm / spec | Resolve unclear goals while preserving settled decisions. |
+| writing-plans | planning | Name ownership, dependencies, interfaces, decisions and acceptance checks. |
+| executing-plans | build | Run small or coupled tasks with focused checks and retained progress. |
+| subagent-driven-development | build | Separate tasks with distinct specification and quality verdicts. |
+| dispatching-parallel-agents | research / build / review | Independent investigations or isolated changes with no shared-state conflicts. |
+| test-driven-development | build | Observe intended failure, implement minimally, pass tests, then refactor. |
+| systematic-debugging | any failed row | Reproduce, trace cause and test one hypothesis. Reassess after three failed attempts. |
+| requesting-code-review | verify / review | Review the complete baseline-to-candidate diff, requirements and proof. |
+| receiving-code-review | review | Reproduce findings; retain test-first fixes or evidence-backed dismissals. |
+| verification-before-completion | every row | Executed checks and readable results tied to the artifact. |
+| using-git-worktrees | pre-build | Inspect and reuse isolation; preserve dirty work, unique commits and rewritten history. |
+| finishing-a-development-branch | commit / ship / closeout | Authorized integration, exact-head CI and fresh-main proof before cleanup. |
+| writing-skills | compound | Real task and pressure trials, held-out cases and negative controls. |
+| diagnosing-superpowers | review / compound | Cite session evidence for repeated failures, cost or delay. Keep external reports as local drafts. |
+
+Default to native execution for small or coupled work. Use subagent-driven development for
+separable tasks with stable interfaces and independent acceptance checks. Use at most two
+children, no nested delegation, explicit ownership and bounded briefs. The root reviews actual
+changes and aggregate checks. Interrupt completed children. Dependent tasks run sequentially.
+
+Use vendor task-brief, review-package and progress helpers only when installed and verified;
+they are not bundled here. Record the actual task baseline, not HEAD~1 for a multi-commit task.
+Retain complete test receipts and resume state. Helper output supports the existing checklist.
+Inspect duplicate plugin identities before changing either; evaluate vendor updates in isolation
+and use supported installation mechanisms, never cache edits. Evaluate upstream 6.4.2's lean
+plans without implementation code; availability and reported benchmarks do not prove local benefit.
+
+Behavior changes and bug fixes require red-green-refactor. Start behavior-preserving refactors
+with characterization checks. Copy, generated output, nonbehavioral configuration and throwaway
+probes use the smallest meaningful validator, with a reason. Preserve existing work and failed
+evidence. Missing tools stay unmeasured. After three failed debugging attempts, reassess the
+cause; ask the owner only for missing access or decisions.
+
+## Bounded improvement contract
+
+Use one candidate lineage per cycle, at most three revisions, in isolation. Retain rejected
+trials and costs; do not reset limits by renaming the work. Freeze baseline, cases, holdout,
+negative controls, acceptance tests, grader, scorer, observed models, tool versions, account,
+currency, spending and runtime caps before scored trials. Select candidates from confirmed
+failures, rejected reviews, drift and measured costs. State one hypothesis and outcome measure.
+
+Run five trials per comparison arm. Retain raw worker and grader output, identity, timestamps,
+failures, refusals, missing output, timeouts and settled costs. Require positive paired 95%
+confidence intervals excluding zero on both the primary and held-out comparisons, unchanged
+negative controls, and no safety failures or correctness regressions. Report detectable effect,
+pass@k and pass^k. Missing output and unavailable or uncalibrated judges cannot pass. Instrument
+changes invalidate the comparison pool. Candidates cannot edit their tests, scoring or authority.
+
+Require two independent reviews of the exact candidate and executed behavior checks. Rehearse
+candidate, rollback and restoration on one isolated target; preserve distinct backups and
+readbacks. Reconcile all calls across revisions, judges and critics against a current verified
+account budget. A fresh verified balance may replace an expired snapshot without changing
+sealed trials, reviews or costs. Unknown costs stay unmeasured; do not repeat spending on resume.
+
+**Standalone capability gap:** this package does not ship a host ledger engine, statistical scorer,
+validated critic runner or executable improvement checker. The native measurement checker is host-only until a
+supported adapter is proved. `devproto.py` records evidence and verifier results; it does not
+enforce this measurement contract or authorize adoption. Keep proposed improvements unproved
+until a reviewed adapter establishes the required bindings using the existing ledger. Do not
+add a parallel ledger or copy a private host engine. Ordinary retrospectives may still complete
+with truthful reports; a work item requiring measured adoption remains blocked without proof.
+
+Review instruments independently before freezing them. Bind executable dependencies;
+unsupported closures remain unmeasured. A plan, statistical score or synthetic fixture is not
+proof of real agent improvement. Only proved reversible changes within existing authorization
+may be adopted. Sends, spending, permissions, secrets, production, destructive actions, model
+defaults and vendor updates retain their existing rules. Verify the installed result and restore
+the retained baseline if its acceptance check fails.
+
+Run after verified closeout or through an existing weekly drift check. Preserve its cadence;
+never duplicate schedules. Track dated primary OpenAI, Google, Microsoft, GitHub, browser tools,
+Lighthouse and actual dependency sources. Record release date/channel, local availability,
+tested compatibility and measured benefit separately. A preview or announcement is not runtime proof.

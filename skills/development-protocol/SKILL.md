@@ -13,6 +13,10 @@ This skill is the conductor. Each row hands off to a bundled skill that owns the
 have to remember the slash commands or their order; this skill runs them in sequence, records proof
 after each one, and reports back.
 
+The optional Superpowers methods in `reference.md` fit inside these same 17 rows. They add no
+ledger or authority. Check installed methods and helpers before invoking them; record missing
+capabilities honestly.
+
 Read these once per session:
 
 - `reference.md` in this folder: the interval table, review rules, evaluation standard, UI proof.
@@ -128,9 +132,13 @@ proves the real thing happened" means. Push a branch and open a pull request to 
    strongest model available for these rows.
 3. Build in three to five phases, never more. Each phase ships one runnable thing against its gate
    number. Do not stop to show partial work between phases unless blocked.
-4. If the work splits into independent components, write one handoff prompt per component and run
-   them as separate sessions or subagents that report back here. Each worker commits only its own
-   files on its own branch.
+4. Choose execution from dependencies and risk. Use native execution for small or coupled work.
+   For independent tasks, use at most two children with disjoint ownership and no nested
+   delegation. Each brief states goal, inputs, ownership, done condition, output format and
+   return budget. Verify available tools and actual model settings before dispatch. The root
+   reads real diffs and runs aggregate checks; worker reports are claims. Interrupt finished
+   children. Preserve resume evidence in the existing checklist.
+
 5. Rows 11 and 12 need a reviewer that did not write the code: a different model family, a fresh
    session with only the diff and spec, or a person. Record which one reviewed.
 6. Before merge, gate with `check --through commit`. Rows `ship`, `compound` and `closeout` can only
@@ -143,6 +151,10 @@ proves the real thing happened" means. Push a branch and open a pull request to 
 target up to n times (5 to 10 is typical). Each pass: review what exists, list gaps, errors and
 simplifications, research the gaps, fix them through the rows, and record a new work item with the
 id `<base>-loop<k>`. Stop early when a pass finds nothing worth fixing, and say so.
+
+This code-improvement loop does not prove skill or model gains. Bounded measurement uses
+`/compound --improve` and the contract in `reference.md`. Do not rename work or repeat a cycle
+to evade revision or spending limits.
 
 ## If context runs low
 

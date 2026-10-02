@@ -15,12 +15,13 @@ This skill satisfies the `compound` row of the development-protocol checklist. T
 reusable learning before closeout. Pass it with the learning report as evidence and a verifier
 that only reads that report (see Step 7).
 
-## Two modes
+## Modes
 
 | You type                         | What runs                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `/compound` (plus scope flags)   | The learning flow below, Steps 0 to 7                                                                   |
 | `/compound --metrics [argument]` | The git metrics retro. Read `references/retro-metrics.md` and follow it end to end. Stop when it stops. |
+| `/compound --improve` | Bounded candidate assessment under `../development-protocol/reference.md`; measurement and adoption require a proved adapter. |
 
 `--metrics` takes `24h`, `14d`, `30d`, `compare [Nd]`, `global [Nd]`, or a project name. Use it
 for "weekly retro", "what did we ship", "engineering retrospective" and "retro numbers".
@@ -378,3 +379,24 @@ reason, not `pass`. Unknown is not pass.
 - Velocity numbers are context, never a grade of a person.
 - Never write to an agent instruction file without confirmation.
 - Never auto-fix what the health checks find. Report it.
+
+## Mode: --improve
+
+Follow the bounded-improvement contract in `../development-protocol/reference.md`. Ordinary
+compound runs remain report-only. Select one candidate from a confirmed defect, repeated failure,
+rejected review, drift or measured cost. Preserve its hypothesis, baseline, frozen instruments,
+rejected attempts and unresolved proof needs in the existing learning report.
+
+The standalone package has no native improvement checker. Do not invoke absent host commands or
+treat the Step 7 heading check as proof of measured gains. The compound row may record a truthful
+retrospective saying the improvement remains unproved. If measured adoption is required by the
+work item's goal, keep the row blocked until a supported adapter proves that contract.
+
+Use the existing DEVPROTO step command with `--result blocked --reason` for missing required
+measurement capability. Do not create another ledger. A future adapter must preserve immutable
+experiments, executed provenance, independent exact-candidate reviews, accumulated settled costs
+and tested rollback. Synthetic fixtures prove checker behavior only, never real agent gains.
+
+Resume retained work rather than repeating rejected trials or resetting limits. Preserve existing
+approval of unchanged scope. Proved adoption still requires applicable authorization and installed
+acceptance checks. Keep unauthorized boundary changes and external reports as local drafts.
