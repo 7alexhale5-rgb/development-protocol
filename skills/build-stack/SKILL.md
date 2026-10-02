@@ -123,15 +123,24 @@ If you find more than one, read them and pick the most recent by file date or co
 ### 1c: Check the approval before building
 
 A plan is only in force once the person who owns the work has approved its exact text. Record
-that approval as a file, for example `.devproto/evidence/plan-approval.md`, with one line such as
-`Approved by <name> on <YYYY-MM-DD>: "<their exact words>"`. Then pass the `planning` row with the plan file as an instrument, so
-the checklist fingerprints the plan:
+that approval in `.devproto/evidence/plan-approval.md` using the existing planning-stack
+record format. Resolve the plan path and compute its SHA256 at approval:
+
+```text
+plan: <absolute plan path>
+sha256: <SHA256 of the exact approved bytes>
+approved_by: <owner>
+approved_at: <timestamp>
+words: <their exact approval words>
+```
+
+Pass the planning row with the plan as an instrument and the existing read-only checker:
 
 ```text
 DEVPROTO --project <repo> step --id <work-id> --step planning --result pass \
   --evidence .devproto/evidence/plan-approval.md \
-  --verify "grep -q 'Approved' .devproto/evidence/plan-approval.md" \
-  --instrument <plan path>
+  --verify "python3 <planning-stack skill folder>/scripts/plan_approval_check.py .devproto/evidence/plan-approval.md" \
+  --instrument <absolute plan path>
 ```
 
 Before building, run `status`:
@@ -148,7 +157,8 @@ Before building, run `status`:
 A plan's age is not approval. Preserve approval evidence for its exact text.
 
 If the plan folder has an `AMENDMENTS.md`, treat it the same way. An amendment is only in force
-once the owner's approval of its exact text is recorded. Stop if it changed or has no approval.
+once the owner's approval of its exact text is recorded in the same format, with its own
+path, hash and approval record checked by plan_approval_check.py. Stop if it changed or has no approval.
 
 Never edit the approved plan file during the build. Progress goes to a `STATE.md` next to the
 plan. Amendments go to `AMENDMENTS.md` and need the owner's approval.
@@ -228,7 +238,9 @@ do not prove the project works. Retain evidence for each capability flag.
 
 Set `IS_TDD` for features, behavior changes and bug fixes, or explicit `--tdd`. Missing required
 tooling is an unmeasured gap; use an isolated executable regression check where suitable.
-An isolated executable regression check is a retained standalone script invoking the
+Retain the isolated regression script as a build `--instrument`, including when stored under
+`.devproto/`, and execute it in the build verifier. An isolated executable regression check
+is a retained standalone script invoking the
 changed code: it exits nonzero for the reproduced defect and zero after the fix. Save
 it in the existing evidence folder and run it before and after the correction.
 Conditional checks may be not applicable with a reason. Required missing checks block completion.

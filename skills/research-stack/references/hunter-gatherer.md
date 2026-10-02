@@ -45,7 +45,7 @@ note whenever a card reveals something about a source that another card's scorer
 ## 2. Hunters (one per sub-question, read-only)
 
 A root batches independent hunters with at most two active children; each owns its
-sub-question and returns a complete evidence package. A child hunts locally without agents. Each brief names (Anthropic's
+sub-question, writes cards-Qn.jsonl and raw-Qn.md, and returns a one-line receipt. A child hunts locally without agents. Each brief names (Anthropic's
 four parts): **objective** (one sub-question), **output format** (cards, below), **tools and
 sources** (from the Step 1 probe and the active lenses), and **boundaries** (this sub-question
 only; no report).

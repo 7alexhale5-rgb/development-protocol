@@ -375,7 +375,7 @@ substantial is worse than an honest zero.
 For `--improve`, use this Step 7 structural verifier instead of the Learnings grep:
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step compound --result pass \
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step --id <work-id> --step compound --result pass \
   --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md \
   --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md --section 'Learnings' --section 'Improvement status: unproved'"
 ```
@@ -415,7 +415,7 @@ goal, brief or explicit owner request naming adoption or promotion, keep the row
 until a supported adapter proves that contract. Report `### Improvement status: unproved`
 until that proof exists; retain the candidate, evidence and next proof beneath it.
 
-Use the existing DEVPROTO step command with `--result blocked --reason` for missing required
+Use the existing devproto.py step command with `--result blocked --reason` for missing required
 measurement capability. Do not create another ledger. A future adapter must preserve immutable
 experiments, executed provenance, independent exact-candidate reviews, accumulated settled costs
 and tested rollback. Synthetic fixtures prove checker behavior only, never real agent gains.
@@ -423,3 +423,7 @@ and tested rollback. Synthetic fixtures prove checker behavior only, never real 
 Resume retained work rather than repeating rejected trials or resetting limits. Preserve existing
 approval of unchanged scope. Proved adoption still requires applicable authorization and installed
 acceptance checks. Keep unauthorized boundary changes and external reports as local drafts.
+
+The structural command above proves a retained unproved report only. This package supplies
+no pass command for a proved heading; measured adoption needs the reviewed adapter’s own
+verifier and the full comparison evidence.

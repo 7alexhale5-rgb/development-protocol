@@ -32,7 +32,8 @@ the structured result; pass the human report as an instrument:
 ```text
 DEVPROTO --project <repo> step --id <work-id> --step review --result pass \
   --evidence .devproto/evidence/review.json --instrument .devproto/evidence/review.md \
-  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)"'
+  --instrument .devproto/evidence/<work-id>-build-base.txt \
+  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id <work-id>'
 ```
 
 At least one acceptance criterion with passing evidence is required, even for an ad-hoc
@@ -102,15 +103,18 @@ git diff --cached --stat            # staged changes
 git rev-parse HEAD                  # Candidate commit; resolve BASE below
 ```
 
-Resolve BASE from `.devproto/evidence/<work-id>-build-base.txt`, the instrument recorded
-by build-stack. Verify its `work-id` matches and its `base <sha>` resolves to a commit.
-Never rewrite it or infer that a merge-base recovers a missing resumed-task baseline. For `--branch`, if no build baseline exists, read the configured default
-branch (for example `git symbolic-ref refs/remotes/origin/HEAD`) and use its merge-base
-with HEAD. Do not assume `main`, use HEAD~1 or guess a missing baseline. If no default
-branch or baseline can be verified, retain the scope gap. For an uncommitted-only review,
-BASE is HEAD; inspect staged and unstaged diffs plus complete new-file contents separately.
-Record the source, BASE and candidate HEAD in the report. Supply the complete BASE..HEAD
-diff plus any current uncommitted changes. Collect changed and created files as the review surface.
+For a work-id review, resolve BASE exclusively from
+`.devproto/evidence/<work-id>-build-base.txt`, regardless of --all, --staged, --branch or
+--files. Its work-id must match and its base must resolve to a commit. Missing or malformed
+baseline remains a required scope gap; never use a merge-base fallback or overwrite it.
+Review the complete BASE..HEAD diff plus staged, unstaged and new files. File filters may
+focus a lens but cannot reduce the final work review scope. Record `base` and `work_id` in
+review.json and retain the baseline as an evidence instrument. The verifier checks both.
+
+Only an ad-hoc review without a work-id or any recorded work baseline may use the configured default branch merge-base
+for --branch, or HEAD for uncommitted-only scope. If no configured branch is verifiable,
+retain the scope gap. Label this narrower scope explicitly; it cannot satisfy a work review.
+Record the source, BASE and candidate HEAD in both reports.
 
 ### 1b: Detect project tooling
 
@@ -197,10 +201,8 @@ CONTEXT_PAYLOAD:
   - recorded_base: "{verified BASE SHA and source}"
   - candidate_head: "{verified HEAD SHA}"
   - acceptance_evidence: "{criteria, receipts and coverage gaps}"
-  - return_budget: "{output and runtime limits}"
-  - review_package: "{complete diff plus files and evidence, each with path and SHA256}"
-  - frozen_package_paths_and_hashes: "{those same verified package entries}"
-  - budget: "{the same return_budget}"
+  - frozen_package_paths_and_hashes: "{complete diff plus files and evidence, each with path and SHA256}"
+  - budget: "{output and runtime limits}"
   - project_summary: "{language/framework}, {N} files changed, {additions}+ {deletions}-"
   - diff: "{full git diff from Step 1a}"
   - changed_files: "{changed file paths with full content}"

@@ -218,6 +218,8 @@ listed as "not verified".
   "verdict": "FIX_THEN_SHIP",
   "gate": "SOFT_FAIL",
   "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "work_id": "<work-id>",
   "scope": { "files": 6, "additions": 142, "deletions": 23 },
   "layers": {
     "l1": {
