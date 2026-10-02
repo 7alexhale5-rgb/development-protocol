@@ -39,6 +39,10 @@ Reference files in this folder, read when the step points to them:
   it, what it is best at, its source tag and its free fallback.
 - `scripts/focus_check.py`: `suggest` tags for a topic, `plan` the tools for tags, `probe` keys
   and CLIs, and `lint` the lenses against the registry.
+- `references/hunter-gatherer.md` and `scripts/gather.py`: hunter/gatherer mode (Step 3H), the
+  evidence-card schema, the rubric scorer and the keep/drop/requote/escalate router.
+- `references/jev-question-design.md`: how Jev reads a request and how to word its questions
+  (the rules the rubric follows; read before changing the rubric).
 
 ## Where this sits in the development protocol
 
@@ -94,6 +98,7 @@ Extract from the user's input:
 | `--no-ask`      | Skip the Step 0.5b ask-gate and turn the Step 2 gate into a one-line notice. Decomposition (0.5a) still runs.                                             |
 | `--focus <tags>`| Comma-separated focus tags or bundles (Step 0.4). `#tag` anywhere in the prompt is the same thing.                                                       |
 | `--target <x>`  | A URL, repo or path the active lenses audit live (Step 4F). Read-only: never modify the target.                                                           |
+| `--hunt` / `--no-hunt` | Force hunter/gatherer mode (Step 3H) on or off. By default it is on for `--deep` and for 4+ sub-questions.                                     |
 
 **Defaults.** No focus unless the user asks for one. Budget caps per depth are in Step 2. The
 cache lives in `.devproto/research/` (Step 10). If the team has turned a tool off, treat it as
@@ -294,6 +299,31 @@ Mobbin, Crunchbase and paid company-data connectors all bill per call or per uni
 calls each lens will make (usually 3 to 10), price them from the provider's pricing page, and
 keep the run inside the budget cap for its depth: auto-shallow $0.05, default $0.50, `--deep`
 $15. Over the cap: use the lens's free-only path for the rest.
+
+---
+
+## Step 3H: Hunter/gatherer mode (`--deep`, 4+ sub-questions, or `--hunt`)
+
+Skip on auto-shallow runs, on runs with 1 to 3 sub-questions, and with `--no-hunt`. Otherwise
+the same Rounds 1 to 3 run in a different shape, so raw pages never reach the context that judges
+and writes. The full protocol is in `references/hunter-gatherer.md`.
+
+1. **Brief.** Write the Step 2 scope to `brief.json`: the decision, done-when, out of scope, the
+   sub-questions, and `source_notes`.
+2. **Hunt.** Spawn one read-only hunter subagent per sub-question, all in one parallel block.
+   Each one runs this skill's rounds and lenses for its own sub-question, writes
+   `cards-Qn.jsonl` and `raw-Qn.md`, and returns a one-line receipt.
+3. **Gather.** Score every card against the rubric (`scripts/gather.py`) in a fresh context.
+   The free scorer is a small-model Claude subagent. Jev, when configured, runs in shadow mode
+   until it is calibrated (`references/hunter-gatherer.md` section 5).
+   `route` sorts each card into keep, drop, escalate or flagged. The lead decides the escalated
+   cards and records each decision as a label.
+4. **Re-hunt** each sub-question the ledger lists as a gap, once, with the gap named.
+5. **Write** Steps 6.6 to 9 from the kept cards and the ledger only. The perspectives receive the
+   kept cards as `compressed_findings`.
+
+Without subagents, run the hunters one after another and still score the cards in a separate,
+clearly labelled pass before writing.
 
 ---
 
@@ -680,6 +710,10 @@ python3 "$skill_dir/scripts/validate_report.py" all "$report"
 - **Citations:** each URL (up to 30) gets a HEAD request, then GET if HEAD is refused. An auth
   wall, bot challenge, throttle or server error counts as **unverified, not dead**: cannot-verify
   is not the same as gone.
+- **Process (`--deep` only):** the dashboard must record the perspectives that ran (with
+  counts), the attribution spot-check as `Attribution: N/N`, and the internal round (or why it was
+  skipped). A missing record is a WARN: the steps may have happened, but nobody can tell. Never
+  write a dashboard line for a step that did not run.
 - **Source quality:** each domain gets a 1 to 10 score: academic and official (9-10) > technical
   (8) > engineering blogs (7) > blogs and news (6) > forums and wikis (5) > social and unknown (4).
   Every lens's `Authorities` domains score as official.
@@ -689,8 +723,8 @@ errors, do the three checks by hand and say so in the dashboard.
 
 **Attribution spot-check (no script, do it yourself).** Pick the 3 to 5 most load-bearing claims
 and confirm each cited source actually **supports the claim**, not just that it exists. Liveness
-is not attribution. A 2026 study of AI citation (CITE-AI) measured existence F1 at 0.81 versus
-attributable F1 at 0.62. That gap is where research reports quietly rot. Fetch the source, find
+is not attribution: a source can be live and still not say what the report claims, and that gap
+is where research reports quietly rot. Fetch the source, find
 the claim, and downgrade or re-source anything it does not support.
 
 Present the result inline:

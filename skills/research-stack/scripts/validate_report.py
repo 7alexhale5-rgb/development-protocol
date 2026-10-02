@@ -155,17 +155,29 @@ DOMAIN_MAP = [
     ("x.com", "social"),
     ("linkedin.com", "social"),
 ]
-# Each focus lens names the primary authorities for its area. They rank as
-# official unless the base map already says otherwise.
-_KNOWN = {d for d, _ in DOMAIN_MAP}
-for _lens in MANIFEST["tags"].values():
-    for _domain in _lens.get("authorities", []):
-        if _domain not in _KNOWN:
-            DOMAIN_MAP.append((_domain, "official"))
-            _KNOWN.add(_domain)
 
+
+def lens_authorities(tags, manifest=None):
+    """Authorities of the active lenses only. A report on one area should not gain trust for
+    citing another lens's domains (youtube.com is an authority for content, not for security)."""
+    manifest = manifest or MANIFEST
+    known = {d for d, _ in DOMAIN_MAP}
+    out = []
+    for tag in tags:
+        for domain in manifest.get("tags", {}).get(tag, {}).get("authorities", []):
+            if domain not in known and domain not in out:
+                out.append(domain)
+    return out
+
+NO_FOCUS = {"none", "null", "~", "-"}
 FRONT_MATTER_RE = re.compile(r"\A\s*---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
 FOCUS_LINE_RE = re.compile(r"^focus:\s*(.*)$", re.MULTILINE)
+DEPTH_LINE_RE = re.compile(r"^depth:\s*([\w-]+)", re.MULTILINE)
+# Dashboard lines a --deep run must record (SKILL.md Steps 6.6 and 8.5). A run can skip a
+# step silently and still pass structure; these lines make the skip visible.
+PERSPECTIVES_RE = re.compile(r"^\W*Perspectives:\s*(.*)$", re.MULTILINE | re.IGNORECASE)
+ATTRIBUTION_RE = re.compile(r"^\W*Attribution:\s*.*?(\d+)\s*/\s*(\d+)", re.MULTILINE | re.IGNORECASE)
+INTERNAL_RE = re.compile(r"^\W*Internal round:\s*(.*)$", re.MULTILINE | re.IGNORECASE)
 
 
 def read(path):
@@ -198,7 +210,37 @@ def declared_focus(text):
     if not line:
         return []
     raw = line.group(1).strip().strip("[]")
-    return [t.strip().strip("\"'").lstrip("#").lower() for t in raw.split(",") if t.strip()]
+    tags = [t.strip().strip("\"'").lstrip("#").lower() for t in raw.split(",") if t.strip()]
+    return [t for t in tags if t not in NO_FOCUS]
+
+
+def declared_depth(text):
+    m = FRONT_MATTER_RE.match(text)
+    if not m:
+        return ""
+    d = DEPTH_LINE_RE.search(m.group(1))
+    return d.group(1).lower() if d else ""
+
+
+def check_process(text):
+    """On a --deep report, require the dashboard to record the perspectives that ran, the
+    attribution spot-check result and the internal round. Missing records are WARN: the
+    report may be right, but nobody can tell whether the steps happened."""
+    if declared_depth(text) != "deep":
+        return "PASS", ["Process: PASS (not a --deep report)"]
+    issues = []
+    persp = PERSPECTIVES_RE.search(text)
+    if not persp or not re.search(r"\d", persp.group(1)):
+        issues.append("WARN: no 'Perspectives:' dashboard line with counts (Step 6.6)")
+    attr = ATTRIBUTION_RE.search(text)
+    if not attr:
+        issues.append("WARN: no 'Attribution: N/N' dashboard line (Step 8.5 spot-check)")
+    elif int(attr.group(1)) < int(attr.group(2)):
+        issues.append(f"WARN: attribution {attr.group(1)}/{attr.group(2)}: fix or drop unsupported claims")
+    if not INTERNAL_RE.search(text):
+        issues.append("WARN: no 'Internal round:' dashboard line (Round 1.5, or say why it was skipped)")
+    status = "WARN" if issues else "PASS"
+    return status, [f"Process: {status}"] + [f"  - {i}" for i in issues]
 
 
 def expand_focus(tags, manifest=None):
@@ -278,13 +320,14 @@ def check_focus(text, manifest=None):
     return status, [f"Focus: {status} ({', '.join(tags)})"] + [f"  - {i}" for i in issues]
 
 
-def classify_url(url):
+def classify_url(url, authorities=()):
+    """Tier for a URL. `authorities` are the active lenses' domains, ranked official."""
     try:
         parsed = urlparse(url)
         domain = (parsed.hostname or "").lower().rstrip(".")
     except ValueError:
         return "unknown"
-    for pattern, tier in DOMAIN_MAP:
+    for pattern, tier in DOMAIN_MAP + [(d, "official") for d in authorities]:
         if domain == pattern or domain.endswith("." + pattern):
             return tier
     if domain.endswith(".edu"):
@@ -298,9 +341,10 @@ def check_sources(text):
     urls = extract_urls(text)
     if not urls:
         return "WARN", ["Source Quality: WARN (no URLs found)"]
+    authorities = lens_authorities(expand_focus(declared_focus(text)))
     tiers = {}
     for url in urls:
-        tiers.setdefault(classify_url(url), []).append(url)
+        tiers.setdefault(classify_url(url, authorities), []).append(url)
     scores = [TIER_SCORES[t] for t, us in tiers.items() for _ in us]
     avg = sum(scores) / len(scores)
     status = "PASS" if avg >= 6 else ("WARN" if avg >= 4 else "FAIL")
@@ -520,7 +564,7 @@ def check_citations(text, fetch=_default_fetch, timeout=10, cap=30):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Validate a research-stack report.")
-    p.add_argument("check", choices=["structure", "focus", "citations", "sources", "all"])
+    p.add_argument("check", choices=["structure", "focus", "process", "citations", "sources", "all"])
     p.add_argument("report")
     p.add_argument("--timeout", type=float, default=10)
     p.add_argument("--max", type=int, default=30, help="max URLs to check")
@@ -536,6 +580,8 @@ def main(argv=None):
         results.append(check_structure(text))
     if a.check in ("structure", "focus", "all") and (a.check == "focus" or declared_focus(text)):
         results.append(check_focus(text))
+    if a.check in ("process", "all") or (a.check == "structure" and declared_depth(text) == "deep"):
+        results.append(check_process(text))
     if a.check == "citations" or (a.check == "all" and not a.offline):
         results.append(check_citations(text, timeout=a.timeout, cap=a.max))
     if a.check in ("sources", "all"):

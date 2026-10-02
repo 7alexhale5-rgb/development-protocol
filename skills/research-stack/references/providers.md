@@ -11,7 +11,7 @@ Placeholders: `{Q}` is a URL-encoded query built from one sub-question. `{TOPIC}
 - Round 1: web search, answer engine, cache
 - Round 2: LLM analysis, Hacker News, community, academic, scraping, index search, self-hosted
   metasearch, code docs, legal, notebooks
-- Round 2F: focus lens tools (pointer)
+- Step 4F: focus lens tools (pointer)
 - Step 4.5: YouTube
 - Step 6: compression
 - Step 6.5: synthesis assist
@@ -226,7 +226,7 @@ connected, use it for current API syntax. Tag `[CODE]`.
 ## Round 2: legal and regulatory (free first)
 
 Go to the statute, the regulator's own site, or the court record. If your team has a legal
-database tool with verifiable citations, use it and follow its citation rules. Tag `[LEX]`.
+database tool with verifiable citations, use it and follow its citation rules. Tag `[LDH]` for Legal Data Hunter and `[LEX]` for any other legal source.
 Weight Highest for legal claims. A blog never outranks a statute.
 
 ## Round 2: social (optional, paid)
@@ -244,7 +244,7 @@ do it only when the user asks. Tag `[NB]`.
 
 ---
 
-## Round 2F: focus lens tools
+## Step 4F: focus lens tools
 
 Each lens in `references/focus/<tag>.md` lists its tools by registry id, in tier order, with
 when to use and skip each one. `references/tool-registry.json` has, for every id: how to detect

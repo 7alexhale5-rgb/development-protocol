@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.0 (2026-10-02)
+
+- Research Stack 3.2.1: hunter/gatherer mode (`--deep` or 4+ sub-questions) splits hunting, scoring
+  and writing into separate contexts, with `scripts/gather.py` scoring evidence cards against a
+  rubric. The validator warns when a `--deep` report skips the perspectives, the attribution
+  check or the internal round, and only the active lenses' authorities rank as official.
+
 ## 2.2.0 (2026-10-01)
 
 - Research focus lens `comms` (voice, SMS and dialers), the 12th lens: `/research-stack --focus

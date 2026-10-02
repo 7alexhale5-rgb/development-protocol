@@ -2,6 +2,28 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-02T13:26:41-05:00
+
+- skill:research-stack: re-ported from upstream research-stack 3.2.1 (`3af6987`). New: hunter/gatherer
+  mode (SKILL.md Step 3H and the `--hunt` / `--no-hunt` flags), `scripts/gather.py` (rubric
+  scorer, keep/drop/requote/escalate router, agreement and eval commands, optional Jev scorer in
+  shadow mode), `references/hunter-gatherer.md` and `references/jev-question-design.md`, with the
+  gather tests and fixtures under `tests/`. Fixes carried over: `validate_report.py` warns when a
+  `--deep` report does not record perspectives, attribution or the internal round, ranks only the
+  active lenses' authorities as official, and reads `focus: none` as no focus; `focus_check.py`
+  walks fallback chains and plans from a given lens folder; the `claude-subagent` and `jev`
+  registry entries; the dashboard Gatherer line; the perf and seo lens wording. `tags.json` is
+  now byte-equal to upstream. `FOCUS_HINTS` in `devproto.py` already matched the upstream
+  triggers, which did not change.
+- Left out on purpose: `references/power-tier.md` (local extras: Gemini CLI, Groq, NotebookLM,
+  last30days, vault notes), as in the earlier port. The upstream research dossier and its run
+  data (`docs/research/`) are not bundled; vendor prices, vendor speed claims and the reseller's
+  company name are stripped from the Jev text. Jev stays optional, paid and in shadow mode.
+- Source lock: `sync/sources.lock.json` is left unchanged. The recorded hashes come from the
+  maintainer's drift check, which cannot run from this repo, so the next drift check should
+  re-record `skill:research-stack` after confirming this port.
+- Version 2.3.0.
+
 ## 2026-10-01T18:46:20-05:00
 
 - skill:research-stack: re-ported the upstream comms lens (voice, SMS and dialers; CPaaS versus
