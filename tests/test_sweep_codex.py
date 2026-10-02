@@ -282,6 +282,22 @@ class CodexSweepTests(unittest.TestCase):
         os.environ.pop("CODEX_THREAD_ID")
         self.assertEqual(sweep.verify_ledger(ledger)[0], 1)
 
+    def test_legacy_missing_file_revisit_cannot_clear_proof(self):
+        self.write_transcript(receipt(self.target))
+        slug = self.make_ledger("legacy-open")
+        ledger = sweep.ledger_path(slug)
+        data = json.loads(ledger.read_text())
+        for key in ("item_kind", "proof_provider", "read_proof_required"):
+            data["universe"][0].pop(key, None)
+        ledger.write_text(json.dumps(data))
+        self.target.unlink()
+        self.transcript.unlink()
+        self.assertEqual(self.run_cli("close", "--slug", slug), 1)
+        self.assertEqual(self.run_cli("visit", "--slug", slug, "test.txt",
+                                     "--force", "--depth", "2", "--evidence",
+                                     "revisit without a target"), 0)
+        self.assertEqual(self.run_cli("close", "--slug", slug), 1)
+
     def test_failed_refuses_close(self):
         self.write_transcript(receipt(self.target, exit_code=1))
         self.assertEqual(self.run_cli("close", "--slug", self.make_ledger()), 1)

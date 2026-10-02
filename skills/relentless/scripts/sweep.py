@@ -591,15 +591,19 @@ def item_path(data: dict, ident: str) -> Path:
 
 def visit_provenance(data: dict, item: dict, session: str | None) -> dict:
     """Retain requirements while evidence exists, never infer them at verify time."""
-    is_file = item.get("item_kind") == "file" or item_path(data, item["id"]).is_file()
+    kind = item.get("item_kind", "unknown")
+    if item_path(data, item["id"]).is_file():
+        kind = "file"
+    # Absence cannot prove that a legacy item was never a file.
+    required = kind != "non-file"
     provider = "unknown"
     if session:
         if session == os.environ.get("CODEX_THREAD_ID") and session != os.environ.get("CLAUDE_CODE_SESSION_ID"):
             provider = "codex" if os.environ.get("SWEEP_CODEX_READ_PROOF") == "1" else "unknown"
         else:
             provider = "claude"
-    return {"item_kind": "file" if is_file else "non-file",
-            "proof_provider": provider, "read_proof_required": is_file}
+    return {"item_kind": kind,
+            "proof_provider": provider, "read_proof_required": required}
 
 
 def audit_reads(data: dict) -> tuple[list[str], int]:
