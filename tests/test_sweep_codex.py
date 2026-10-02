@@ -298,6 +298,27 @@ class CodexSweepTests(unittest.TestCase):
                                      "revisit without a target"), 0)
         self.assertEqual(self.run_cli("close", "--slug", slug), 1)
 
+    def add_missing_ledger(self, ident):
+        slug = "add-missing"
+        self.assertEqual(self.run_cli("init", "--slug", slug, "--goal", "g", "--done", "d",
+                                     "--depth", "2", "--project", str(self.project)), 0)
+        self.assertEqual(self.run_cli("visit", "--slug", slug, ident, "--add-missing",
+                                     "--depth", "2", "--evidence", "record checked"), 0)
+        return slug
+
+    def test_add_missing_non_file_closes_and_verifies(self):
+        slug = self.add_missing_ledger("company:123")
+        self.assertEqual(self.run_cli("close", "--slug", slug), 0)
+        ledger = next((self.root / "sweeps").rglob("ledger.json"))
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 0)
+
+    def test_add_missing_file_requires_full_read(self):
+        self.write_transcript(receipt(self.target, include_output=False))
+        slug = self.add_missing_ledger("test.txt")
+        self.assertEqual(self.run_cli("close", "--slug", slug), 1)
+        self.write_transcript(receipt(self.target))
+        self.assertEqual(self.run_cli("close", "--slug", slug), 0)
+
     def test_failed_refuses_close(self):
         self.write_transcript(receipt(self.target, exit_code=1))
         self.assertEqual(self.run_cli("close", "--slug", self.make_ledger()), 1)

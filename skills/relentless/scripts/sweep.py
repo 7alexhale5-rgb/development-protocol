@@ -1014,7 +1014,8 @@ def cmd_visit(args) -> int:
                         "evidence": args.evidence,
                         "ts": now_iso(),
                         "session": me,
-                        **visit_provenance(data, {"id": m}, me),
+                        **visit_provenance(data, {"id": m, "item_kind":
+                            "file" if item_path(data, m).is_file() else "non-file"}, me),
                     }
                 )
             data.setdefault("enumerations", []).append(
