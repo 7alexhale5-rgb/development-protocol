@@ -31,6 +31,10 @@ record a pass from a web page you read by eye.
 
 ### 0a: Verify state
 
+Accept `--work-id <id>` or resolve the existing active checklist for this branch. An
+existing work item with unknown identity is a proof gap, never an ad-hoc bypass.
+
+
 ```bash
 git status --porcelain -- . ':!.devproto'
 git branch --show-current
@@ -48,7 +52,7 @@ git log --oneline -3
 Before push, release, or PR creation for a protocol work item, run:
 
 ```text
-python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> check --id=<work-id> --through review
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> check --id=<work-id> --through commit
 python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>
 ```
 
@@ -56,6 +60,14 @@ A nonzero result blocks shipping before any outward action. Report open rows and
 resume evidence. Never reinterpret a missing work ID as permission to bypass an existing
 work item. Re-run these checks after a sync changes the commit or candidate; stale reviews
 must be renewed. An ad-hoc release still needs the declared checks and independent review.
+
+The seventeen rows preserve their order. Simplification may change files and commit
+moves HEAD, so after the final commit run Full Verify and an independent review of the
+committed candidate. Re-record review, then re-pass simplify with `/simplify --check`
+(read-only on that same BASE..HEAD) and commit using the existing commit's proof without
+creating another commit. These renewed receipts allow `check --through commit` to pass.
+If read-only simplification finds a defect, fix it, test, commit and repeat final review.
+Do not refresh a review hash or commit field without the required independent review.
 
 ### 0b: Detect the base branch
 
@@ -149,6 +161,10 @@ git merge origin/{base_branch} --no-edit
 **If the merge is clean:** continue without comment.
 
 ---
+
+After synchronization changes HEAD or any candidate bytes, repeat Full Verify, required
+independent review, and the review/simplify/commit receipt sequence above before push.
+Never continue silently from a changed merge with stale review evidence.
 
 ## Step 2: Run tests
 

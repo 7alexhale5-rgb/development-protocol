@@ -765,10 +765,6 @@ class DevprotoTest(unittest.TestCase):
         self.assertIn("READY through pathway.", buf.getvalue())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class IntakeBaselineTest(unittest.TestCase):
     def test_planning_commits_do_not_move_intake_baseline(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -789,3 +785,16 @@ class IntakeBaselineTest(unittest.TestCase):
             baseline.unlink()
             devproto.start(project, TRIVIAL, "work")
             self.assertFalse(baseline.exists(), "resume must not invent missing intake evidence")
+
+    def test_unborn_repository_can_start_with_explicit_proof_gap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            subprocess.run(["git", "init", "-q", directory], check=True)
+            result = devproto.start(project, TRIVIAL, "new")
+            self.assertTrue(result["ok"])
+            self.assertFalse((project / ".devproto/evidence/new-build-base.txt").exists())
+            record = json.loads((project / ".devproto/new.json").read_text())
+            self.assertTrue(any("baseline unavailable" in note for note in record["rule_notes"]))
+
+if __name__ == "__main__":
+    unittest.main()

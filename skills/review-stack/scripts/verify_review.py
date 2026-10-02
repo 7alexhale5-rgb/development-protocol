@@ -51,9 +51,23 @@ def candidate_snapshot(project):
         return result.stdout
     if Path(os.fsdecode(git('rev-parse', '--show-toplevel')).strip()).resolve() != project:
         raise ValueError('--project must name the repository root')
-    names = set(git('ls-tree', '-rz', '--name-only', 'HEAD').split(b'\0'))
+    head_entries = {}
+    for entry in git('ls-tree', '-rz', 'HEAD').split(b'\0'):
+        if entry:
+            metadata, name = entry.split(b'\t', 1)
+            head_entries[name] = metadata.split(b' ')[0]
+    names = set(head_entries)
     names.update(git('ls-files', '-z', '-co', '--exclude-standard').split(b'\0'))
     digest = hashlib.sha256()
+    index_modes = {}
+    for entry in git('ls-files', '-sz').split(b'\0'):
+        if not entry:
+            continue
+        metadata, name = entry.split(b'\t', 1)
+        if name == b'.devproto' or name.startswith(b'.devproto/'):
+            continue
+        index_modes[name] = metadata.split(b' ')[0]
+        digest.update(b'index\0' + entry + b'\0')
     for name in sorted(names - {b''}):
         if name == b'.devproto' or name.startswith(b'.devproto/'):
             continue
@@ -66,25 +80,34 @@ def candidate_snapshot(project):
         elif path.is_file():
             kind = b'executable' if path.stat().st_mode & 0o111 else b'file'
             content = path.read_bytes()
+        elif path.is_dir() and head_entries.get(name) != b'160000' and index_modes.get(name) != b'160000':
+            kind, content = b'deleted', b''
         else:
             raise ValueError('candidate includes an unsupported directory or submodule')
         digest.update(kind + b'\0' + hashlib.sha256(content).digest())
     return digest.hexdigest()
 
 
+def closed_work_record(path, identifier):
+    try:
+        record = json.loads(path.read_text())
+        rows = record.get('steps')
+        return (record.get('work_id') == identifier and isinstance(rows, list) and bool(rows)
+                and any(row.get('step_id') == 'closeout' and row.get('status') == 'passed' for row in rows)
+                and all(row.get('status') in {'passed', 'not-applicable'} for row in rows))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def has_open_baseline(project):
-    for baseline in (project.resolve() / '.devproto' / 'evidence').glob('*-build-base.txt'):
+    store = project.resolve() / '.devproto'
+    for record in store.glob('*.json'):
+        if not closed_work_record(record, record.stem):
+            return True
+    for baseline in (store / 'evidence').glob('*-build-base.txt'):
         identifier = baseline.name.removesuffix('-build-base.txt')
-        try:
-            record = json.loads((project.resolve() / '.devproto' / f'{identifier}.json').read_text())
-            rows = record.get('steps')
-            if (record.get('work_id') == identifier and isinstance(rows, list) and rows
-                    and any(row.get('step_id') == 'closeout' and row.get('status') == 'passed' for row in rows)
-                    and all(row.get('status') in {'passed', 'not-applicable'} for row in rows)):
-                continue
-        except (OSError, ValueError, TypeError, AttributeError):
-            pass
-        return True
+        if not closed_work_record(store / f'{identifier}.json', identifier):
+            return True
     return False
 
 

@@ -102,3 +102,9 @@ before recording the final implementation receipt.
 
 In the development protocol, `/ship` comes next: sync with the base branch, run the tests, push,
 open the pull request, and wait for checks on the exact commit.
+
+After the final commit, run focused/full verification and required independent review
+against this exact committed candidate. Re-record review, perform `/simplify --check`,
+and re-pass commit with proof of this existing SHA, without making another commit.
+Shipping checks through commit and revalidates the candidate. Any later mutation or
+merge requires renewing those receipts; never edit an old review's commit or hash.

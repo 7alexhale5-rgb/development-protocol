@@ -553,24 +553,26 @@ or changes files, invalidate those receipts and rerun Full Verify and reviews on
 complete new candidate before completion. It prepares the audit
 tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
 accessibility library for Playwright, Playwright's browser dependencies, performance budgets, and
-CI gate scaffolding. It is idempotent: a re-run detects a fresh baseline and skips the work when
-the build has not drifted.
+CI gate scaffolding. Preserving an existing Lighthouse baseline without --force returns nonzero and is
+not fresh capture proof. Retain that gap, or use authorized --force with backups before
+Full Verify and review when fresh capture is required.
 
 Run it even when no audit flag is set. It costs seconds when nothing changed and a few minutes on
-first install. It guarantees that any later `/review-stack` or `/review-stack --audit`, in this
-session or the next, has tooling and a baseline ready.
+first install. Inspect the actual result; missing required tooling or fresh capture
+remains a gap for any later review.
 
 Note on checklist order: the `audit-setup` row comes before `build` in the checklist. Close it
 once before the build starts. This step re-runs the tool to refresh the baseline against the new
-code. It does not need a new checklist entry unless the tool's output file changed.
+code. A changed output needs renewed setup proof; a nonzero preserved-baseline result is
+not a pass. Run mutating preparation before final Full Verify and reviews.
 
 **Failure handling:**
 
 - If `/audit-setup` hits an install error that blocks the build (for example `npm install`
   fails), treat it as a Full Verify failure and surface it to the user.
 - If it reports non-fatal warnings (a stale baseline it cannot re-capture right now, a missing
-  local env file for the preview URL), note them and go on to Step 6.5. They will not block
-  `/review-stack --branch`, but they may block `--audit`.
+  local env file for the preview URL), retain the gap. Missing required audit proof blocks its row and release; only
+  explicitly optional checks may remain unavailable.
 
 ---
 
@@ -675,10 +677,14 @@ an honest remaining-scope report. Missing required proof blocks completion.
 
 | Classification | Checkpoints     | Full Verify     | Context gate     | Perspectives                                   | Audit preflight             | Helper agents | Est. time    |
 | -------------- | --------------- | --------------- | ---------------- | ---------------------------------------------- | --------------------------- | ------------- | ------------ |
-| BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (idempotent) | Independent reviewer | Scope-dependent |
-| SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (idempotent) | Independent reviewer | Scope-dependent |
-| MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (idempotent) | Independent reviewer | 15 to 45 min |
-| LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (idempotent) | Yes           | 30 to 90 min |
+| BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (fresh proof or gap) | Independent reviewer | Scope-dependent |
+| SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (fresh proof or gap) | Independent reviewer | Scope-dependent |
+| MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (fresh proof or gap) | Independent reviewer | 15 to 45 min |
+| LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (fresh proof or gap) | Yes           | 30 to 90 min |
 
-The audit preflight (Step 6.4) runs for every classification, so `/review-stack` always has a
-fresh Lighthouse baseline, the axe library and budgets ready. Skip it only with `--no-verify`.
+Audit preflight runs for every applicable classification. Inspect fresh capture and
+tool availability; missing required proof blocks completion. A skipped preflight remains
+unverified. Run mutating setup before final Full Verify and independent review.
+
+Review snapshot and release checks require the Git repository root. For a monorepo
+subproject, pass the root as --project and identify package scope in the work brief.

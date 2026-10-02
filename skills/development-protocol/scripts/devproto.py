@@ -313,7 +313,11 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
                 record["rule_notes"] = notes
                 save(path, record)
             return summary(project, record)
-        identity = git_identity(project)
+        try:
+            identity = git_identity(project)
+        except ValueError as exc:
+            identity = None
+            notes.append(f'Git intake baseline unavailable: {exc}; required Git proof remains blocked')
         if identity is not None:
             baseline = project / STORE_DIR / 'evidence' / f'{work_id}-build-base.txt'
             baseline.parent.mkdir(parents=True, exist_ok=True)

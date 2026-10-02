@@ -69,6 +69,50 @@ class ReviewScopeTests(unittest.TestCase):
         self.proof.write_text(f"base {unrelated}\nwork-id job\n")
         self.data["base"] = unrelated
         self.assertNotEqual(self.run_check().returncode, 0)
+    def test_open_legacy_record_without_baseline_blocks_ad_hoc(self):
+        self.proof.unlink()
+        (self.repo / ".devproto/job.json").write_text(json.dumps({"work_id": "job", "steps": [{"step_id": "build", "status": "pending"}]}))
+        self.data.pop("base")
+        self.data.pop("work_id")
+        self.assertNotEqual(self.run_check(scoped=False).returncode, 0)
+    def test_staged_content_changed_behind_restored_worktree_invalidates_review(self):
+        target = self.repo / "source.py"
+        target.write_text("answer = 1\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "source.py"], check=True)
+        self.assertEqual(self.run_check().returncode, 0)
+        target.write_text("answer = 2\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "source.py"], check=True)
+        target.write_text("answer = 1\n")
+        self.assertNotEqual(self.run_check().returncode, 0)
+    def test_index_only_mode_change_invalidates_review(self):
+        target = self.repo / "source.py"
+        target.write_text("answer = 1\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "source.py"], check=True)
+        self.assertEqual(self.run_check().returncode, 0)
+        subprocess.run(["git", "-C", str(self.repo), "update-index", "--chmod=+x", "source.py"], check=True)
+        self.assertNotEqual(self.run_check().returncode, 0)
+    def test_file_to_directory_replacement_is_supported(self):
+        target = self.repo / "config"
+        target.write_text("old config\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "config"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "file config"], check=True)
+        self.head = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        self.data["commit"] = self.head
+        target.unlink()
+        target.mkdir()
+        (target / "settings.json").write_text("{}\n")
+        self.assertEqual(self.run_check().returncode, 0)
+    def test_final_commit_requires_and_accepts_renewed_review(self):
+        target = self.repo / "source.py"
+        target.write_text("answer = 1\n")
+        self.assertEqual(self.run_check().returncode, 0)
+        subprocess.run(["git", "-C", str(self.repo), "add", "source.py"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "final candidate"], check=True)
+        self.head = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        self.assertNotEqual(self.run_check().returncode, 0, "precommit review cannot certify changed HEAD")
+        self.data["commit"] = self.head
+        self.seal_snapshot()  # Simulate a new independent review of the final package.
+        self.assertEqual(self.run_check().returncode, 0)
     def test_complete_recorded_scope_passes(self):
         r = self.run_check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

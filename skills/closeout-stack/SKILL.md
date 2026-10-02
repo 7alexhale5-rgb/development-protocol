@@ -167,9 +167,9 @@ Look back through the conversation for a `/review-stack` verdict (or any indepen
 | FIX THEN SHIP / SHIP WITH CAVEATS  | Proceed. Put the remediation items under Blockers in the resume prompt.                                                             |
 | NEEDS WORK or BLOCKED (unresolved) | Block Step 4 shipping; retain the blocker and continue saving evidence, handoff and learning. |
 | No review found, MODE=ship         | Block Step 4 shipping until required independent review is verified.                                      |
-| No review found, MODE=eod or pivot | Proceed silently.                                                                                                                   |
+| No review found, MODE=eod or pivot | Continue persistence; any later choice to ship must first apply the MODE=ship review rule.                                                                                                                   |
 
-Missing or failed required review blocks `/ship`, push and release. Continue the
+Set STATE_PAYLOAD.review_blocked for missing or failed required review. It blocks `/ship`, push and release. Continue the
 persistence steps so evidence and the resume prompt are saved; never mark this closeout
 shipped. Passing headlines with unresolved required findings also remain blocked.
 
@@ -202,7 +202,9 @@ the report. Never mark a manual gate as passed on a person's behalf.
 ## Step 4: Ship (gated)
 
 ```text
-IF --no-ship OR MODE=pivot:
+IF STATE_PAYLOAD.review_blocked:
+    SKIP ship; retain the required-review failure and continue persistence
+ELIF --no-ship OR MODE=pivot:
     SKIP (log: "Skipped ship: mode=pivot or --no-ship")
 ELIF --ship OR MODE=ship:
     RUN /ship

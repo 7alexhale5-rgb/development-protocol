@@ -202,3 +202,8 @@ At intake, `DEVPROTO start` captures the current Git commit in
 Planning, setup and build consume that same baseline. Resume never recreates a missing
 baseline; legacy work without sufficient provenance remains a required scope gap.
 Ordinary non-Git work may start, but cannot claim a Git review or release proof.
+
+Git proof uses the repository root even for a monorepo package. An unborn repository
+or missing Git may start intake with an explicit baseline-unavailable note. That does
+not create Git proof; later build/review/ship remain blocked until genuine intake
+provenance can be recovered. Resume never invents a missing baseline at a newer HEAD.

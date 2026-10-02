@@ -640,3 +640,7 @@ release verdict.
 
 For `--deep` and `--audit`, use the highest reasoning effort your agent offers. For the other
 tiers, the default high effort is enough.
+
+The snapshot uses the repository root. For a monorepo package, pass its Git root as
+--project and name the package in the scope. Local-only or abandoned open work retains
+its required scope gap; use its work-id rather than silently issuing an ad-hoc pass.

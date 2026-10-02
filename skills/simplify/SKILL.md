@@ -8,6 +8,12 @@ description: Reviews the uncommitted diff against four falsifiable tests (surgic
 Last-stop gate before commit. Reviews the in-progress diff against four common pitfalls of
 agent-written code, each distilled to a test you can fail. Fix what fails, leave what passes.
 
+`--check` is a read-only pass on the complete recorded BASE..HEAD and current candidate.
+It reports violations without editing. Use it after final committed-candidate review to
+renew the simplify row; a material finding blocks release until fixed and re-reviewed.
+In ordinary mutating mode, any changed bytes invalidate prior review and need final
+verification and independent review after the final commit.
+
 ## Checklist row
 
 This skill satisfies the `simplify` row of the development-protocol checklist. Save the report
