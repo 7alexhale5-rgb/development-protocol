@@ -50,7 +50,7 @@ From the user's input, extract:
 - **SCOPE**, what to review:
   - `--all`: every uncommitted change (default).
   - `--staged`: only staged files.
-  - `--branch`: the full branch diff against the base (`main` or `master`).
+  - `--branch`: the full branch diff against the recorded BASE (Step 1a).
   - `--files path1 path2`: only these files.
   - `--plan`: check against a plan's acceptance criteria.
 - **DEPTH**:
@@ -100,11 +100,11 @@ git status                          # what changed
 git diff --stat                     # unstaged changes
 git diff --cached --stat            # staged changes
 git rev-parse HEAD                  # Candidate commit; resolve BASE below
-git rev-parse HEAD                  # the commit you are reviewing; goes in the report
 ```
 
-Resolve BASE from the build row or `.devproto/evidence/build.md` and verify that it names
-a real commit. For `--branch`, if no build baseline exists, read the configured default
+Resolve BASE from `.devproto/evidence/<work-id>-build-base.txt`, the instrument recorded
+by build-stack. Verify its `work-id` matches and its `base <sha>` resolves to a commit.
+Never rewrite it or infer that a merge-base recovers a missing resumed-task baseline. For `--branch`, if no build baseline exists, read the configured default
 branch (for example `git symbolic-ref refs/remotes/origin/HEAD`) and use its merge-base
 with HEAD. Do not assume `main`, use HEAD~1 or guess a missing baseline. If no default
 branch or baseline can be verified, retain the scope gap. For an uncommitted-only review,
@@ -198,6 +198,9 @@ CONTEXT_PAYLOAD:
   - candidate_head: "{verified HEAD SHA}"
   - acceptance_evidence: "{criteria, receipts and coverage gaps}"
   - return_budget: "{output and runtime limits}"
+  - review_package: "{complete diff plus files and evidence, each with path and SHA256}"
+  - frozen_package_paths_and_hashes: "{those same verified package entries}"
+  - budget: "{the same return_budget}"
   - project_summary: "{language/framework}, {N} files changed, {additions}+ {deletions}-"
   - diff: "{full git diff from Step 1a}"
   - changed_files: "{changed file paths with full content}"

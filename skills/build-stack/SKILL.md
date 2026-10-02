@@ -38,8 +38,12 @@ When the build is done and Full Verify passes, save the diff and record the row:
 
 Capture a complete snapshot before recording the row:
 
-1. Resolve the approved baseline to a commit SHA (merge-base with the remote default
-   branch, or HEAD for local work). Save that SHA in the evidence.
+1. Before the first edit, record `git rev-parse HEAD` as a commit SHA in
+   `.devproto/evidence/<work-id>-build-base.txt`, using exactly `base <sha>` and
+   `work-id <work-id>` lines. This is supporting evidence, not another ledger.
+   On resume read this file and verify its work ID and commit; never overwrite its
+   baseline, recalculate it at closeout or substitute a branch merge-base. Missing
+   legacy baseline remains a scope gap until genuine evidence is recovered.
 2. Use a temporary Git index (`GIT_INDEX_FILE`), seeded with `git read-tree HEAD`.
    Enumerate the union of `git ls-tree -rz --name-only HEAD` and tracked plus
    nonignored untracked files from `git ls-files -z -co --exclude-standard`.
@@ -56,6 +60,7 @@ Capture a complete snapshot before recording the row:
 ```text
 DEVPROTO --project <repo> step --id <work-id> --step build --result pass \
   --evidence .devproto/evidence/build.diff --verify "<compare the current snapshot with build.diff, then run focused tests>" \
+  --instrument .devproto/evidence/<work-id>-build-base.txt \
   --instrument <the main test file you relied on>
 ```
 
@@ -132,9 +137,10 @@ DEVPROTO --project <repo> step --id <work-id> --step planning --result pass \
 Before building, run `status`:
 
 - The `planning` row is passed and unchanged: proceed.
-- The `planning` row reopened: inspect which evidence or instrument changed. Restore valid
-  proof for unchanged approved scope without requesting approval again. If scope changed, show
-  the change and obtain any authorization that change requires.
+- The `planning` row reopened: compare the current plan hash with its approved hash.
+  A changed plan or amendment needs the owner's approval of the new exact text before
+  re-passing. Never rewrite the approved plan hash under an old quote. Only identical
+  plan bytes with changed non-plan evidence may recover proof without another approval.
 - No approval on record: if the owner approved this plan in the current conversation, write the
   approval file now (quote their message) and pass the row. Otherwise STOP until they approve,
   whatever the plan's age.
@@ -213,7 +219,8 @@ Before writing code, find out which checks this project can actually run. Probe 
 | `CAN_LINT`      | An `eslint.config.*`, `.eslintrc*`, `biome.json`, `ruff.toml` or `.ruff.toml` exists at the root, or `package.json` has a `lint` script                                     |
 | `CAN_TEST` | The intended package documents an executable test command, including standard-library tests, with applicable test cases. |
 
-Search for test files at most 4 folders deep, and skip `node_modules`, `.git`, `dist`, `build`,
+Use that documented command and search its intended package for applicable test files,
+at most 4 folders deep. Derive `CAN_TEST` from both results, and skip `node_modules`, `.git`, `dist`, `build`,
 `.next`, `.venv`, `venv`, `__pycache__`, `coverage` and archive folders.
 
 Use the repository's documented commands and intended package scope. Unrelated vendored tests
@@ -221,6 +228,9 @@ do not prove the project works. Retain evidence for each capability flag.
 
 Set `IS_TDD` for features, behavior changes and bug fixes, or explicit `--tdd`. Missing required
 tooling is an unmeasured gap; use an isolated executable regression check where suitable.
+An isolated executable regression check is a retained standalone script invoking the
+changed code: it exits nonzero for the reproduced defect and zero after the fix. Save
+it in the existing evidence folder and run it before and after the correction.
 Conditional checks may be not applicable with a reason. Required missing checks block completion.
 
 ---

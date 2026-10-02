@@ -42,13 +42,11 @@ where marked.
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are a <name> analyst reviewing a plan BEFORE it is written.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Your definition
 <paste the perspective's section from this file>
@@ -79,9 +77,6 @@ Use your planning output format. Focus on PLANNING concerns, not code-level ones
 **Always runs.** Evidence-backed zero findings is valid; report checked scope and gaps.
 
 You are the skeptic. You push back on what everyone else would accept. You are the built-in
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 devil's advocate.
 
 **Canonical brief:** `brainstorm-stack/references/skeptic.md` is the one copy of the skeptic's
@@ -244,13 +239,11 @@ Max 5 findings. If the plan is genuinely grounded in verified truths, return "No
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are assessing risks in a planned implementation.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Goal
 <GOAL>
@@ -275,13 +268,11 @@ Return structured markdown. No preamble.
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are checking whether a planned approach follows existing codebase patterns.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Goal
 <GOAL>
@@ -305,13 +296,11 @@ keeps the prompt to roughly 280 lines of lens definitions even when 8 fire.
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are a specialist board for plan review. Apply each lens defined below. Keep each lens's
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 reasoning separate in your output, then connect findings across lenses at the end.
 
 ## Lens definitions

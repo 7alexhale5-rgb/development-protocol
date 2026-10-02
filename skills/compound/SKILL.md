@@ -372,6 +372,17 @@ A report with zero learnings is valid if it says so under `### Learnings` ("None
 the work repeated known patterns"). An empty heading is not. Padding the list to look
 substantial is worse than an honest zero.
 
+For `--improve`, use this Step 7 structural verifier instead of the Learnings grep:
+
+```text
+DEVPROTO --project <repo> step --id <work-id> --step compound --result pass \
+  --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md \
+  --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md --section 'Learnings' --section 'Improvement status: unproved'"
+```
+
+Use the `proved` heading only with the required measurement proof; when adoption is
+required and unproved, record `--result blocked --reason` instead of this pass command.
+
 For `--improve`, also require a nonempty `### Improvement status: unproved` or
 `### Improvement status: proved` section with candidate, evidence and remaining proof.
 A read-only heading check may verify report structure only; it cannot prove measured gains.

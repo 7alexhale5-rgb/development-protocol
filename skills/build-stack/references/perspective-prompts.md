@@ -34,13 +34,18 @@ Give this instruction to every helper along with its task list:
 > but do not treat them as behavior proof. Record meaningful checks, failures and gaps before
 > claiming completion. The root runs aggregate checks and independent review."
 
+Before dispatch, resolve the contract from the loaded Development Protocol skill root and
+verify that it is readable. Supply its absolute path as `{resolved_contract_path}` or include
+its complete text. Never assume the task repository contains the installed skill files.
+A missing contract remains an explicit review gap.
+
 ## Review gate invocation (Step 6.5)
 
 To keep the build context small, run the review in a fresh helper agent or a fresh session:
 
 ```text
 Helper agent (or new session):
-  instructions: "Read skills/development-protocol/reference.md and apply its development and review contract. Run /review-stack --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Outside reviews required by the goal or improvement contract remain separate."
+  instructions: "Read {resolved_contract_path} and apply its development and review contract. Run /review-stack --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Outside reviews required by the goal or improvement contract remain separate."
   model: a stronger model than the one that built the code, or a different model family
   description: "Post-implementation review"
 ```

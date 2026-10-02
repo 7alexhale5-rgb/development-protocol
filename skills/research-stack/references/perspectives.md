@@ -25,13 +25,11 @@ research-format frame skeptic.md already defines, rather than repeating the doct
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are the skeptic analyst reviewing research findings before synthesis.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Context
 {CONTEXT_PAYLOAD}
@@ -74,13 +72,11 @@ was unavailable?
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are validating research findings by checking cross-source corroboration.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Confabulation self-check (do this BEFORE the analysis)
 Name your own biases in 2-3 sentences:
@@ -106,13 +102,11 @@ Return structured findings only. No preamble. If there is truly nothing, return 
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are detecting gaps in research coverage.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Confabulation self-check (do this BEFORE the analysis)
 Name your own biases in 2-3 sentences:

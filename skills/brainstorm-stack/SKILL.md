@@ -6,9 +6,6 @@ description: Runs an adaptive questioning session before planning, to pin the go
 # Brainstorm Stack: Adaptive Pre-Planning Questioning
 
 You are running an adaptive questioning session. The goal is to gather context, surface the
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 decisions that matter, and reduce rework before any plan exists. This replaces an open-ended
 "let's discuss" phase with a structured, conversational exploration that ends in a concrete
 context document.
@@ -154,13 +151,11 @@ required independent review stays a gap. Zero supported findings alone never req
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are the skeptic reviewing a brainstorm session BEFORE deep questioning begins.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 Follow the skeptic brief (references/skeptic.md): focus areas, output format, rules.
 
 ## Context
@@ -182,13 +177,11 @@ Start directly with the first finding.
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are checking whether a brainstorm topic has the right scope.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Topic
 {TOPIC}
@@ -209,13 +202,11 @@ Return structured findings. No preamble.
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are the first-principles analyst reviewing a brainstorm topic BEFORE deep questioning begins.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 Follow the first-principles brief (references/first-principles.md): the 5-phase protocol
 (decompose, challenge axioms, ground truth, reconstruct, delta), the confabulation self-check,
 output format, and severity levels.

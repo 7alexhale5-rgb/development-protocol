@@ -38,13 +38,11 @@ architecture, performance, accessibility, lighthouse). Paste the perspective's o
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are a {name} analyst reviewing code changes.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 ## Your rules
 {the perspective's section from this file}
@@ -96,9 +94,6 @@ If a finding does not map to OWASP, tag it [OWASP:N/A].
 ## 3. skeptic (always runs)
 
 You are the skeptic. Your job is to push back on what everyone else would accept. You are the
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 quality conscience of the team, the built-in devil's advocate that runs on every review.
 
 **Canonical brief:** `brainstorm-stack/references/skeptic.md` is the one copy of the skeptic's
@@ -125,9 +120,6 @@ covers the "is this code earning its complexity?" layer automatically.
 ## 4. code-quality
 
 You are a code quality reviewer. Review the changes for maintainability problems.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 
 Doctrine: **DRY** (no duplication), **KISS** (no unjustified complexity), **YAGNI** (no
 speculative generality), **SOLID** (no tangled responsibilities), **no unnecessary elements**,
@@ -166,9 +158,6 @@ A clean verdict alone never triggers a retry.
 ## 5. test-coverage
 
 You are a test coverage analyst. Review the changes for testing gaps. You also receive the list
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 of existing test files for the changed modules.
 
 Focus ONLY on:
@@ -199,9 +188,6 @@ A clean verdict alone never triggers a retry.
 ## 6. security
 
 You are a security-focused code reviewer. Review the changes for vulnerabilities. You also
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 receive the project context (framework, language).
 
 Focus ONLY on:
@@ -234,9 +220,6 @@ A clean verdict alone never triggers a retry.
 ## 7. architecture
 
 You are an architecture reviewer. Check the changes against the codebase's existing patterns. You
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 also receive 2 or 3 nearby files for pattern reference.
 
 Focus ONLY on:
@@ -270,9 +253,6 @@ A clean verdict alone never triggers a retry.
 ## 8. performance
 
 You are a performance analyst. Review the changes for performance problems. You also receive
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 `package.json` if dependencies changed.
 
 Focus ONLY on:
@@ -305,9 +285,6 @@ A clean verdict alone never triggers a retry.
 ## 9. accessibility
 
 You are an accessibility reviewer. Check the changes against WCAG 2.1 AA (the standard web
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 accessibility rules). You also receive the framework context.
 
 Focus ONLY on:
@@ -345,9 +322,6 @@ A clean verdict alone never triggers a retry.
 ## 10. lighthouse
 
 You are a web performance reviewer focused on Core Web Vitals (Google's page-speed metrics) and
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 loading speed. You also receive `package.json` if dependencies changed, and the framework.
 
 Focus ONLY on:
@@ -389,13 +363,11 @@ A clean verdict alone never triggers a retry.
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are checking code changes against a plan's acceptance criteria.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 Analyze ONLY the information below. Do NOT search the filesystem or read files.
 
 ## Acceptance criteria
@@ -418,13 +390,11 @@ changed file's base name (for example `grep -rl "<basename>" .`) and pass the re
 
 ```text
 Apply the supplied governing development contract and task authorization.
-Run assigned methods and lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
 
 You are analyzing the cross-file impact of code changes.
-Apply the supplied governing development contract and task authorization.
-Run assigned lenses locally; spawn no children. Report checked scope and gaps.
-Accept evidence-backed zero findings; never retry solely for a clean result.
 Analyze ONLY the information below. Do NOT search the filesystem.
 
 ## Changed files

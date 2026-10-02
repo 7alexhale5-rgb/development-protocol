@@ -1,12 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.4.0 (2026-10-02)
 
 - Review handoffs retain complete task scope and explicit gaps; no finding quotas or clean-result retries.
 
-## 2.4.0 (2026-10-02)
-
-- Route all15 Superpowers methods through the existing development checklist. Prove behavior
+- Route all 15 Superpowers methods through the existing development checklist. Prove behavior
   changes with red-green checks, retain independent review for every work size, and record
   skipped required checks as blocked.
 - Add bounded improvement reports with frozen comparisons, held-out cases, independent reviews

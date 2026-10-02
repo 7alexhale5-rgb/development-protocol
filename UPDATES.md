@@ -4,7 +4,7 @@ Every re-port, source baseline, and public maintenance change, newest first.
 
 ## 2026-10-02T16:42:05-05:00
 
-- Version2.4.0: integrate all15 Superpowers methods within the existing protocol.
+- Version 2.4.0: integrate all 15 Superpowers methods within the existing protocol.
   Behavior changes require red-green evidence, every class needs independent review, and
   skipped required checks end with a blocked record. Bounded improvement reports distinguish
   truthful learning from measured adoption; this package requires a reviewed measurement adapter.
