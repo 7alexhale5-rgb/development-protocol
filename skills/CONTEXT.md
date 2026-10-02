@@ -50,3 +50,5 @@ only this repo installed. Paths relative to the repo root.
 The maintainer runs the changed skill once on a real task and reads the diff. Pass: the skill
 works with only this repo installed, the scan is clean and the suite is green. Fail: fix the port
 before merge.
+
+Allowed public divergence: preserve the generic workflow-consumer metadata note in research-stack/references/focus/tags.json during re-ports. Do not restore a private implementation pointer. Triggers, lenses and FOCUS_HINTS must retain verified upstream parity.

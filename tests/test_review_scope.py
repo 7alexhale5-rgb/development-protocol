@@ -138,6 +138,26 @@ class ReviewScopeTests(unittest.TestCase):
         r = subprocess.run([sys.executable, str(SCRIPT), "--snapshot", "--project", str(self.repo)], capture_output=True, text=True)
         self.assertNotEqual(r.returncode, 0)
 
+    def test_unreadable_store_cannot_be_ad_hoc(self):
+        import os
+        if os.geteuid() == 0:
+            self.skipTest("root can read mode-zero directories")
+        self.proof.unlink()
+        self.data.pop("base")
+        self.data.pop("work_id")
+        self.seal_snapshot()
+        report = self.repo / "outside-review.json"
+        # Ignore the report itself to retain the previously sealed candidate.
+        (self.repo / ".git/info/exclude").write_text("outside-review.json\n")
+        report.write_text(json.dumps(self.data))
+        store = self.repo / ".devproto"
+        store.chmod(0)
+        try:
+            r = subprocess.run([sys.executable, str(SCRIPT), str(report), "--commit", self.head, "--project", str(self.repo)], capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0)
+        finally:
+            store.chmod(0o700)
+
     def test_complete_recorded_scope_passes(self):
         r = self.run_check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

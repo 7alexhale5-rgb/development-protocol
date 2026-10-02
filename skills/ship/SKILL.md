@@ -295,3 +295,5 @@ Shipped.
 
 `--skip-tests` is an exception, not a pass: say so in the report and in the pull request body,
 and the local test line reads "skipped".
+
+Receipt renewal always follows checklist order after source or evidence changes: renew affected setup proof first, current build proof next, then required verify (karpathy-verify on the native host), independent review, read-only simplify and the existing commit proof. Re-recording an earlier row reopens later rows; close each prerequisite before recording review. Run the final through-commit check and the exact candidate review verifier before outward release.

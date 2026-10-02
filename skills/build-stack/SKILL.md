@@ -250,6 +250,8 @@ Conditional checks may be not applicable with a reason. Required missing checks 
 
 ---
 
+Re-recording planning for a mid-build amendment reopens later passed rows. Renew visual-spec, design, premortem and audit-setup proof, or valid conditional n/a records, before passing build. Mandatory rows cannot be n/a.
+
 ## Step 4: Scaffold
 
 Turn the plan's task list into tracked tasks (your agent's task list or todo tool, or a checklist
@@ -280,7 +282,7 @@ Report the scaffold:
 
 **Skip if `--no-verify` is set.**
 
-Run `/audit-setup` before final Full Verify and independent reviews. If it runs later
+Determine setup applicability first. When package.json is absent, do not invoke the Node initializer. Satisfy the required audit-setup row with executed checks of the applicable test/build/CI setup and evidence explaining why frontend tools do not apply. Never mark a mandatory setup row n/a. For applicable Node projects, Run `/audit-setup` before final Full Verify and independent reviews. If it runs later
 or changes files, invalidate those receipts and rerun Full Verify and reviews on the
 complete new candidate before completion. It prepares the audit
 tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
@@ -313,7 +315,7 @@ not a pass. Run mutating preparation before final Full Verify and reviews.
 Pick the path that matches the classification.
 
 If `--no-verify` is set, finish only the authorized implementation scope, then go to
-Steps 7a and 7b. Record the build row as blocked with reason "built with --no-verify",
+Steps 7a and 7b. Record the earliest open prerequisite as blocked (only after its earlier rows are terminal); leave build and later rows pending if their prerequisites remain open. Preserve implementation evidence, with reason "built with --no-verify",
 remaining checks, scope, owner and next proof. Do not run skipped review stages or claim completion.
 
 ### BUGFIX path
@@ -636,8 +638,7 @@ Show the tree-format summary. The template is in `references/handoff-format.md` 
 
 ### 7b: Record the checklist row
 
-Record the `build` row as shown in "Checklist row" above. If verification had open failures,
-record `blocked` with the reason. Then run `status` and tell the user the next open row.
+Record the `build` row only after earlier rows are terminal. If verification has failures, record the earliest open eligible row as blocked with the reason and leave later rows pending. Then run `status` and tell the user the next open row.
 
 ### 7c: Suggest next steps
 

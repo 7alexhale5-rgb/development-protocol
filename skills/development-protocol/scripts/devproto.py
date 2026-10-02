@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import command_digest, digest, now, redact, run_verifier  # noqa: E402
+from _shared import candidate_snapshot, command_digest, digest, now, redact, run_verifier  # noqa: E402
 from _shared import locked as _store_locked  # noqa: E402
 
 # (row id, skill that satisfies it, what the row proves)
@@ -98,7 +98,7 @@ STEP_IDS = [s[0] for s in STEPS]
 TERMINAL = {"passed", "not-applicable"}
 RECORD_KEYS = (
     "status", "evidence_sha256", "instruments", "verify_command",
-    "verify_command_sha256", "git_identity",
+    "verify_command_sha256", "git_identity", "candidate_sha256",
 )
 RELEASE_STEPS = set(STEP_IDS[STEP_IDS.index("commit"):])
 CONDITIONAL = {"brainstorm", "research", "visual-spec", "design"}
@@ -310,12 +310,14 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
                     )
                 for s in record["steps"]:
                     s["required"] = s["step_id"] in required
-                record["rule_notes"] = notes
+                record["rule_notes"] = notes + [n for n in record.get("rule_notes", []) if n.startswith("Git intake baseline")]
                 save(path, record)
             return summary(project, record)
         try:
             identity = git_identity(project)
         except ValueError as exc:
+            if str(exc) == "Git identity lookup failed":
+                raise
             identity = None
             notes.append(f'Git intake baseline unavailable: {exc}; required Git proof remains blocked')
         if identity is not None:
@@ -436,7 +438,13 @@ def refresh(project: Path, record: dict) -> bool:
             step["step_id"] in RELEASE_STEPS
             and step.get("git_identity") != identity
         )
-        changed = not ev_ok or identity_changed
+        candidate_changed = False
+        if step["step_id"] == "review" and git_identity(project) is not None:
+            try:
+                candidate_changed = step.get("candidate_sha256") != candidate_snapshot(project)
+            except (OSError, ValueError):
+                candidate_changed = True
+        changed = not ev_ok or identity_changed or candidate_changed
         for name, meta in step["instruments"].items():
             sha = meta["sha256"] if isinstance(meta, dict) else meta
             stat = meta.get("stat") if isinstance(meta, dict) else None
@@ -447,6 +455,8 @@ def refresh(project: Path, record: dict) -> bool:
             step["revision"] = step.get("revision", 0) + 1
             step["status"] = "pending"
             step["reason"] = (
+                "Reviewed candidate changed or cannot be inspected. Repeat review and later steps."
+                if candidate_changed else
                 "Git HEAD or branch changed after it passed. Repeat this step."
                 if identity_changed else
                 "Evidence or instrument changed after it passed. Repeat this step."
@@ -637,6 +647,7 @@ def step(
             deps[portable(project, q)] = digest(q)
         sha = digest(ev)
         identity = git_identity(project) if step_id in RELEASE_STEPS else None
+        candidate = candidate_snapshot(project) if step_id == "review" and git_identity(project) is not None else None
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     code, output = run_verifier(verify_cmd, project, timeout)
@@ -657,11 +668,17 @@ def step(
         identity_stable = (
             step_id not in RELEASE_STEPS or identity == git_identity(project)
         )
-        passed = code == 0 and stable and identity_stable and not earlier
+        try:
+            candidate_stable = candidate is None or candidate == candidate_snapshot(project)
+        except (OSError, ValueError):
+            candidate_stable = False
+        passed = code == 0 and stable and identity_stable and candidate_stable and not earlier
         if earlier:
             why = "An earlier step reopened while the verifier ran: " + ", ".join(
                 earlier
             )
+        elif not candidate_stable:
+            why = "Reviewed candidate changed while the verifier ran. Repeat review."
         elif not identity_stable:
             why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
         elif not stable:
@@ -688,6 +705,7 @@ def step(
             verify_command=redact(verify_cmd),
             verify_command_sha256=command_digest(verify_cmd),
             git_identity=identity,
+            candidate_sha256=candidate,
             verifier_exit=code,
             output_tail=redact(output)[-2000:],
             verified_at=now(),

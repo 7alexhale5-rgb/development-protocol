@@ -46,7 +46,7 @@ Each skill states which checklist row it satisfies and how to record it. The che
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step <row> --result pass --evidence <file> --verify "<command>"
+  --id=<work-id> --step <row> --result pass --evidence <file> --verify "<command>"
 ```
 
 Rows, in order: `pathway`, `brainstorm`, `research`, `spec`, `planning`, `visual-spec`, `design`,

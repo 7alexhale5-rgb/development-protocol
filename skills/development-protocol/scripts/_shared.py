@@ -274,3 +274,54 @@ if __name__ == "__main__":
         else "FAIL required sections are missing or empty"
     )
     raise SystemExit(0 if passed else 1)
+
+
+def candidate_snapshot(project):
+    """Hash the complete nonignored candidate without modifying the user's Git index."""
+    project = project.resolve()
+    def git(*args):
+        result = subprocess.run(['git', '-C', str(project), *args], capture_output=True)
+        if result.returncode:
+            raise ValueError('candidate Git state cannot be read')
+        return result.stdout
+    if Path(os.fsdecode(git('rev-parse', '--show-toplevel')).strip()).resolve() != project:
+        raise ValueError('--project must name the repository root')
+    head_entries = {}
+    for entry in git('ls-tree', '-rz', 'HEAD').split(b'\0'):
+        if entry:
+            metadata, name = entry.split(b'\t', 1)
+            head_entries[name] = metadata.split(b' ')[0]
+    names = set(head_entries)
+    names.update(git('ls-files', '-z', '-co', '--exclude-standard').split(b'\0'))
+    digest = hashlib.sha256()
+    index_modes = {}
+    for entry in git('ls-files', '-sz').split(b'\0'):
+        if not entry:
+            continue
+        metadata, name = entry.split(b'\t', 1)
+        if name == b'.devproto' or name.startswith(b'.devproto/'):
+            continue
+        index_modes[name] = metadata.split(b' ')[0]
+        digest.update(b'index\0' + entry + b'\0')
+    for name in sorted(names - {b''}):
+        if name == b'.devproto' or name.startswith(b'.devproto/'):
+            continue
+        path = project / os.fsdecode(name)
+        if index_modes.get(name) == b'160000':
+            raise ValueError('candidate includes an unsupported indexed submodule')
+        digest.update(name + b'\0')
+        if path.is_symlink():
+            kind, content = b'symlink', os.fsencode(os.readlink(path))
+        elif not path.exists():
+            kind, content = b'deleted', b''
+        elif path.is_file():
+            kind = b'executable' if path.stat().st_mode & 0o111 else b'file'
+            content = path.read_bytes()
+        elif path.is_dir() and head_entries.get(name) != b'160000' and index_modes.get(name) != b'160000':
+            if (path / '.git').exists():
+                raise ValueError('candidate includes an unsupported nested repository')
+            kind, content = b'deleted', b''
+        else:
+            raise ValueError('candidate includes an unsupported directory or submodule')
+        digest.update(kind + b'\0' + hashlib.sha256(content).digest())
+    return digest.hexdigest()

@@ -30,8 +30,7 @@ at its files.
 
 ## 1. Step 4.5a.0: Audit-setup preflight (one combined finding)
 
-Before probing each tool, run the `/audit-setup` status check (its status script, if it ships
-one). This turns missing tooling into ONE actionable finding, instead of every later step
+Before probing each tool, read the retained `/audit-setup` status. After sealing, do not run any setup/status script that writes project files; capture that evidence before sealing. This turns missing tooling into ONE actionable finding, instead of every later step
 emitting its own partial warning. This skill installs nothing. It only tells the user the one way
 to fix the gaps.
 
@@ -320,7 +319,7 @@ baseline was already past it.
   skip.
 - Do not install Lighthouse globally from inside this skill. Require `npx --no-install`, so the
   project opts in on purpose.
-- Only `--audit --write-baseline` may write new baseline files.
+- Work reviews reject `--write-baseline`. New baselines belong in build Step4.5 before the review snapshot. Ad-hoc capture also precedes sealing; review never writes tracked baseline files after sealing.
 - A median of 3 runs catches most single-run noise. Use 5 runs (`LH_RUNS=5`) for
   performance-critical audits.
 

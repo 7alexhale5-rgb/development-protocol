@@ -83,6 +83,36 @@ class DevprotoTest(unittest.TestCase):
         self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
                  "commit", "--allow-empty", "-m", "first")
 
+    def test_changed_candidate_reopens_review_and_later_rows(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        self.pass_step("commit")
+        (self.project / "source.py").write_text("changed implementation\n")
+        out = devproto.status(self.project, "w1", "commit")
+        self.assertFalse(out["ready"])
+        self.assertEqual(self.rows(out)["review"]["status"], "pending")
+        self.assertEqual(self.rows(out)["commit"]["status"], "pending")
+
+    def test_candidate_mutation_during_review_verifier_blocks(self):
+        self.init_git()
+        self.start()
+        self.close_until("review")
+        out = self.pass_step("review", "printf changed > source.py")
+        self.assertFalse(out["ok"])
+
+    def test_transient_intake_failure_can_retry_without_creating_record(self):
+        with patch.object(devproto, "git_identity", side_effect=ValueError("Git identity lookup failed")):
+            with self.assertRaisesRegex(ValueError, "lookup failed"):
+                self.start()
+        self.assertFalse(devproto.store_path(self.project, "w1").exists())
+
+    def test_flag_restart_preserves_intake_gap(self):
+        self.git("init")
+        self.start(TRIVIAL)
+        out = self.start(TRIVIAL, force=["research"])
+        self.assertTrue(any("baseline unavailable" in note for note in out["rule_notes"]))
+
     def test_commit_proof_reopens_on_head_change_only_from_commit_onward(self):
         self.init_git()
         self.start()

@@ -50,13 +50,13 @@ It lives next to this file at `scripts/devproto.py`. Python 3.9+, standard libra
 `--project` and `--json` go before the subcommand.
 
 ```text
-DEVPROTO --project <repo> start --goal "<goal>" [--id <id>] [--require <row>] [--optional <row>]
-DEVPROTO --project <repo> status --id <id>
-DEVPROTO --project <repo> step --id <id> --step <row> --result pass \
+DEVPROTO --project <repo> start --goal "<goal>" [--id=<id>] [--require <row>] [--optional <row>]
+DEVPROTO --project <repo> status --id=<id>
+DEVPROTO --project <repo> step --id=<id> --step <row> --result pass \
     --evidence <file> --verify "<command that only reads it>" [--instrument <test file>]
-DEVPROTO --project <repo> step --id <id> --step <row> --result na --reason "<why>"
-DEVPROTO --project <repo> step --id <id> --step <row> --result blocked --reason "<what>"
-DEVPROTO --project <repo> check --id <id> [--through <row>]
+DEVPROTO --project <repo> step --id=<id> --step <row> --result na --reason "<why>"
+DEVPROTO --project <repo> step --id=<id> --step <row> --result blocked --reason "<what>"
+DEVPROTO --project <repo> check --id=<id> [--through <row>]
 DEVPROTO steps           # the 17 rows and the skill for each
 DEVPROTO --project <repo> list
 DEVPROTO --project <repo> doctor
@@ -144,9 +144,9 @@ proves the real thing happened" means. Push a branch and open a pull request to 
 
 5. Rows 11 and 12 need a reviewer that did not write the code: a different model family, a fresh
    session with only the diff and spec, or a person. Record which one reviewed.
-6. Before merge, gate with `check --through commit`. Rows `ship`, `compound` and `closeout` can only
+6. Before merge, execute the exact candidate review verifier and `check --through commit`. Rows `ship`, `compound` and `closeout` can only
    be proven after the merge.
-7. At the end, `check` must exit 0. Answer "is it done?" from `check`, never from memory.
+7. At the end, execute current verification and the candidate review verifier, then require `check` to exit 0. Git review rows retain a candidate snapshot; changed or unreadable candidates reopen review and later rows. The checklist reports evidence, not an independently executed semantic review. Never answer completion from memory.
 
 ## Loop mode
 

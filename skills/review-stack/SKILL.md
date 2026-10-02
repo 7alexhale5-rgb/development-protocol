@@ -115,8 +115,8 @@ hash before dispatch with `python3 <review-stack skill folder>/scripts/verify_re
 baseline as an evidence instrument. Verification compares the current complete candidate
 with the reviewed hash, including committed, staged, unstaged and new files, excluding
 only `.devproto/` supporting evidence. Unsupported submodules and nested repositories remain explicit proof gaps; this verifier does not certify their child state. Required review stays blocked until a reviewed adapter covers that state.
-Keep generated build, coverage and log output ignored or in `.devproto/` before sealing; do not ignore implementation files to shrink scope. Status/check rows report retained evidence only and do not revalidate this snapshot. Run this read-only verifier before any completion claim and again before ship; a changed file invalidates prior review.
-Never refresh the report hash without a new review of those bytes.
+Keep generated build, coverage and log output ignored or in `.devproto/` before sealing; do not ignore implementation files to shrink scope. Status/check refresh reopens Git review and later rows when the retained candidate snapshot changes or cannot be inspected. Run this read-only verifier before any completion claim and again before ship; a changed file invalidates prior review.
+After sealing, review must not write outside `.devproto/` or an ignored/external evidence folder. Work reviews reject `--write-baseline`; prepare baselines and any mutating audit status setup before sealing through build Step4.5. Inspect audit tools read-only after sealing. Never refresh the report hash without a new review of those bytes.
 
 Only an ad-hoc review without a work-id or any open/unknown recorded work baseline may use the configured default branch merge-base
 for --branch, or HEAD for uncommitted-only scope. If no configured branch is verifiable,
@@ -429,7 +429,7 @@ the gate "manual".
 
 Sub-checks, in order. The full procedure for each is in `references/runtime-checks.md`.
 
-1. **4.5a.0 Audit-setup preflight.** Run the `/audit-setup` status check. If any tool is missing,
+1. **4.5a.0 Audit-setup preflight.** Inspect the retained `/audit-setup` status read-only; do not rerun a script that writes project status. If any tool is missing,
    emit ONE info finding that lists them and says how to install them.
 2. **4.5a Detect the runtime.** Set `CAN_DEV_SERVER`, `HAS_PLAYWRIGHT`, `HAS_LIGHTHOUSE`,
    `HAS_AXE_PLAYWRIGHT`, `HAS_BROWSER_PROBE` and `DIFF_TOUCHES_UI`.
@@ -614,7 +614,7 @@ Invocation examples: `references/output-templates.md` (section "Agent isolation"
 | Playwright             | Not installed                            | Use any browser tool for a page-load smoke check. Skip structured end-to-end tests                                                                        |
 | `@axe-core/playwright` | Not installed                            | The Lighthouse accessibility score (4.5f) and the accessibility perspective cover the gap. Emit info: "run `/audit-setup` to add axe"                     |
 | Lighthouse CLI         | `npx --no-install lighthouse` fails      | Skip 4.5f. Emit info: "run `/audit-setup` to add Lighthouse". Still run axe, bundle and npm audit                                                         |
-| Lighthouse baseline    | No reports in `ops/lighthouse/baseline/` | Absolute floors only, no regression compare. Emit info: "run `/audit-setup` to capture a baseline". Write a baseline ONLY with `--audit --write-baseline` |
+| Lighthouse baseline    | No reports in `ops/lighthouse/baseline/` | Absolute floors only, no regression compare. Emit info: "run `/audit-setup` to capture a baseline". Work reviews cannot use `--write-baseline`; capture through build Step4.5 before sealing. Ad-hoc baseline capture must occur before sealing too |
 | Preview URL            | None for this branch                     | Fall back to a local production build. If that fails too, skip 4.5f                                                                                       |
 | Bundle analyzer        | Not configured                           | Read chunk sizes from the build output only                                                                                                               |
 | npm audit              | npm not available                        | Skip. Note it in the report                                                                                                                               |
