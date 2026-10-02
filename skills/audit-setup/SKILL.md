@@ -389,7 +389,7 @@ verifier only reads it and fails on any recorded failure:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step audit-setup --result pass --evidence ops/audit/STATUS.md \
+  --id=<work-id> --step audit-setup --result pass --evidence ops/audit/STATUS.md \
   --verify "grep -q '^## Ran this invocation' ops/audit/STATUS.md && ! grep -q '^- FAILED' ops/audit/STATUS.md"
 ```
 
@@ -420,7 +420,7 @@ so there must be a way to close the row without the kit:
   ```text
   printf 'CI: %s\nTests: %s\n' .github/workflows/ci.yml pyproject.toml > .devproto/evidence/audit-setup.txt
   python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id <work-id> --step audit-setup --result pass --evidence .devproto/evidence/audit-setup.txt \
+    --id=<work-id> --step audit-setup --result pass --evidence .devproto/evidence/audit-setup.txt \
     --verify "test -f .github/workflows/ci.yml && test -f pyproject.toml"
   ```
 
@@ -429,9 +429,9 @@ so there must be a way to close the row without the kit:
 
   ```text
   python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> set-optional \
-    --id <work-id> --step audit-setup --reason "pure Python repo, no package.json"
+    --id=<work-id> --step audit-setup --reason "pure Python repo, no package.json"
   python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id <work-id> --step audit-setup --result na --reason "pure Python repo, no package.json"
+    --id=<work-id> --step audit-setup --result na --reason "pure Python repo, no package.json"
   ```
 
   Unlike `start`'s `--require`/`--optional`, `set-optional` works after earlier rows have already

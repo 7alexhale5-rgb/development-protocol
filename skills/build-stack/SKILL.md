@@ -30,7 +30,7 @@ the task.
 This skill satisfies the `build` row of the development-protocol checklist. `DEVPROTO` means
 `python3 <development-protocol skill folder>/scripts/devproto.py`.
 
-Before you start, run `DEVPROTO --project <repo> status --id <work-id>`. The `build` row can only
+Before you start, run `DEVPROTO --project <repo> status --id=<work-id>`. The `build` row can only
 pass after every earlier row (`planning`, `premortem`, `audit-setup` and the rest) is closed. If an
 earlier row is open, close it first or mark it `na` with a reason where the tool allows.
 
@@ -58,7 +58,7 @@ Capture a complete snapshot before recording the row:
    indexes created by this procedure. A changed implementation must invalidate proof.
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step build --result pass \
+DEVPROTO --project <repo> step --id=<work-id> --step build --result pass \
   --evidence .devproto/evidence/build.diff --verify "<compare the current snapshot with build.diff, then run focused tests>" \
   --instrument .devproto/evidence/<work-id>-build-base.txt \
   --instrument <the main test file you relied on>
@@ -138,7 +138,7 @@ words: <their exact approval words>
 Pass the planning row with the plan as an instrument and the existing read-only checker:
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step planning --result pass \
+DEVPROTO --project <repo> step --id=<work-id> --step planning --result pass \
   --evidence .devproto/evidence/plan-approval.md \
   --verify "python3 <planning-stack skill folder>/scripts/plan_approval_check.py .devproto/evidence/plan-approval.md" \
   --instrument <plan path>
@@ -275,6 +275,38 @@ Report the scaffold:
 > - Full Verify after all batches
 
 ---
+
+## Step 4.5: Audit preflight (always on)
+
+**Skip if `--no-verify` is set.**
+
+Run `/audit-setup` before final Full Verify and independent reviews. If it runs later
+or changes files, invalidate those receipts and rerun Full Verify and reviews on the
+complete new candidate before completion. It prepares the audit
+tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
+accessibility library for Playwright, Playwright's browser dependencies, performance budgets, and
+CI gate scaffolding. Preserving an existing Lighthouse baseline without --force returns nonzero and is
+not fresh capture proof. Retain that gap, or use authorized --force with backups before
+Full Verify and review when fresh capture is required.
+
+Run it even when no audit flag is set. It costs seconds when nothing changed and a few minutes on
+first install. Inspect the actual result; missing required tooling or fresh capture
+remains a gap for any later review.
+
+Note on checklist order: the `audit-setup` row comes before `build` in the checklist. Close it
+once before the build starts. When a later code change requires fresh capture, rerun this preparation before final verification. A changed output needs renewed setup proof; a nonzero preserved-baseline result is
+not a pass. Run mutating preparation before final Full Verify and reviews.
+
+**Failure handling:**
+
+- If `/audit-setup` hits an install error that blocks the build (for example `npm install`
+  fails), treat it as a Full Verify failure and surface it to the user.
+- If it reports non-fatal warnings (a stale baseline it cannot re-capture right now, a missing
+  local env file for the preview URL), retain the gap. Missing required audit proof blocks its row and release; only
+  explicitly optional checks may remain unavailable.
+
+---
+
 
 ## Step 5: Execute
 
@@ -544,37 +576,6 @@ complete, ship it or pass its proof row. Record the missing proof and next check
 
 ---
 
-## Step 6.4: Audit preflight (always on)
-
-**Skip if `--no-verify` is set.**
-
-Run `/audit-setup` before final Full Verify and independent reviews. If it runs later
-or changes files, invalidate those receipts and rerun Full Verify and reviews on the
-complete new candidate before completion. It prepares the audit
-tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
-accessibility library for Playwright, Playwright's browser dependencies, performance budgets, and
-CI gate scaffolding. Preserving an existing Lighthouse baseline without --force returns nonzero and is
-not fresh capture proof. Retain that gap, or use authorized --force with backups before
-Full Verify and review when fresh capture is required.
-
-Run it even when no audit flag is set. It costs seconds when nothing changed and a few minutes on
-first install. Inspect the actual result; missing required tooling or fresh capture
-remains a gap for any later review.
-
-Note on checklist order: the `audit-setup` row comes before `build` in the checklist. Close it
-once before the build starts. This step re-runs the tool to refresh the baseline against the new
-code. A changed output needs renewed setup proof; a nonzero preserved-baseline result is
-not a pass. Run mutating preparation before final Full Verify and reviews.
-
-**Failure handling:**
-
-- If `/audit-setup` hits an install error that blocks the build (for example `npm install`
-  fails), treat it as a Full Verify failure and surface it to the user.
-- If it reports non-fatal warnings (a stale baseline it cannot re-capture right now, a missing
-  local env file for the preview URL), retain the gap. Missing required audit proof blocks its row and release; only
-  explicitly optional checks may remain unavailable.
-
----
 
 ## Step 6.5: Independent review for every classification
 
@@ -591,7 +592,7 @@ The agent that wrote the code must not be the only reviewer. Do not duplicate re
 ### Standard review (`--review` or LARGE)
 
 ```text
-/review-stack --work-id <work-id> --branch --plan <plan path from Step 1>
+/review-stack --work-id=<work-id> --branch --plan <plan path from Step 1>
 ```
 
 To keep the build conversation's context small, run it in a fresh helper agent or a fresh
@@ -603,7 +604,7 @@ invocation").
 If `--audit` is set, run the full audit pipeline instead:
 
 ```text
-/review-stack --work-id <work-id> --audit --auto --branch --plan <plan path from Step 1>
+/review-stack --work-id=<work-id> --audit --auto --branch --plan <plan path from Step 1>
 ```
 
 This runs all review layers (static, pattern, context, runtime) with all 8 perspectives,
@@ -666,7 +667,7 @@ it on the summary. If it fails, the tree summary stands. Skip this for BUGFIX an
 | Test framework | No applicable test runner | Use meaningful isolated regression proof or keep required verification blocked. |
 | Helper agents          | Not supported, any classification              | Implement sequentially; independent review remains required       |
 | Checklist tool         | `/development-protocol` not installed | Keep the evidence files anyway and report in chat       |
-| `/audit-setup`         | Not installed                         | Skip Step 6.4. Note that `--audit` reviews will degrade |
+| `/audit-setup`         | Not installed                         | Retain the required setup gap in Step 4.5. Note that `--audit` reviews will degrade |
 
 **Minimum viable run:** a bounded change, executed meaningful checks, readable evidence and
 an honest remaining-scope report. Missing required proof blocks completion.

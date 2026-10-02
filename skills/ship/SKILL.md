@@ -16,7 +16,7 @@ request link and the check results, then record the row with a verifier that re-
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step ship --result pass --evidence .devproto/evidence/ship.txt \
+  --id=<work-id> --step ship --result pass --evidence .devproto/evidence/ship.txt \
   --verify 'expected=$(sed -n "s/^sha //p" .devproto/evidence/ship.txt); test -n "$expected" && test "$(git rev-parse HEAD)" = "$expected" && test "$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)" = "$expected" && gh pr checks <pr-number> && test "$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)" = "$expected"'
 ```
 
@@ -31,7 +31,7 @@ record a pass from a web page you read by eye.
 
 ### 0a: Verify state
 
-Accept `--work-id <id>` or resolve the existing active checklist for this branch. An
+Accept `--work-id=<id>` or resolve the existing active checklist for this branch. An
 existing work item with unknown identity is a proof gap, never an ad-hoc bypass.
 
 
@@ -128,7 +128,7 @@ never edits anything.
    `git merge-base --is-ancestor <prod-sha> origin/{base}`. A production deploy with no commit
    attached came from someone's laptop, and that is drift too.
 5. **receipts.** Are the checklist's evidence files current? Run
-   `python3 <development-protocol skill folder>/scripts/devproto.py --project . status --id <work-id>`;
+   `python3 <development-protocol skill folder>/scripts/devproto.py --project . status --id=<work-id>`;
    any step it reopened has evidence that changed after it passed.
 
 Why this step exists: on 2026-09-04 one project had nine verifier scripts, zero CI workflows,

@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills/review-stack/scripts/verify_review.py"
+sys.path.insert(0, str(ROOT / "skills/development-protocol/scripts"))
+from devproto import STEP_IDS
 
 class ReviewScopeTests(unittest.TestCase):
     def setUp(self):
@@ -113,6 +115,29 @@ class ReviewScopeTests(unittest.TestCase):
         self.data["commit"] = self.head
         self.seal_snapshot()  # Simulate a new independent review of the final package.
         self.assertEqual(self.run_check().returncode, 0)
+    def test_closeout_only_record_is_unknown_not_closed(self):
+        (self.repo / ".devproto/job.json").write_text(json.dumps({"work_id": "job", "steps": [{"step_id": "closeout", "status": "passed"}]}))
+        self.data.pop("base")
+        self.data.pop("work_id")
+        self.assertNotEqual(self.run_check(scoped=False).returncode, 0)
+    def test_absent_gitlink_is_an_explicit_proof_gap(self):
+        subprocess.run(["git", "-C", str(self.repo), "update-index", "--add", "--cacheinfo", f"160000,{self.head},module"], check=True)
+        r = subprocess.run([sys.executable, str(SCRIPT), "--snapshot", "--project", str(self.repo)], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+    def test_regular_file_cannot_hide_indexed_gitlink(self):
+        subprocess.run(["git", "-C", str(self.repo), "update-index", "--add", "--cacheinfo", f"160000,{self.head},module"], check=True)
+        (self.repo / "module").write_text("replacement\n")
+        r = subprocess.run([sys.executable, str(SCRIPT), "--snapshot", "--project", str(self.repo)], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+    def test_untracked_nested_repository_is_an_explicit_proof_gap(self):
+        nested = self.repo / "nested"
+        subprocess.run(["git", "init", "-q", str(nested)], check=True)
+        (nested / "source.py").write_text("answer = 1\n")
+        subprocess.run(["git", "-C", str(nested), "add", "source.py"], check=True)
+        subprocess.run(["git", "-C", str(nested), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "nested"], check=True)
+        r = subprocess.run([sys.executable, str(SCRIPT), "--snapshot", "--project", str(self.repo)], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+
     def test_complete_recorded_scope_passes(self):
         r = self.run_check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -143,7 +168,7 @@ class ReviewScopeTests(unittest.TestCase):
         self.assertNotEqual(self.run_check(scoped=False).returncode, 0)
     def test_completed_work_does_not_prevent_new_ad_hoc_review(self):
         record = self.repo / ".devproto/job.json"
-        record.write_text(json.dumps({"work_id": "job", "steps": [{"step_id": "closeout", "status": "passed"}]}))
+        record.write_text(json.dumps({"work_id": "job", "steps": [{"step_id": step, "status": "passed"} for step in STEP_IDS]}))
         self.data.pop("base")
         self.data.pop("work_id")
         r = self.run_check(scoped=False)

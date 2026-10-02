@@ -6,7 +6,11 @@ import os
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "development-protocol" / "scripts"))
+from devproto import load as load_work_record, TERMINAL
 
 
 def validate(data, commit):
@@ -72,6 +76,8 @@ def candidate_snapshot(project):
         if name == b'.devproto' or name.startswith(b'.devproto/'):
             continue
         path = project / os.fsdecode(name)
+        if index_modes.get(name) == b'160000':
+            raise ValueError('candidate includes an unsupported indexed submodule')
         digest.update(name + b'\0')
         if path.is_symlink():
             kind, content = b'symlink', os.fsencode(os.readlink(path))
@@ -81,6 +87,8 @@ def candidate_snapshot(project):
             kind = b'executable' if path.stat().st_mode & 0o111 else b'file'
             content = path.read_bytes()
         elif path.is_dir() and head_entries.get(name) != b'160000' and index_modes.get(name) != b'160000':
+            if (path / '.git').exists():
+                raise ValueError('candidate includes an unsupported nested repository')
             kind, content = b'deleted', b''
         else:
             raise ValueError('candidate includes an unsupported directory or submodule')
@@ -90,11 +98,11 @@ def candidate_snapshot(project):
 
 def closed_work_record(path, identifier):
     try:
-        record = json.loads(path.read_text())
+        record = load_work_record(path)
         rows = record.get('steps')
         return (record.get('work_id') == identifier and isinstance(rows, list) and bool(rows)
                 and any(row.get('step_id') == 'closeout' and row.get('status') == 'passed' for row in rows)
-                and all(row.get('status') in {'passed', 'not-applicable'} for row in rows))
+                and all(row.get('status') in TERMINAL for row in rows))
     except (OSError, ValueError, TypeError, AttributeError):
         return False
 

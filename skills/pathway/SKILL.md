@@ -25,15 +25,15 @@ owes. The checklist says which steps of the proof loop are done. Every call belo
 
 ## Checklist row
 
-This skill satisfies the `pathway` row. `next --id <work-id>` needs an outcome that already
+This skill satisfies the `pathway` row. `next --id=<work-id>` needs an outcome that already
 exists; on a brand-new work id (row 1, nothing started yet) run START first, then ASK, then record
 the answer:
 
 ```text
-PATHWAY --project <repo> start --goal "<goal>" --id <work-id>   # only if <work-id> has no outcome yet
+PATHWAY --project <repo> start --goal "<goal>" --id=<work-id>   # only if <work-id> has no outcome yet
 mkdir -p .devproto/evidence
-PATHWAY --project <repo> scope --id <work-id> > .devproto/evidence/pathway-scope.json
-DEVPROTO --project <repo> step --id <work-id> --step pathway --result pass \
+PATHWAY --project <repo> scope --id=<work-id> > .devproto/evidence/pathway-scope.json
+DEVPROTO --project <repo> step --id=<work-id> --step pathway --result pass \
   --evidence .devproto/evidence/pathway-scope.json --verify "python3 -m json.tool .devproto/evidence/pathway-scope.json >/dev/null"
 ```
 
@@ -257,7 +257,7 @@ Do not present a menu.
    either. If the user gave no artifact or verifier, ask for it.
 3. Write the evidence first, then run:
    ```text
-   PATHWAY --project <repo> log --id <work-id> --pathway <pathway> \
+   PATHWAY --project <repo> log --id=<work-id> --pathway <pathway> \
      --evidence <file> --verify "<command that re-checks the file and only reads it>"
    ```
    The router fingerprints the evidence file. A verifier that exits non-zero, or one that rewrites
@@ -267,14 +267,14 @@ Do not present a menu.
 ## CLOSE: "done with this outcome"
 
 1. Get the work id (as in LOG).
-2. Run `PATHWAY --project <repo> close --id <work-id>`.
-3. If it closed, confirm in one line, then run `DEVPROTO check --id <work-id>` and report its
+2. Run `PATHWAY --project <repo> close --id=<work-id>`.
+3. If it closed, confirm in one line, then run `DEVPROTO check --id=<work-id>` and report its
    answer too. The itinerary and the checklist are two different gates; both must be clear.
 4. If it did not close, tell the user in plain English exactly what blocks it and the one thing to
    fix. **The coverage gate is usually the blocker.** `coverage.open` lists pathways still owed
    proof. For each, either run it (`/pathway <project> go`) or, if it genuinely does not apply,
    mark it:
-   `PATHWAY cover --id <work-id> --pathway <name> --na --reason "<why it does not apply>"`.
+   `PATHWAY cover --id=<work-id> --pathway <name> --na --reason "<why it does not apply>"`.
    Nothing closes until every itinerary pathway is proved with an artifact or n/a with a reason.
    That is the guarantee that no necessary pathway was skipped.
 

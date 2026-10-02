@@ -22,7 +22,7 @@ instruments so a weakened test cannot keep an old pass:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step simplify --result pass --evidence .devproto/evidence/simplify.md \
+  --id=<work-id> --step simplify --result pass --evidence .devproto/evidence/simplify.md \
   --verify "<the project's full test command>" --instrument <main test file>
 ```
 

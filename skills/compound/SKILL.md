@@ -366,7 +366,7 @@ The report from Step 5a is the evidence. The verifier only reads it:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step compound --result pass \
+  --id=<work-id> --step compound --result pass \
   --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md \
   --verify "grep -q '^### Learnings' .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md"
 ```
@@ -378,7 +378,7 @@ substantial is worse than an honest zero.
 For `--improve`, use this Step 7 structural verifier instead of the Learnings grep:
 
 ```text
-python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step --id <work-id> --step compound --result pass \
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step --id=<work-id> --step compound --result pass \
   --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md \
   --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md --section 'Learnings' --section 'Improvement status: unproved'"
 ```

@@ -22,13 +22,13 @@ This skill satisfies two rows of the development protocol checklist: `spec` (Lay
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step spec --result pass \
+  --id=<work-id> --step spec --result pass \
   --evidence .devproto/evidence/spec-baseline.json \
   --verify "<read and validate the saved baseline failure, source revision, command, expected failure and test-file hash>" \
   --instrument <the acceptance test file>
 
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step verify --result pass \
+  --id=<work-id> --step verify --result pass \
   --evidence .devproto/evidence/verify.md \
   --verify "<the full test suite command>" --instrument <the acceptance test file>
 ```

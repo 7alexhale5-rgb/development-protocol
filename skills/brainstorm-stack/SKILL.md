@@ -17,7 +17,7 @@ written the context document, record it:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step brainstorm --result pass \
+  --id=<work-id> --step brainstorm --result pass \
   --evidence .devproto/evidence/brainstorm.md \
   --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/evidence/brainstorm.md --section 'Key Decisions' --section 'Project Boundary'"
 ```

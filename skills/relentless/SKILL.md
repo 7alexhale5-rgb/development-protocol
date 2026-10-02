@@ -279,7 +279,7 @@ evidence, with `sweep verify` as the read-only verifier:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step review --result pass \
+  --id=<work-id> --step review --result pass \
   --evidence .sweeps/_closed/<slug>-<stamp>/ledger.json \
   --verify "python3 <relentless skill folder>/scripts/sweep.py verify .sweeps/_closed/<slug>-<stamp>/ledger.json"
 ```

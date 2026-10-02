@@ -30,10 +30,10 @@ Write the report to `.devproto/evidence/review.md` and its canonical structured 
 the structured result; pass the human report as an instrument:
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step review --result pass \
+DEVPROTO --project <repo> step --id=<work-id> --step review --result pass \
   --evidence .devproto/evidence/review.json --instrument .devproto/evidence/review.md \
   --instrument .devproto/evidence/<work-id>-build-base.txt \
-  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id <work-id>'
+  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>'
 ```
 
 At least one acceptance criterion with passing evidence is required, even for an ad-hoc
@@ -61,7 +61,7 @@ From the user's input, extract:
   - `--audit`: full audit. L1 to L4 plus the remediation report. Includes everything in
     `--deep` plus runtime checks.
 - **FLAGS**:
-  - `--work-id <id>`: binds a work review to the retained intake baseline.
+  - `--work-id=<id>`: binds a work review to the retained intake baseline.
   - `--plan path/to/plan.md`: the plan to check against.
   - `--gate hard`: treat all L1 failures as blocking (default: advisory).
   - `--no-criteria`: skip comparison against a plan; still record a request-derived criterion with evidence.
@@ -114,8 +114,8 @@ hash before dispatch with `python3 <review-stack skill folder>/scripts/verify_re
 --snapshot --project <repo>`, and freeze the complete package for reviewers. Retain the
 baseline as an evidence instrument. Verification compares the current complete candidate
 with the reviewed hash, including committed, staged, unstaged and new files, excluding
-only `.devproto/` supporting evidence. Unsupported submodules remain a proof gap.
-Use this read-only verifier again before ship; a changed file invalidates prior review.
+only `.devproto/` supporting evidence. Unsupported submodules and nested repositories remain explicit proof gaps; this verifier does not certify their child state. Required review stays blocked until a reviewed adapter covers that state.
+Keep generated build, coverage and log output ignored or in `.devproto/` before sealing; do not ignore implementation files to shrink scope. Status/check rows report retained evidence only and do not revalidate this snapshot. Run this read-only verifier before any completion claim and again before ship; a changed file invalidates prior review.
 Never refresh the report hash without a new review of those bytes.
 
 Only an ad-hoc review without a work-id or any open/unknown recorded work baseline may use the configured default branch merge-base

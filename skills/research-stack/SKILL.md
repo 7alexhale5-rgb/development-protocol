@@ -56,7 +56,7 @@ the report:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step research --result pass \
+  --id=<work-id> --step research --result pass \
   --evidence .devproto/evidence/research.md \
   --verify "python3 <research-stack skill folder>/scripts/validate_report.py structure .devproto/evidence/research.md"
 ```

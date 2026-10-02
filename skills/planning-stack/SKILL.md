@@ -25,7 +25,7 @@ Record the step only after the user approves the plan (see Step 6, "Record the a
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step planning --result pass \
+  --id=<work-id> --step planning --result pass \
   --evidence .devproto/evidence/plan-approval.md \
   --instrument <plan file> \
   --verify "python3 <this skill folder>/scripts/plan_approval_check.py .devproto/evidence/plan-approval.md"

@@ -110,7 +110,7 @@ git stash list | wc -l                                   # stashes hold one copy
 ls .devproto 2>/dev/null && python3 "$devproto_dir/scripts/devproto.py" --project . list
 ```
 
-If a work item is open, also run `devproto.py --project . status --id <work-id>` and note its
+If a work item is open, also run `devproto.py --project . status --id=<work-id>` and note its
 `next_step`.
 
 Add the fields only the agent can see:
@@ -222,6 +222,11 @@ Add the failure to **STATE_PAYLOAD.failures**. Step 10 will put
 On success, capture **STATE_PAYLOAD.pr_url**.
 
 ### 4.5: Production matches main
+
+When review_blocked, this step is read-only: report drift, keep local evidence and
+backups, and never merge, push or deploy. Any later outward action requires renewed
+candidate verification and required independent review first.
+
 
 Run this on **every** ship-mode closeout, not only when a claim spans repositories. Widened on
 2026-09-04 after a production site ran a branch 454 files ahead of `main` for five days, and an
@@ -440,6 +445,11 @@ Non-critical: log a failure, never stop the pipeline.
 
 ## Step 9.4: Persist final artifacts and refresh safety
 
+When review_blocked, retain approved artifacts locally with verified backups. Do not
+push, merge or deploy them. Renew final candidate proof and required independent review
+before any later outward action; local persistence does not clear the review blocker.
+
+
 After all session logs, handoffs, lessons and documentation writes, inspect status again.
 Classify every generated artifact as committed and pushed, intentionally local with a
 verified backup, or still unpersisted. Commit and push approved non-receipt artifacts
@@ -469,7 +479,7 @@ fresh main:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step closeout --result pass \
+  --id=<work-id> --step closeout --result pass \
   --evidence .devproto/handoffs/<YYYY-MM-DD>-<slug>.md \
   --verify "grep -q '^## Unknowns' .devproto/handoffs/<YYYY-MM-DD>-<slug>.md && <test command>"
 ```

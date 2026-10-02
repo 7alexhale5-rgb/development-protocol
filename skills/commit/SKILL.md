@@ -15,7 +15,7 @@ lands (step 8), save the commit as evidence and record the row with a verifier t
 ```text
 git log -1 --format='%H %s' > .devproto/evidence/commit.txt
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step commit --result pass --evidence .devproto/evidence/commit.txt \
+  --id=<work-id> --step commit --result pass --evidence .devproto/evidence/commit.txt \
   --verify 'test "$(git rev-parse HEAD)" = "$(cut -d" " -f1 .devproto/evidence/commit.txt)"'
 ```
 

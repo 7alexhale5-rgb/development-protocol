@@ -36,7 +36,7 @@ Record the row when the gate passes and the owner has reviewed every view:
 python3 <this skill folder>/scripts/spec_pack_check.py <pack folder> \
   > .devproto/evidence/visual-spec-check.txt
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step visual-spec --result pass \
+  --id=<work-id> --step visual-spec --result pass \
   --evidence .devproto/evidence/visual-spec-check.txt \
   --instrument <pack folder>/manifest.json --instrument <pack folder>/review-ledger.md \
   --verify "python3 <this skill folder>/scripts/spec_pack_check.py <pack folder>"
