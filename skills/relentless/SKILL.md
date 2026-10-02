@@ -299,3 +299,12 @@ Read the one that fits before you enumerate:
 - `references/research.md`: sources on a topic, to saturation
 - `references/audits.md`: targets crossed with checks, against the live system
 - `references/migrations.md`: every reference to an old thing, until none remain
+
+### Retained read requirements
+
+Enumeration and visits retain `item_kind`; file visits also retain `proof_provider` and
+`read_proof_required`. Later checks use these requirements even after a session change
+or removal of the Codex opt-in flag. Missing required files or transcripts fail.
+A legacy visit without retained kind/provider is unverified until a new real visit
+records and proves it; verification never manufactures provenance. Explicit non-file
+items keep their domain evidence and do not require a file transcript.

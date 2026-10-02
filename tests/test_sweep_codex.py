@@ -1,6 +1,9 @@
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/relentless/scripts"))
+
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "skills/relentless/scripts")
+)
 
 """Staged integration checks; all ledgers/transcripts live in temporary dirs."""
 
@@ -166,6 +169,114 @@ class CodexSweepTests(unittest.TestCase):
         self.write_transcript(receipt(self.target, include_output=False))
         self.assertEqual(self.run_cli("close", "--slug", self.make_ledger()), 1)
 
+    def closed_ledger(self):
+        self.write_transcript(receipt(self.target))
+        self.assertEqual(self.run_cli("close", "--slug", self.make_ledger()), 0)
+        return next((self.root / "sweeps").rglob("ledger.json"))
+
+    def test_missing_file_and_transcript_fail_from_different_session(self):
+        ledger = self.closed_ledger()
+        self.target.unlink()
+        self.transcript.unlink()
+        os.environ["CODEX_THREAD_ID"] = "00000000-0000-4000-8000-000000000002"
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 1)
+
+    def test_missing_proof_fails_without_session_or_opt_in(self):
+        ledger = self.closed_ledger()
+        self.target.unlink()
+        self.transcript.unlink()
+        os.environ.pop("CODEX_THREAD_ID")
+        os.environ.pop("SWEEP_CODEX_READ_PROOF")
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 1)
+
+    def test_required_codex_proof_survives_removed_opt_in(self):
+        ledger = self.closed_ledger()
+        os.environ.pop("SWEEP_CODEX_READ_PROOF")
+        os.environ.pop("CODEX_THREAD_ID")
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 0)
+        self.transcript.unlink()
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 1)
+
+    def test_file_kind_survives_deletion_before_visit(self):
+        self.write_transcript(receipt(self.target))
+        self.assertEqual(
+            self.run_cli(
+                "init",
+                "--slug",
+                "deleted",
+                "--goal",
+                "g",
+                "--done",
+                "d",
+                "--project",
+                str(self.project),
+            ),
+            0,
+        )
+        self.assertEqual(self.run_cli("add", "--slug", "deleted", "test.txt"), 0)
+        self.target.unlink()
+        self.assertEqual(
+            self.run_cli(
+                "visit",
+                "--slug",
+                "deleted",
+                "test.txt",
+                "--depth",
+                "2",
+                "--evidence",
+                "read",
+            ),
+            0,
+        )
+        os.environ.pop("CODEX_THREAD_ID")
+        os.environ.pop("SWEEP_CODEX_READ_PROOF")
+        self.assertEqual(self.run_cli("close", "--slug", "deleted"), 1)
+
+    def test_non_file_items_remain_verifiable_after_session_change(self):
+        self.assertEqual(
+            self.run_cli(
+                "init",
+                "--slug",
+                "domain",
+                "--goal",
+                "g",
+                "--done",
+                "d",
+                "--project",
+                str(self.project),
+            ),
+            0,
+        )
+        self.assertEqual(self.run_cli("add", "--slug", "domain", "company:123"), 0)
+        self.assertEqual(
+            self.run_cli(
+                "visit",
+                "--slug",
+                "domain",
+                "company:123",
+                "--depth",
+                "2",
+                "--evidence",
+                "record checked",
+            ),
+            0,
+        )
+        self.assertEqual(self.run_cli("close", "--slug", "domain"), 0)
+        os.environ.pop("CODEX_THREAD_ID")
+        ledger = next((self.root / "sweeps").rglob("ledger.json"))
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 0)
+
+    def test_legacy_item_without_retained_kind_cannot_certify_deleted_file(self):
+        ledger = self.closed_ledger()
+        data = json.loads(ledger.read_text())
+        for key in ("item_kind", "proof_provider", "read_proof_required"):
+            data["universe"][0].pop(key, None)
+        ledger.write_text(json.dumps(data))
+        self.target.unlink()
+        self.transcript.unlink()
+        os.environ.pop("CODEX_THREAD_ID")
+        self.assertEqual(sweep.verify_ledger(ledger)[0], 1)
+
     def test_failed_refuses_close(self):
         self.write_transcript(receipt(self.target, exit_code=1))
         self.assertEqual(self.run_cli("close", "--slug", self.make_ledger()), 1)
@@ -270,7 +381,19 @@ class CodexSweepTests(unittest.TestCase):
                 }
             )
             + "\n"
-            + json.dumps({"message": {"content": [{"type": "tool_result", "tool_use_id": "claude-read", "content": self.target.read_text()}]}})
+            + json.dumps(
+                {
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "claude-read",
+                                "content": self.target.read_text(),
+                            }
+                        ]
+                    }
+                }
+            )
             + "\n"
         )
         slug = self.make_ledger("claude")
@@ -296,7 +419,19 @@ class CodexSweepTests(unittest.TestCase):
                 }
             )
             + "\n"
-            + json.dumps({"message": {"content": [{"type": "tool_result", "tool_use_id": "claude-read", "content": self.target.read_text()}]}})
+            + json.dumps(
+                {
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "claude-read",
+                                "content": self.target.read_text(),
+                            }
+                        ]
+                    }
+                }
+            )
             + "\n"
         )
         slug = self.make_ledger("mixed")

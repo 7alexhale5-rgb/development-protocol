@@ -585,6 +585,20 @@ def codex_session_proofs(session: str, targets: set[Path]) -> tuple[bool, set[Pa
     return True, result["proved_paths"]
 
 
+def item_path(data: dict, ident: str) -> Path:
+    return Path(ident) if os.path.isabs(ident) else Path(data.get("project") or ".") / ident
+
+
+def visit_provenance(data: dict, item: dict, session: str | None) -> dict:
+    """Retain requirements while evidence exists, never infer them at verify time."""
+    is_file = item.get("item_kind") == "file" or item_path(data, item["id"]).is_file()
+    provider = "unknown"
+    if session:
+        provider = "codex" if session == os.environ.get("CODEX_THREAD_ID") and session != os.environ.get("CLAUDE_CODE_SESSION_ID") else "claude"
+    return {"item_kind": "file" if is_file else "non-file",
+            "proof_provider": provider, "read_proof_required": is_file}
+
+
 def audit_reads(data: dict) -> tuple[list[str], int]:
     """Items at L2+ that are files and were never opened in the transcript of the
     session that visited them. Returns (unverified ids, unauditable count).
@@ -594,26 +608,23 @@ def audit_reads(data: dict) -> tuple[list[str], int]:
     deferred = {d["id"] for d in data.get("deferred", [])}
     cache: dict[str, tuple[bool, set[str], list[tuple[str, str]]]] = {}
     codex_cache: dict[str, tuple[bool, set[Path]]] = {}
-    codex_opt_in = os.environ.get("SWEEP_CODEX_READ_PROOF") == "1"
-    codex_origin: dict[str, bool] = {}
     unverified: list[str] = []
     unauditable = 0
     for it in data.get("universe", []):
         if int(it.get("depth", 0)) < EVIDENCE_FROM or it["id"] in deferred:
             continue
-        p = Path(it["id"]) if os.path.isabs(it["id"]) else project / it["id"]
+        p = item_path(data, it["id"])
         session = it.get("session")
-        if codex_opt_in and session and session not in codex_origin:
-            codex_origin[session] = (
-                session == os.environ.get("CODEX_THREAD_ID")
-                or codex_session_file(session) is not None
-            )
-        is_codex = codex_origin.get(session, False)
-        if not p.is_file():
+        kind = it.get("item_kind")
+        if kind == "non-file" and not p.is_file() and it.get("read_proof_required") is False:
             unauditable += 1
-            if is_codex:
-                unverified.append(it["id"])
             continue
+        if (kind != "file" or it.get("read_proof_required") is not True
+                or it.get("proof_provider") not in {"claude", "codex"} or not p.is_file()):
+            unauditable += 1
+            unverified.append(it["id"])
+            continue
+        is_codex = it["proof_provider"] == "codex"
         if not session:
             unauditable += 1
             unverified.append(it["id"])
@@ -931,6 +942,7 @@ def cmd_add(args) -> int:
                         "evidence": None,
                         "ts": None,
                         "session": None,
+                        "item_kind": "file" if item_path(data, i).is_file() else "non-file",
                     }
                 )
         if not new and not args.allow_empty:
@@ -974,6 +986,7 @@ def cmd_visit(args) -> int:
                 missing.append(ident)
                 continue
             if args.depth > int(it.get("depth", 0)) or args.force:
+                it.update(visit_provenance(data, it, me))
                 it.update(
                     depth=args.depth,
                     evidence=args.evidence,
@@ -994,6 +1007,7 @@ def cmd_visit(args) -> int:
                         "evidence": args.evidence,
                         "ts": now_iso(),
                         "session": me,
+                        **visit_provenance(data, {"id": m}, me),
                     }
                 )
             data.setdefault("enumerations", []).append(
