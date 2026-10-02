@@ -74,12 +74,9 @@ Set these flags:
 
 Check whether the diff touches UI:
 
-Use the exact selected review surface to form a NUL-delimited changed-path list:
-`git diff --name-only -z HEAD` plus `git ls-files -z --others --exclude-standard`
-for default uncommitted scope, `git diff --cached --name-only -z` for staged scope,
-`git diff --name-only -z "$BASE_REF"...HEAD` for branch scope, or explicit files.
-Set `DIFF_TOUCHES_UI=1` if any selected path is a UI component or page. Do not
-substitute a committed branch diff for uncommitted review scope.
+For a work-id review, use the complete frozen Step1a package regardless of mode. Its NUL-delimited changed paths are the union of `git diff --name-only -z "$BASE_REF" HEAD`, `git diff --cached --name-only -z`, `git diff --name-only -z`, and `git ls-files -z --others --exclude-standard`. BASE_REF is the retained intake baseline; file/lens filters never reduce this applicability list. Determine UI routes and DIFF_TOUCHES_UI from that union, including committed UI changes in default mode and uncommitted UI changes in branch mode. A missing baseline is a required gap, never a backend-only classification.
+
+Only genuinely ad-hoc reviews may use the selected narrower surface: default `git diff --name-only -z HEAD` plus untracked files, staged index, configured branch merge-base, or explicitly selected paths. Label the narrower scope. Set DIFF_TOUCHES_UI=1 if any applicable path is a UI component or page.
 
 Pure API or backend changes leave `DIFF_TOUCHES_UI` unset.
 

@@ -412,7 +412,7 @@ def refresh(project: Path, record: dict) -> bool:
     """Reopen a passed step, and every later passed step, when its inputs changed."""
     changed_any, reopen = False, False
     identity = git_identity(project) if any(
-        s["status"] == "passed" and s["step_id"] in RELEASE_STEPS
+        s["status"] == "passed" and (s["step_id"] in RELEASE_STEPS or s["step_id"] == "review")
         for s in record["steps"]
     ) else None
     for step in record["steps"]:
@@ -435,7 +435,7 @@ def refresh(project: Path, record: dict) -> bool:
         )
         step["evidence_stat"] = ev_stat
         identity_changed = (
-            step["step_id"] in RELEASE_STEPS
+            (step["step_id"] in RELEASE_STEPS or step["step_id"] == "review")
             and step.get("git_identity") != identity
         )
         candidate_changed = False
@@ -646,7 +646,7 @@ def step(
                 )
             deps[portable(project, q)] = digest(q)
         sha = digest(ev)
-        identity = git_identity(project) if step_id in RELEASE_STEPS else None
+        identity = git_identity(project) if step_id in RELEASE_STEPS or step_id == "review" else None
         candidate = candidate_snapshot(project) if step_id == "review" and git_identity(project) is not None else None
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
@@ -666,21 +666,19 @@ def step(
             digest(resolve(project, q)) == h for q, h in deps.items()
         )
         identity_stable = (
-            step_id not in RELEASE_STEPS or identity == git_identity(project)
+            (step_id not in RELEASE_STEPS and step_id != "review") or identity == git_identity(project)
         )
         try:
             candidate_stable = candidate is None or candidate == candidate_snapshot(project)
         except (OSError, ValueError):
             candidate_stable = False
         passed = code == 0 and stable and identity_stable and candidate_stable and not earlier
-        if earlier:
-            why = "An earlier step reopened while the verifier ran: " + ", ".join(
-                earlier
-            )
+        if not identity_stable:
+            why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
+        elif earlier:
+            why = "An earlier step reopened while the verifier ran: " + ", ".join(earlier)
         elif not candidate_stable:
             why = "Reviewed candidate changed while the verifier ran. Repeat review."
-        elif not identity_stable:
-            why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
         elif not stable:
             why = (
                 "The verifier changed the evidence or an instrument file. "

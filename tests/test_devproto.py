@@ -94,6 +94,14 @@ class DevprotoTest(unittest.TestCase):
         self.assertEqual(self.rows(out)["review"]["status"], "pending")
         self.assertEqual(self.rows(out)["commit"]["status"], "pending")
 
+    def test_head_change_during_review_verifier_blocks_without_file_changes(self):
+        self.init_git()
+        self.start()
+        self.close_until("review")
+        out = self.pass_step("review", "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -m changed")
+        self.assertFalse(out["ok"])
+        self.assertIn("Git HEAD or branch changed", out["error"])
+
     def test_candidate_mutation_during_review_verifier_blocks(self):
         self.init_git()
         self.start()
@@ -137,12 +145,17 @@ class DevprotoTest(unittest.TestCase):
         self.git("checkout", "-b", "other")
         self.assertFalse(devproto.status(self.project, "w1", "commit")["ready"])
 
-    def test_first_commit_keeps_precommit_progress(self):
+    def test_final_commit_requires_review_renewal_but_keeps_build_proof(self):
         self.init_git()
         self.start()
         self.close_until("commit")
         self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
                  "commit", "--allow-empty", "-m", "work")
+        out = devproto.status(self.project, "w1", "commit")
+        self.assertEqual(self.rows(out)["build"]["status"], "passed")
+        self.assertEqual(self.rows(out)["review"]["status"], "pending")
+        self.pass_step("review")
+        self.pass_step("simplify")
         self.assertTrue(self.pass_step("commit")["ok"])
         self.assertTrue(devproto.status(self.project, "w1", "commit")["ready"])
 
