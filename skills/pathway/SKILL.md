@@ -231,8 +231,9 @@ Do not present a menu.
    - **live**: real users touch it (adds data, observability, release, docs). _Default._
    - **production-secure**: untrusted actors or compliance (adds research, security, techdebt).
      The goal's own words also pull in `design` (UI words), `research` (unknowns) or `data`
-     (schema, migration, import, export). The research card runs `/research-stack --focus <tags>`:
-     use the tags `devproto.py` suggests for the goal, or none if nothing matches. If the user did not say, infer the tier from the goal and
+     (schema, migration, import, export). The research card suggests focus tags
+     (the ones `devproto.py` derives from the goal, or none); confirm them at research-stack's scope
+     gate before passing `--focus`, never apply them silently. If the user did not say, infer the tier from the goal and
      state your pick in one line. Do not interrogate.
 3. Run:
    ```text
