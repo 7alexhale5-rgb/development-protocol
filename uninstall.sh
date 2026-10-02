@@ -61,13 +61,14 @@ while IFS= read -r dest; do
   # whole tree on disk (not just SKILL.md) means it was edited after install.
   if [[ -n "$stored_hash" ]] && [[ "$stored_hash" != "$(tree_hash "$dest")" ]]; then
     [[ -n "$changed_dir" ]] || changed_dir="$state_dir/uninstall-changed-$stamp"
-    run mkdir -p "$changed_dir"
-    run mv "$dest" "$changed_dir/$name"
+    saved="$changed_dir/$(basename "$(dirname "$(dirname "$dest")")")/$name"
+    run mkdir -p "$(dirname "$saved")"
+    run mv "$dest" "$saved"
     # R3-5: dry-run must never claim the move already happened.
     if [[ $dry_run -eq 1 ]]; then
-      echo "[dry-run] would keep changed copy: $name differs from the installed version, would save to $changed_dir/$name"
+      echo "[dry-run] would keep changed copy: $name differs from the installed version, would save to $saved"
     else
-      echo "kept changed copy: $name differs from the installed version, saved to $changed_dir/$name"
+      echo "kept changed copy: $name differs from the installed version, saved to $saved"
     fi
   else
     run rm -rf "$dest"

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Read-audit guidance states its retained-transcript requirement and the missing native Codex
+  transcript adapter. Session ownership does not establish whole-file read proof.
+- Premortem evidence uses verifier-compatible headings. Lighthouse publication locks refuse
+  capture before dependency work, including forced recapture. Replaced-file backups are reported
+  and their exclusions share one append path; all prior copies remain retained.
+- Ad-hoc review proof still needs a request-derived acceptance criterion. Citation validation
+  requires at least one live source and rejects safety-blocked fetches; unverified links remain
+  distinct from dead links. The skill guidance now states those proof requirements.
+- Lighthouse capture rejects incomplete, replayed, redirected and mixed reports, and records
+  durable proof for fresh-clone validation. Setup checks existing proof and helper freshness,
+  preserves replaced helpers and custom exclusions, and refuses stale publication locks.
+- Preview workflow output accepts only valid allowed origins. Warning tuples, including
+  scalar thresholds, become errors when enforcement is requested.
+
 ## 2.0.1 (2026-09-29)
 
 - Release proof rejects failed pipelines, stale concurrent results, unknown Git identity,

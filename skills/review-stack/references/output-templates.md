@@ -89,6 +89,9 @@ is checked, or until the owner accepts it in writing with a reason.
 
 ## 4. Acceptance criteria section
 
+This section is required. Without a plan, use at least one request-derived behavior check
+and cite its executed proof; `--no-criteria` skips plan comparison, not this proof requirement.
+
 ```text
 Plan alignment: {pass_count}/{total_count} criteria met
 

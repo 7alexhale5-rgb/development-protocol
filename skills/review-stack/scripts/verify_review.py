@@ -15,6 +15,8 @@ def validate(data, commit):
         raise ValueError('review gate failed or is missing')
     if not isinstance(data.get('findings'), list) or not isinstance(data.get('criteria'), list):
         raise ValueError('findings and criteria arrays are required')
+    if not data['criteria']:
+        raise ValueError('at least one acceptance criterion is required')
     for finding in data['findings']:
         if not isinstance(finding, dict):
             raise ValueError('malformed finding')

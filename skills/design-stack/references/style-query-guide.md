@@ -20,11 +20,13 @@ one `--style` query becomes three searches:
 ```bash
 # Find the installed search script; the path varies by install method.
 SEARCH=$(find ~ -path '*ui-ux-pro-max*/scripts/search.py' 2>/dev/null | sort -V | tail -1)
-[ -z "$SEARCH" ] && echo "--style: no style database found; using the free fallback" >&2
-
-python3 "$SEARCH" "warm editorial refined" --domain style
-python3 "$SEARCH" "warm editorial" --domain color
-python3 "$SEARCH" "editorial refined" --domain typography
+if [ -n "$SEARCH" ]; then
+  python3 "$SEARCH" "warm editorial refined" --domain style
+  python3 "$SEARCH" "warm editorial" --domain color
+  python3 "$SEARCH" "editorial refined" --domain typography
+else
+  echo "--style: no style database found; using the free fallback" >&2
+fi
 ```
 
 Its domains:

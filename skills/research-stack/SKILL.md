@@ -551,7 +551,10 @@ python3 "$skill_dir/scripts/validate_report.py" all "$report"
   gaps), source tags present and of 2 or more types, report not suspiciously short.
 - **Citations:** each URL (up to 30) gets a HEAD request, then GET if HEAD is refused. An auth
   wall, bot challenge, throttle or server error counts as **unverified, not dead**: cannot-verify
-  is not the same as gone.
+  is not the same as gone. The aggregate check fails with no URLs, no verified live URL,
+  any safety-blocked fetch, or more than five dead URLs. A `BLOCKED` detail means the request
+  was refused, not that the source is gone. Other unverified sources, three to five dead URLs,
+  or URLs beyond the check cap produce a warning when at least one live source remains.
 - **Source quality:** each domain gets a 1 to 10 score: academic and official (9-10) > technical
   (8) > engineering blogs (7) > blogs and news (6) > forums and wikis (5) > social and unknown (4).
 
@@ -578,6 +581,8 @@ Validation Gate
 **Decision matrix:**
 
 - All pass: deliver.
+- Citation fail: replace or re-source the affected claims before delivery. An entirely
+  paywalled or bot-blocked source set cannot establish verified liveness by itself.
 - More than 2 dead citations: flag them in the report and suggest re-running Round 3.
 - Source quality average below 5: warn the user that the sources are mostly informal.
 - Structure fail: fix the report before delivery.

@@ -2,6 +2,43 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-02T11:59:38-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-02T11:50:35-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-02T11:32:52-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-02T10:53:05-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-01T18:39:01-05:00
+
+- skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
+
+Portable re-port of the tested Codex read-proof parser and opt-in sweep integration.
+The Claude successful-result lane stays unchanged. Tests cover complete output, failures,
+truncation, conflicting sessions and changed targets. Read proof never grants runtime
+coverage. Both outside reviews and new exact-head cloud checks remain required.
+
+## 2026-10-01T01:27:20-05:00
+
+Independent review follow-up: the premortem template matches its verifier; Lighthouse
+publication locks refuse capture early and retained backup paths are reported. Ad-hoc review
+and citation guidance now state their proof requirements. Read-audit guidance also states
+its retained-transcript requirement and missing native Codex transcript adapter. These are
+portable maintenance changes, not an upstream re-port; source fingerprints remain unchanged.
+
+## 2026-09-30T21:21:38-05:00
+
+- skill:audit-setup: source fingerprint recorded for drift monitoring; this is not a re-port
+
 ## 2026-09-29T21:01:33-05:00
 
 Public maintenance release 2.0.1 fixes confirmed release-review findings. These are changes to

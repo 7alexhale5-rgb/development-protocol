@@ -128,13 +128,15 @@ Open with the inversion framing, then the table:
 | 1   | [1-line outcome] | H/M/L      | H/M/L  | crit/high/med/low | [the assumption]  | [2-3 searchable signals] | [1-3 concrete plan edits] |
 | 2   | ...              |            |        |                   |                   |                          |                           |
 
-**Top revisions to apply BEFORE building**:
+## Top revisions to apply BEFORE building
 
 1. [most critical revision, from the top-impact chain]
 2. [second most critical]
 3. [third, only if there is a clear gap]
 
-**What this premortem did NOT cover** (out of scope, or assumed adequately handled):
+## What this premortem did NOT cover
+
+Out of scope, or assumed adequately handled:
 
 - [things you chose not to probe; this keeps you honest]
 ```

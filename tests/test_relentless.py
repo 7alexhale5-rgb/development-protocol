@@ -23,7 +23,7 @@ import sweep  # noqa: E402
 import _shared  # noqa: E402 (loaded onto sys.path as a side effect of importing sweep)
 
 CLEAN = ("SWEEP_HOME", "SWEEP_TRANSCRIPTS", "SWEEP_SESSION_ID",
-         "CLAUDE_CODE_SESSION_ID", "RELENTLESS_LOG")  # fmt: skip
+         "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "RELENTLESS_LOG")  # fmt: skip
 
 
 def quiet(fn, *args):
@@ -175,6 +175,47 @@ class Store(unittest.TestCase):
         self.init("demo2", session=None, CLAUDE_CODE_SESSION_ID="claude-id")
         data = json.loads((self.repo / ".sweeps/demo2/ledger.json").read_text())
         self.assertEqual(data["session_id"], "claude-id")
+
+    def test_codex_thread_id_is_recorded_when_no_override_exists(self):
+        self.init("codex", session=None, CODEX_THREAD_ID="codex-thread")
+        data = json.loads((self.repo / ".sweeps/codex/ledger.json").read_text())
+        self.assertEqual(data["session_id"], "codex-thread")
+
+    def test_file_without_auditable_session_cannot_close(self):
+        target = self.repo / "readme.txt"
+        target.write_text("whole file\n")
+        self.init(session=None)
+        self.sweep("add", "--slug", "demo", "readme.txt", session=None)
+        self.sweep(
+            "visit", "--slug", "demo", "readme.txt", "--depth", "2", "--evidence", "read", session=None
+        )
+        result = self.sweep("close", "--slug", "demo", session=None)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("never opened", result.stderr)
+
+    def test_file_with_missing_transcript_cannot_close(self):
+        (self.repo / "readme.txt").write_text("whole file\n")
+        self.init()
+        self.sweep("add", "readme.txt")
+        self.sweep("visit", "readme.txt", "--depth", "2", "--evidence", "read")
+        result = self.sweep("close", "--slug", "demo", SWEEP_TRANSCRIPTS=str(self.other / "missing"))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("never opened", result.stderr)
+
+    def test_old_closed_file_ledger_with_unauditable_reads_fails_verify(self):
+        (self.repo / "readme.txt").write_text("whole file\n")
+        self.init(session=None)
+        self.sweep("add", "--slug", "demo", "readme.txt", session=None)
+        self.sweep(
+            "visit", "--slug", "demo", "readme.txt", "--depth", "2", "--evidence", "read", session=None
+        )
+        closed = self.repo / ".sweeps/demo/ledger.json"
+        data = json.loads(closed.read_text())
+        data.update(status="closed", forced=[], unauditable=1)
+        closed.write_text(json.dumps(data))
+        result = self.sweep("verify", str(closed), session=None)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("unauditable", result.stderr)
 
     def test_verify_reads_a_closed_ledger(self):
         self.init()

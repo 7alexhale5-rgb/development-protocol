@@ -164,7 +164,11 @@ def check_structure(text):
         issues.append(f"WARN: only {words} words, possibly incomplete")
         score -= 2
     score = max(0, score)
-    status = "FAIL" if present != len(SECTIONS) or not tags else ("PASS" if score >= 7 else ("WARN" if score >= 4 else "FAIL"))
+    status = (
+        "FAIL"
+        if present != len(SECTIONS) or not tags
+        else ("PASS" if score >= 7 else ("WARN" if score >= 4 else "FAIL"))
+    )
     lines = [
         f"Structure: {status} ({score}/10)",
         f"  Sections: {present}/{len(SECTIONS)}",
@@ -258,7 +262,7 @@ def _validate_and_pin(host):
     try:
         infos = _real_getaddrinfo(host, None)
     except OSError as exc:
-        raise ValueError(f"could not resolve host {host}: {exc}") from exc
+        raise urllib.error.URLError(exc) from exc
     safe_ip = None
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
@@ -277,7 +281,9 @@ def _validate_and_pin(host):
         if safe_ip is None:
             safe_ip = str(ip)
     if safe_ip is None:
-        raise ValueError(f"no addresses for {host}")
+        raise urllib.error.URLError(
+            socket.gaierror(socket.EAI_NONAME, f"no addresses for {host}")
+        )
     _PINNED_ADDRS[_normalize_host(host)] = safe_ip
     return safe_ip
 
@@ -316,7 +322,8 @@ def _reject_unsafe_url(url):
     loopback, private, link-local, reserved, unspecified or multicast address
     (cloud metadata endpoints like 169.254.169.254 included). Raises
     ValueError; callers turn that into a "dead"/"BLOCKED" citation rather than
-    letting it escape as a crash.
+    letting it escape as a crash. Resolution errors use URLError so ordinary
+    DNS absence stays distinct from an unsafe destination.
 
     As a side effect, records the validated address for this host in
     _PINNED_ADDRS (keyed on its normalised form): see _dns_pinning and
@@ -343,7 +350,9 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-_SAFE_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SafeRedirectHandler)
+_SAFE_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), _SafeRedirectHandler
+)
 
 
 def _default_fetch(url, method, timeout):
@@ -359,8 +368,8 @@ def _default_fetch(url, method, timeout):
 def classify_citation(url, fetch=_default_fetch, timeout=10):
     """Return ('live' | 'dead' | 'unverified', detail).
 
-    Cannot-verify is not dead: an auth wall, a bot challenge, a throttle or a
-    server error says the page may exist, so it is reported, not failed.
+    An auth wall, bot challenge, throttle or server error is unverified, not dead.
+    The aggregate check still needs a live source and refuses any blocked fetch.
     """
     for method in ("HEAD", "GET"):
         try:
@@ -375,6 +384,8 @@ def classify_citation(url, fetch=_default_fetch, timeout=10):
                 pass
         except urllib.error.URLError as e:
             reason = getattr(e, "reason", e)
+            if isinstance(reason, socket.gaierror) and reason.errno == socket.EAI_AGAIN:
+                return "unverified", f"DNS {url} (temporary resolution failure)"
             if isinstance(reason, ssl.SSLError):
                 return "unverified", f"TLS {url}"
             if isinstance(reason, (TimeoutError, socket.timeout)):
@@ -395,16 +406,23 @@ def classify_citation(url, fetch=_default_fetch, timeout=10):
 def check_citations(text, fetch=_default_fetch, timeout=10, cap=30):
     urls = extract_urls(text)
     if not urls:
-        return "WARN", ["Citations: WARN (no URLs found)"]
+        return "FAIL", ["Citations: FAIL (no URLs found; nothing could be verified)"]
     counts = {"live": 0, "dead": 0, "unverified": 0}
     details = []
+    blocked = False
     for url in urls[:cap]:
         kind, detail = classify_citation(url, fetch, timeout)
         counts[kind] += 1
         if detail:
             details.append(f"  {detail}")
+            blocked = blocked or detail.startswith("BLOCKED ")
     dead = counts["dead"]
-    status = "PASS" if dead <= 2 else ("WARN" if dead <= 5 else "FAIL")
+    if blocked or counts["live"] == 0 or dead > 5:
+        status = "FAIL"
+    elif dead > 2 or counts["unverified"] or len(urls) > cap:
+        status = "WARN"
+    else:
+        status = "PASS"
     lines = [
         f"Citations: {status} ({counts['live']} live / {dead} dead / "
         f"{counts['unverified']} unverified / {min(len(urls), cap)} checked)"

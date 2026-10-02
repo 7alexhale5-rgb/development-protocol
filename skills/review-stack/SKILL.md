@@ -35,7 +35,8 @@ DEVPROTO --project <repo> step --id <work-id> --step review --result pass \
   --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)"'
 ```
 
-HARD_FAIL, missing gate data, failed criteria, and unresolved required findings block the
+At least one acceptance criterion with passing evidence is required, even for an ad-hoc
+review without a plan. HARD_FAIL, missing gate data, failed criteria, and unresolved required findings block the
 row regardless of the headline verdict. A fixed outcome needs evidence; rejection needs
 a reason. Deferral is only allowed for explicitly nonrequired, noncritical/nonhigh findings
 with an owner, reason and named acceptance. Re-review and update both reports after fixes.
@@ -61,7 +62,7 @@ From the user's input, extract:
 - **FLAGS**:
   - `--plan path/to/plan.md`: the plan to check against.
   - `--gate hard`: treat all L1 failures as blocking (default: advisory).
-  - `--no-criteria`: skip the acceptance criteria check (for ad-hoc reviews).
+  - `--no-criteria`: skip comparison against a plan; still record a request-derived criterion with evidence.
   - `--json`: output findings as structured JSON (for other tools).
   - `--cap N`: change the finding cap (default 12).
   - `--auto`: run every stage without pausing between layers. Pause only on a BLOCKED verdict.
@@ -136,12 +137,14 @@ Unless `--no-criteria` is set, look for a plan in the conversation, then on disk
 ```
 
 If you find one, extract the acceptance criteria (the `- [ ]` items).
+Without a plan, or with `--no-criteria`, derive at least one checkable criterion from the
+requested behavior. State the assumption and cite its executed proof in the structured result.
 
 ### 1d: Report the scope
 
 > **Review scope:** {N} files ({additions} additions, {deletions} deletions) at commit {sha}
 > **Tooling:** types {yes/no} | lint {yes/no} | tests {yes/no} | security {yes/no}
-> **Plan:** {found at path | not found, skipping criteria check}
+> **Plan:** {found at path | none, using request-derived criteria}
 > **Depth:** {quick | default | deep | audit}
 
 ---
@@ -497,9 +500,10 @@ criteria), BLOCKED (any critical). In audit mode also READY TO SHIP and SHIP WIT
 List every finding in the Step 5d structure. Leave an "Outcome" line on each for the builder to
 fill: fixed, rejected with reason, or deferred with owner.
 
-### Acceptance criteria (if a plan exists)
+### Acceptance criteria
 
 List each criterion with its PASS, FAIL, PARTIAL or CANNOT VERIFY verdict and the gap.
+For an ad-hoc review, identify the request-derived criterion and its evidence.
 
 ### Suggested next steps
 
@@ -582,7 +586,7 @@ Invocation examples: `references/output-templates.md` (section "Agent isolation"
 | Test suite             | No tests                                 | Skip coverage. Flag it as a finding ("no test coverage")                                                                                                  |
 | Security scanner       | No semgrep                               | AI security review only (L3)                                                                                                                              |
 | Dead code tool         | No knip                                  | Skip. Note it in the report                                                                                                                               |
-| Plan                   | No plan found                            | Skip the criteria check. Review code quality only                                                                                                         |
+| Plan                   | No plan found                            | Review code quality and record at least one request-derived criterion with passing evidence                                                               |
 | Git                    | Not a repository                         | Review the named files without diff context                                                                                                               |
 | Dev server             | No `dev` script                          | Skip local L4. Try a preview URL if one is set. Otherwise note "no runtime target, L4 skipped"                                                            |
 | Playwright             | Not installed                            | Use any browser tool for a page-load smoke check. Skip structured end-to-end tests                                                                        |

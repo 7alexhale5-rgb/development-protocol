@@ -44,8 +44,12 @@ for root in "${roots[@]}"; do
     if [[ "$name" != "$s" ]]; then bad "$s: frontmatter name is '$name'"; continue; fi
     while IFS= read -r asset; do
       relative="${asset#"$here/skills/$s/"}"
-      [[ -f "$root/$s/$relative" ]] || bad "$s: required asset missing: $relative"
-    done < <(find "$here/skills/$s" -type f \( -name '*.py' -o -name '*.sh' \))
+      if [[ ! -f "$root/$s/$relative" ]]; then
+        bad "$s: required asset missing: $relative"
+      elif ! cmp -s "$asset" "$root/$s/$relative"; then
+        bad "$s: installed asset differs: $relative"
+      fi
+    done < <(find "$here/skills/$s" -type d -name '__pycache__' -prune -o -type f ! -name 'SKILL.md' -print)
     if cmp -s "$f" "$here/skills/$s/SKILL.md"; then ok "$s"; else note "$s differs from this repo copy (older install? re-run install.sh)"; fi
   done
   dp="$root/development-protocol/scripts/devproto.py"
@@ -60,6 +64,18 @@ for root in "${roots[@]}"; do
     rm -rf "$tmp"
   else
     bad "required checklist tool missing"
+  fi
+  pathway="$root/pathway/scripts/pathway.py"
+  if [[ -f "$pathway" ]]; then
+    tmp="$(mktemp -d)"
+    if python3 "$pathway" --project "$tmp" doctor >/dev/null 2>&1; then
+      ok "pathway tool runs"
+    else
+      bad "pathway tool failed its doctor check"
+    fi
+    rm -rf "$tmp"
+  else
+    bad "required pathway tool missing"
   fi
 done
 
