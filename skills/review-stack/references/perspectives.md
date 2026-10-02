@@ -7,11 +7,11 @@ Every perspective has:
 
 - a **focus list** (what it checks),
 - an **exclusion list** (what it leaves to others),
-- a **quality threshold** (when "No findings." triggers a retry with a stronger model),
+- a **coverage check** (missing evidence or capability may need another pass),
 - an **output format**.
 
-Each returns 0 to 5 findings, highest severity first, in at most about 2,000 tokens. The skeptic
-returns 1 to 5, never 0.
+Each returns 0 to 5 supported findings, highest severity first, in at most about 2,000 tokens.
+An evidence-backed clean review is valid for every lens, including the skeptic.
 
 ## Contents
 
@@ -51,7 +51,8 @@ Each finding: Title [{severity}], File:{line}, Evidence, Issue or Challenge, Fix
 
 ## Rules
 - At most 5 findings, highest severity first.
-- If you find nothing worth reporting, return "No findings." (The skeptic may not do this.)
+- If no supported issue exists, return "No findings." with checked scope and coverage limits.
+- Apply the development contract. Do not spawn children or retry solely for zero findings.
 - Return ONLY structured findings as markdown.
 - No preamble, no analysis paragraphs, no summary. Start directly with the first finding.
 - Max output: 2000 tokens.
@@ -90,7 +91,8 @@ quality conscience of the team, the built-in devil's advocate that runs on every
 **Canonical brief:** `brainstorm-stack/references/skeptic.md` is the one copy of the skeptic's
 doctrine (the five core questions, hallucination and assumption patterns, the simplicity filter,
 "what the skeptic is not", and the quality threshold). Read it and follow it for this pass, using
-the code-format frame described there.
+the code-format frame described there. The development contract overrides any finding
+quota or clean-review retry in that brief.
 
 For a full claim-by-claim check of research output, use `/devilsadvocate` instead. The skeptic
 covers the "is this code earning its complexity?" layer automatically.
@@ -132,7 +134,8 @@ Focus ONLY on:
 Do NOT flag: security issues, architecture or boundary concerns, missing tests, or problems in
 unchanged code.
 
-**Quality threshold:** 0 findings on a diff of 100 lines or more means escalate.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{warn|info}]
@@ -161,8 +164,8 @@ Focus ONLY on:
 Do NOT flag: private helpers tested through their public API, test style or layout, security,
 architecture or quality concerns, trivial getters and setters, or config constants.
 
-**Quality threshold:** new public functions (new `export function`, `def`, class methods or route
-handlers) with 0 findings means escalate.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{warn|info}]
@@ -193,8 +196,8 @@ Focus ONLY on:
 Do NOT flag: style or organization, performance, missing tests, or theoretical risks with no
 concrete attack path in this code.
 
-**Quality threshold:** 0 findings on 50 or more lines that touch user input, API endpoints or auth
-logic means escalate.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{critical|warn|info}] [OWASP:A0X]
@@ -225,7 +228,8 @@ Focus ONLY on:
 
 Do NOT flag: security, performance, test gaps, or formatting.
 
-**Quality threshold:** 0 findings on 50 or more lines of new code (not just edits) means escalate.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{critical|warn|info}]
@@ -257,8 +261,8 @@ Focus ONLY on:
 Do NOT flag: micro-optimizations that do not matter, performance in tests or build scripts,
 theoretical issues with no concrete hot path, or other perspectives' concerns.
 
-**Quality threshold:** 0 findings on changes to database, API or rendering code means escalate.
-Performance issues there are common and easy to miss.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{critical|warn|info}]
@@ -293,9 +297,8 @@ Focus ONLY on:
 Do NOT flag: visual taste, performance, security or architecture, issues in unchanged code, or
 theoretical issues. Only flag concrete violations with a specific WCAG criterion.
 
-**Quality threshold:** 0 findings on UI changes with interactive elements (`<button>`, `<input>`,
-`<a>`, `onClick`, `role=`, `<dialog>`, `<form>`) means escalate. Interactive UI changes almost
-always have at least one gap.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{critical|warn|info}]
@@ -334,8 +337,8 @@ Focus ONLY on:
 Do NOT flag: accessibility, security, quality or architecture, micro-optimizations that do not
 move a Core Web Vital, or dev-only code.
 
-**Quality threshold:** 0 findings on page-level changes (layouts, pages, components imported in
-layouts, new dependencies) means escalate.
+**Coverage check:** retry only for missing evidence or a concrete capability gap.
+A clean verdict alone never triggers a retry.
 
 ```text
 - **{Title}** [{critical|warn|info}]

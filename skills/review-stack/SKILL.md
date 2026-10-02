@@ -149,16 +149,17 @@ requested behavior. State the assumption and cite its executed proof in the stru
 
 ---
 
-## Step 2: Spawn analysis perspectives
+## Step 2: Run analysis perspectives
 
 **For `--quick`, run only the skeptic.**
 
-While L1 static checks run (Step 2.5), start the review perspectives in parallel. Each looks at the
-code from one angle. Collect their results after L1 finishes.
-
-If your agent supports helper agents, run each perspective as a background helper, all in one
-message. If it does not, run each perspective yourself as a separate pass after L1, reading only
-the payload and that perspective's rules.
+Read the installed `development-protocol/reference.md` (under the skill root; the repo copy
+is `skills/development-protocol/reference.md`) for the governing development contract.
+Review the complete recorded BASE..HEAD diff and acceptance evidence, not HEAD~1.
+Perspectives are lenses, not a required agent count. A root may run independent lenses in
+batches of at most two children, with explicit ownership and no nested delegation. Interrupt
+finished children. A child reviewer runs every selected lens locally and never spawns agents.
+Missing independent review remains a gap; self-review cannot satisfy it.
 
 ### 2a: Pick perspectives by depth
 
@@ -170,7 +171,7 @@ the payload and that perspective's rules.
 | `--audit` | skeptic, security, architecture, code-quality, test-coverage, performance, accessibility, lighthouse | plan-conformance, cross-file-impact                    |
 
 The **skeptic** always runs, at every depth. It is the quality conscience that keeps the review
-honest about value and sloppiness. It always returns at least one finding.
+honest about value and sloppiness. Zero evidence-backed findings is a valid result.
 
 The **code-quality** perspective enforces DRY (no duplication), KISS (no unjustified complexity),
 YAGNI (no speculative generality), SOLID (no tangled responsibilities), no unnecessary elements,
@@ -192,12 +193,13 @@ CONTEXT_PAYLOAD:
   - adjacent_files: "{2 or 3 files next to the changes}"       (architecture only)
 ```
 
-### 2c: Start them together
+### 2c: Apply the bounded review contract
 
-Start every selected perspective at once, using the templates in `references/perspectives.md`.
-Registry perspectives use the shared template. Security adds the OWASP block. Plan-conformance and
-cross-file-impact use their own inline templates. Use a fast, cheap model for the first pass if
-your agent lets you choose.
+Use the templates in `references/perspectives.md`. Root reviewers may batch disjoint
+perspectives two at a time; child reviewers perform them locally. Supply the governing
+contract, recorded baseline, complete candidate diff, acceptance checks and return budget
+in every fresh-session prompt. Model and provider availability must be verified rather
+than inferred from an account label. Retain both required outside reviews separately.
 
 ### 2d: Go straight on to L1
 
@@ -239,17 +241,12 @@ should finish in 30 to 60 seconds.
 
 ```text
 FOR each perspective result:
-  IF result is empty or an error:
-    Log: "{name}: failed, skipping"
-  ELIF result is "No findings." AND the perspective always runs (skeptic):
-    This should not happen. Retry with a stronger model.
-  ELIF result is "No findings." AND the diff is 50 lines or more AND the perspective's area is touched:
-    Retry with a stronger model, adding: "The first review found nothing. Look harder."
-  ELIF the retry also returns "No findings.":
-    Accept as clean. Note: "{name}: clean (checked 2x)"
+  IF result is empty, an error, or lacks required coverage:
+    Record the missing review and its reason. Retry only for that concrete capability gap.
+  ELIF result is "No findings." with the checked scope and coverage limits:
+    Accept it. Never retry solely because findings are zero or the diff is large.
   ELSE:
-    Parse the findings into the shared finding pool.
-    Tag each with its source: [perspective:{name}]
+    Parse supported findings and tag their perspective; verify claims before remediation.
 ```
 
 ### Merge into the finding pool
@@ -566,8 +563,9 @@ gate and verdict, clearing stale issues.
 
 This skill runs apart from the building context. Three ways:
 
-- As a helper agent: give it the instruction "Run /review-stack --branch --plan <path> and return
-  the full verification report." Use a stronger model, or a different model family, than the one
+- As a helper agent: give it the instruction "Load the development contract, review the recorded BASE..HEAD
+  and complete package against the plan, run selected lenses locally without children, accept
+  evidence-backed clean results, and return the full report with gaps." Use a stronger model, or a different model family, than the one
   that wrote the code.
 - As a fresh session: start a new session in the repository and run
   `/review-stack --branch --plan .planning/<phase>/PLAN.md`.
