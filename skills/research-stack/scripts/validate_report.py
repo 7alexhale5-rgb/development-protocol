@@ -3,11 +3,16 @@
 
 Usage:
   validate_report.py structure <report.md>
+  validate_report.py focus     <report.md>
   validate_report.py citations <report.md> [--timeout 10] [--max 30]
   validate_report.py sources   <report.md>
   validate_report.py all       <report.md> [--offline]
 
 Each check prints a one-line verdict (PASS, WARN or FAIL) and detail lines.
+When the report's front matter declares `focus: [tag, ...]`, `structure` also
+runs the focus check: every tag must be known (focus/tags.json), its addendum
+section must be present, and the report should cite at least one source from
+that tag's stack.
 Exit 0 on PASS or WARN, 1 on FAIL, 2 on a usage error. The script only reads
 the report; it never writes to it, so it is safe as a checklist verifier.
 """
@@ -15,6 +20,8 @@ the report; it never writes to it, so it is safe as a checklist verifier.
 import argparse
 import contextlib
 import ipaddress
+import json
+import os
 import re
 import socket
 import ssl
@@ -45,7 +52,42 @@ TAGS = {
     "NB",
     "CACHE",
     "perspective",
+    "AUDIT",
+    "GM",
+    "GQ",
+    "L30",
+    "XS",
+    "PAR",
+    "KAGI",
 }
+
+
+def _find_manifest():
+    """Locate focus/tags.json: the standalone layout (../focus) or the ported one
+    (../references/focus). RESEARCH_STACK_FOCUS overrides both."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.environ.get("RESEARCH_STACK_FOCUS", ""),
+        os.path.join(here, "..", "focus", "tags.json"),
+        os.path.join(here, "..", "references", "focus", "tags.json"),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def load_manifest(path=None):
+    path = path or _find_manifest()
+    if not path:
+        return {"tags": {}, "bundles": {}}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+MANIFEST = load_manifest()
+for _lens in MANIFEST["tags"].values():
+    TAGS.update(_lens.get("source_tags", []))
 
 # (aliases, penalty). The first alias is the name printed when missing.
 SECTIONS = [
@@ -115,6 +157,29 @@ DOMAIN_MAP = [
 ]
 
 
+def lens_authorities(tags, manifest=None):
+    """Authorities of the active lenses only. A report on one area should not gain trust for
+    citing another lens's domains (youtube.com is an authority for content, not for security)."""
+    manifest = manifest or MANIFEST
+    known = {d for d, _ in DOMAIN_MAP}
+    out = []
+    for tag in tags:
+        for domain in manifest.get("tags", {}).get(tag, {}).get("authorities", []):
+            if domain not in known and domain not in out:
+                out.append(domain)
+    return out
+
+NO_FOCUS = {"none", "null", "~", "-"}
+FRONT_MATTER_RE = re.compile(r"\A\s*---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
+FOCUS_LINE_RE = re.compile(r"^focus:\s*(.*)$", re.MULTILINE)
+DEPTH_LINE_RE = re.compile(r"^depth:\s*([\w-]+)", re.MULTILINE)
+# Dashboard lines a --deep run must record (SKILL.md Steps 6.6 and 8.5). A run can skip a
+# step silently and still pass structure; these lines make the skip visible.
+PERSPECTIVES_RE = re.compile(r"^\W*Perspectives:\s*(.*)$", re.MULTILINE | re.IGNORECASE)
+ATTRIBUTION_RE = re.compile(r"^\W*Attribution:\s*.*?(\d+)\s*/\s*(\d+)", re.MULTILINE | re.IGNORECASE)
+INTERNAL_RE = re.compile(r"^\W*Internal round:\s*(.*)$", re.MULTILINE | re.IGNORECASE)
+
+
 def read(path):
     with open(path, encoding="utf-8") as f:
         return f.read()
@@ -134,6 +199,59 @@ def extract_tags(text):
         if heads and all(h in TAGS for h in heads):
             found.extend(heads)
     return found
+
+
+def declared_focus(text):
+    """Return the focus tags named in the report's front matter, or []."""
+    m = FRONT_MATTER_RE.match(text)
+    if not m:
+        return []
+    line = FOCUS_LINE_RE.search(m.group(1))
+    if not line:
+        return []
+    raw = line.group(1).strip().strip("[]")
+    tags = [t.strip().strip("\"'").lstrip("#").lower() for t in raw.split(",") if t.strip()]
+    return [t for t in tags if t not in NO_FOCUS]
+
+
+def declared_depth(text):
+    m = FRONT_MATTER_RE.match(text)
+    if not m:
+        return ""
+    d = DEPTH_LINE_RE.search(m.group(1))
+    return d.group(1).lower() if d else ""
+
+
+def check_process(text):
+    """On a --deep report, require the dashboard to record the perspectives that ran, the
+    attribution spot-check result and the internal round. Missing records are WARN: the
+    report may be right, but nobody can tell whether the steps happened."""
+    if declared_depth(text) != "deep":
+        return "PASS", ["Process: PASS (not a --deep report)"]
+    issues = []
+    persp = PERSPECTIVES_RE.search(text)
+    if not persp or not re.search(r"\d", persp.group(1)):
+        issues.append("WARN: no 'Perspectives:' dashboard line with counts (Step 6.6)")
+    attr = ATTRIBUTION_RE.search(text)
+    if not attr:
+        issues.append("WARN: no 'Attribution: N/N' dashboard line (Step 8.5 spot-check)")
+    elif int(attr.group(1)) < int(attr.group(2)):
+        issues.append(f"WARN: attribution {attr.group(1)}/{attr.group(2)}: fix or drop unsupported claims")
+    if not INTERNAL_RE.search(text):
+        issues.append("WARN: no 'Internal round:' dashboard line (Round 1.5, or say why it was skipped)")
+    status = "WARN" if issues else "PASS"
+    return status, [f"Process: {status}"] + [f"  - {i}" for i in issues]
+
+
+def expand_focus(tags, manifest=None):
+    """Expand bundles and drop duplicates, keeping order. Unknown names pass through."""
+    manifest = manifest or MANIFEST
+    out = []
+    for tag in tags:
+        for t in manifest.get("bundles", {}).get(tag, [tag]):
+            if t not in out:
+                out.append(t)
+    return out
 
 
 def has_section(text, alias):
@@ -178,13 +296,42 @@ def check_structure(text):
     return status, lines
 
 
-def classify_url(url):
+def check_focus(text, manifest=None):
+    """Focus addenda: one required section per declared tag, plus lens sources."""
+    manifest = manifest or MANIFEST
+    tags = expand_focus(declared_focus(text), manifest)
+    if not tags:
+        return "PASS", ["Focus: PASS (no focus declared)"]
+    lenses = manifest.get("tags", {})
+    issues, fail = [], False
+    used = set(extract_tags(text))
+    for tag in tags:
+        lens = lenses.get(tag)
+        if lens is None:
+            known = ", ".join(sorted(lenses)) or "none (manifest not found)"
+            issues.append(f"FAIL: unknown focus tag '{tag}' (known: {known})")
+            fail = True
+            continue
+        if not has_section(text, lens["addendum"]):
+            issues.append(f"FAIL: focus '{tag}' needs a '{lens['addendum']}' section")
+            fail = True
+        if not used.intersection(lens.get("source_tags", [])):
+            issues.append(
+                f"WARN: focus '{tag}' cites none of its stack "
+                f"({', '.join(lens.get('source_tags', []))}); say which tools were unavailable"
+            )
+    status = "FAIL" if fail else ("WARN" if issues else "PASS")
+    return status, [f"Focus: {status} ({', '.join(tags)})"] + [f"  - {i}" for i in issues]
+
+
+def classify_url(url, authorities=()):
+    """Tier for a URL. `authorities` are the active lenses' domains, ranked official."""
     try:
         parsed = urlparse(url)
         domain = (parsed.hostname or "").lower().rstrip(".")
     except ValueError:
         return "unknown"
-    for pattern, tier in DOMAIN_MAP:
+    for pattern, tier in DOMAIN_MAP + [(d, "official") for d in authorities]:
         if domain == pattern or domain.endswith("." + pattern):
             return tier
     if domain.endswith(".edu"):
@@ -198,9 +345,10 @@ def check_sources(text):
     urls = extract_urls(text)
     if not urls:
         return "WARN", ["Source Quality: WARN (no URLs found)"]
+    authorities = lens_authorities(expand_focus(declared_focus(text)))
     tiers = {}
     for url in urls:
-        tiers.setdefault(classify_url(url), []).append(url)
+        tiers.setdefault(classify_url(url, authorities), []).append(url)
     scores = [TIER_SCORES[t] for t, us in tiers.items() for _ in us]
     avg = sum(scores) / len(scores)
     status = "PASS" if avg >= 6 else ("WARN" if avg >= 4 else "FAIL")
@@ -434,7 +582,7 @@ def check_citations(text, fetch=_default_fetch, timeout=10, cap=30):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Validate a research-stack report.")
-    p.add_argument("check", choices=["structure", "citations", "sources", "all"])
+    p.add_argument("check", choices=["structure", "focus", "process", "citations", "sources", "all"])
     p.add_argument("report")
     p.add_argument("--timeout", type=float, default=10)
     p.add_argument("--max", type=int, default=30, help="max URLs to check")
@@ -448,6 +596,10 @@ def main(argv=None):
     results = []
     if a.check in ("structure", "all"):
         results.append(check_structure(text))
+    if a.check in ("structure", "focus", "all") and (a.check == "focus" or declared_focus(text)):
+        results.append(check_focus(text))
+    if a.check in ("process", "all") or (a.check == "structure" and declared_depth(text) == "deep"):
+        results.append(check_process(text))
     if a.check == "citations" or (a.check == "all" and not a.offline):
         results.append(check_citations(text, timeout=a.timeout, cap=a.max))
     if a.check in ("sources", "all"):

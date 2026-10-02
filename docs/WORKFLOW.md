@@ -9,7 +9,9 @@ sessions at once, all day.
 - Start every piece of work with a prepared prompt: the goal, the context, the constraints, links to
   what exists. A little direction up front saves hours of iteration later.
 - Give `/development-protocol` any existing research and plan. It verifies those inputs or routes
-  missing research and planning before the build. A thin plan gives a thin build.
+  missing research and planning before the build. A thin plan gives a thin build. Aim research with focus tags:
+  `/research-stack --focus devtools,security` for architecture, `--focus ui-ux,a11y` for UI,
+  `#launch` for a launch.
 - Use your strongest model for reasoning, research and the spec. It has to account for every
   variable. Implementation of a good spec can go to a faster, cheaper model.
 - If your agent has a goal mode, set the goal first, then run the protocol with full context, and

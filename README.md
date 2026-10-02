@@ -53,7 +53,7 @@ Needs Python 3.9+ and git. No packages to install; every script is standard libr
 | `/development-protocol` | The conductor: runs the 17 rows, keeps the checklist, reports                                    |
 | `/pathway`              | Starts each piece of work, picks the lane, tracks one work id                                    |
 | `/brainstorm-stack`     | Surfaces the real goal and the decisions before planning                                         |
-| `/research-stack`       | Multi-source research with cited, corroborated findings (free sources by default)                |
+| `/research-stack`       | Multi-source research with cited findings, optional focus lenses (free sources by default)       |
 | `/karpathy`             | `spec`: pin the goal and the check first. `verify`: second-model critic plus real-artifact proof |
 | `/planning-stack`       | A plan in 3 to 5 phases, each with a number that proves it moved                                 |
 | `/visual-spec`          | Screens, flows and data mapped and machine-checked before UI is built                            |

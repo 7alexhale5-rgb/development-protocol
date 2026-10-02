@@ -2,6 +2,28 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-02T13:26:41-05:00
+
+- skill:research-stack: re-ported from upstream research-stack 3.2.1 (`3af6987`). New: hunter/gatherer
+  mode (SKILL.md Step 3H and the `--hunt` / `--no-hunt` flags), `scripts/gather.py` (rubric
+  scorer, keep/drop/requote/escalate router, agreement and eval commands, optional Jev scorer in
+  shadow mode), `references/hunter-gatherer.md` and `references/jev-question-design.md`, with the
+  gather tests and fixtures under `tests/`. Fixes carried over: `validate_report.py` warns when a
+  `--deep` report does not record perspectives, attribution or the internal round, ranks only the
+  active lenses' authorities as official, and reads `focus: none` as no focus; `focus_check.py`
+  walks fallback chains and plans from a given lens folder; the `claude-subagent` and `jev`
+  registry entries; the dashboard Gatherer line; the perf and seo lens wording. `tags.json` is
+  now byte-equal to upstream. `FOCUS_HINTS` in `devproto.py` already matched the upstream
+  triggers, which did not change.
+- Left out on purpose: `references/power-tier.md` (local extras: Gemini CLI, Groq, NotebookLM,
+  last30days, vault notes), as in the earlier port. The upstream research dossier and its run
+  data (`docs/research/`) are not bundled; vendor prices, vendor speed claims and the reseller's
+  company name are stripped from the Jev text. Jev stays optional, paid and in shadow mode.
+- Source lock: `sync/sources.lock.json` is left unchanged. The recorded hashes come from the
+  maintainer's drift check, which cannot run from this repo, so the next drift check should
+  re-record `skill:research-stack` after confirming this port.
+- Version 2.3.0.
+
 ## 2026-10-02T11:59:38-05:00
 
 - skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
@@ -18,6 +40,19 @@ Every re-port, source baseline, and public maintenance change, newest first.
 
 - skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
 
+## 2026-10-01T18:46:20-05:00
+
+- skill:research-stack: re-ported the upstream comms lens (voice, SMS and dialers; CPaaS versus
+  UCaaS). New `references/focus/comms.md` and a 12th tag in `references/focus/tags.json` (between
+  `data-infra` and `legal`, addendum "Telephony and messaging plan"), plus 7 registry tools:
+  RingCentral, Twilio, Telnyx, Aircall, Dialpad, CallRail and FCC, eCFR and CTIA rules (83 tools).
+  `data-infra` authorities gain vercel.com, supabase.com and opentelemetry.io; `devtools`
+  triggers also match api, sdk, integration and webhook. The lens's pathway line points to
+  `/pathway`, as in the other lenses. Nothing dropped: the new entries hold no private material.
+- skill:development-protocol: `FOCUS_HINTS` in `devproto.py` mirrors the new and changed triggers.
+- tests: `test_focus.py` gains the upstream dialer-topic regression test.
+- Version 2.2.0.
+
 ## 2026-10-01T18:39:01-05:00
 
 - skill:relentless: source fingerprint recorded for drift monitoring; this is not a re-port
@@ -26,6 +61,29 @@ Portable re-port of the tested Codex read-proof parser and opt-in sweep integrat
 The Claude successful-result lane stays unchanged. Tests cover complete output, failures,
 truncation, conflicting sessions and changed targets. Read proof never grants runtime
 coverage. Both outside reviews and new exact-head cloud checks remain required.
+
+## 2026-10-01T13:05:28-05:00
+
+- Repo layout: agent routing by the ICM folder method. A root `CLAUDE.md` router (with an
+  `AGENTS.md` symlink for Codex), a `CONTEXT.md` system map, and one `CONTEXT.md` contract each
+  for `skills/`, `docs/`, `tests/`, `sync/`, `.claude-plugin/` and `.github/`. No files moved,
+  nothing installed changes: `install.sh` copies only `skills/<name>/` folders that hold a
+  `SKILL.md`. Not a user-visible change, so no version bump.
+
+## 2026-10-01T12:50:53-05:00
+
+- skill:research-stack: research-stack re-ported from v3 (focus lenses). Eleven lenses and the tag
+  manifest now ship under `references/focus/`, with the tool registry, `focus_check.py` and a
+  validator that enforces focus addenda. Dropped: the power tier (local extras), config file
+  reading, and notes-vault paths. Person-specific connectors became generic "if your team has
+  one" entries.
+- skill:1pct: re-ported the "External unknowns go to research, not to the user" rule.
+- skill:development-protocol: `devproto.py` suggests `/research-stack --focus <tags>` from the
+  goal when the research row turns on. Lane docs and callers pass focus tags through.
+- Source lock: not updated. The recorded hashes come from the maintainer's drift check, whose
+  method could not be reproduced here (no plain SHA-256 of the source SKILL.md or any of its
+  committed versions matches). The next drift check should re-record `skill:research-stack` and
+  `skill:1pct` after confirming this port.
 
 ## 2026-10-01T01:27:20-05:00
 
@@ -38,6 +96,7 @@ portable maintenance changes, not an upstream re-port; source fingerprints remai
 ## 2026-09-30T21:21:38-05:00
 
 - skill:audit-setup: source fingerprint recorded for drift monitoring; this is not a re-port
+
 
 ## 2026-09-29T21:01:33-05:00
 

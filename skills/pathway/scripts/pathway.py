@@ -100,9 +100,11 @@ CARDS = {
         "git host CLI (optional)",
     ),
     "research": (
-        "/research-stack",
-        ["/research-stack", "/devilsadvocate"],
-        "Answer the open unknowns from primary sources before anyone builds.",
+        "/research-stack --focus <tags>",
+        ["/research-stack --focus <tags>", "/devilsadvocate"],
+        "Answer the open unknowns from primary sources before anyone builds. Confirm the focus tags"
+        " the checklist suggests from the goal (for example ui-ux,a11y or devtools,security) at the"
+        " research scope gate, then pass them.",
         "Every claim in research.md names a source a second reader can open.",
         ".devproto/evidence/research.md",
         "web search and docs lookup (optional)",

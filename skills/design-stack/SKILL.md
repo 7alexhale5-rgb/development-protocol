@@ -140,7 +140,9 @@ reference shots and named tokens enter the context first.
 
 Before Step 0.5, pull 2 or 3 concrete references keyed to the goal: the project's own DESIGN.md
 tokens, a team design library if the project points to one, and live products or source studies
-that fit the brief. Show them once, inline:
+that fit the brief. For pre-design pattern research (how shipped products solve this flow, with
+usability evidence), run `/research-stack --focus ui-ux` (add `a11y` when the flow has forms or
+dialogs). Show them once, inline:
 
 ```text
 > Taste prime:

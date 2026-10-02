@@ -23,6 +23,8 @@ date: {YYYY-MM-DD}
 type: research
 topic: "{TOPIC}"
 depth: {auto-shallow|default|deep}
+focus: [{tags, or leave the list empty}]
+target: {URL / repo / path, or none}
 ---
 
 ## Research: {TOPIC}
@@ -55,6 +57,11 @@ depth: {auto-shallow|default|deep}
 - {each sub-question left under-covered and why}, or "none: every sub-question met the 2-source or
   1-authoritative bar"
 
+### {Focus addendum, one per active tag, e.g. "SEO scorecard" or "Threat and advisory table"}
+
+{the table from references/focus/<tag>.md "Report addendum": every row has a specific and a
+source tag; an unavailable tool is named in its row, never filled with a guess}
+
 ### Sources
 
 - {every URL fetched, one per line}
@@ -79,11 +86,14 @@ Research Stack report
 |- Index search: {service} {n} calls | or "not configured"
 |- YouTube: {n} transcripts | or "skipped (not --deep/--youtube)"
 |- Internal round: {sources} | or "unavailable (headless)" / "not relevant"
+|- Focus: {tags} | per tag: {tools used} / {tools missing -> fallback} | audit: {target or "none"}
 |- Compression: {n} pages | {self | subagent | hosted model name}
+|- Gatherer: {scorer} | {N} cards | keep {k} / drop {d} / requote {r} / escalate {e} / flagged {f} | re-hunt {list or "none"} | or "off (single context)"
 |- Synthesis assist: {model or subagent} | "skipped (not --deep)" | "unavailable"
 |- Perspectives: {N} run | {N} with findings | {N} escalated
 |  |- skeptic: {N} findings
 |  `- {name}: {N} findings | "clean (verified 2x)" | "failed" | "skipped"
+|- Attribution: {N}/{N} spot-checked claims supported | "skipped (not --deep/--validate)"
 |- Validation: {PASS | WARN | FAIL | skipped}
 |- Cache: {path to the cache file}
 |- Est. total cost: ${X.XX} ($0.00 on a free-only run)
@@ -105,6 +115,8 @@ date: {YYYY-MM-DD}
 type: research
 topic: "{TOPIC}"
 depth: {depth}
+focus: [{tags}]
+target: {target or none}
 sub_questions: {N}
 sources_count: {N}
 ---
