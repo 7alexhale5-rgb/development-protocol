@@ -343,7 +343,7 @@ Preflight only. Safe anywhere.
 
 | Situation                     | Behavior                                                                                                                      |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| No `package.json`             | Stop: "Not a Node project. Run from a package root." For the checklist row itself, see "Non-Node repos" above.                |
+| No `package.json`             | Do not initialize here. Inspect affected package roots, including nested web/app; run from an applicable package root. Otherwise use "Projects without an affected web runtime" below.                |
 | Unknown framework             | Set up Lighthouse, axe and knip. Skip the bundle check: "needs Next.js, Vite or a known build."                               |
 | Node older than 18            | Stop the Lighthouse and axe steps: "Upgrade Node first."                                                                      |
 | Node 18 to 22.18              | Install Lighthouse 12.6.1, the last release for older Node. Say so.                                                           |
@@ -406,37 +406,27 @@ If a tool genuinely does not apply (an API-only project needs no bundle check), 
 in the evidence. If a required tool failed, record the row as `blocked` with the reason. Do not
 pass it.
 
-### Non-Node repos (no `package.json`)
+### Projects without an affected web runtime
 
-The kit's tools are Node-only by design (Lighthouse, axe, the bundle check and knip all need a JS
-build), so none of them can run on a Python, Go, Rust or other non-Node repo. `audit-setup` is
-still required by default there (it is only conditional when the goal itself reads as trivial),
-so there must be a way to close the row without the kit:
+A missing root `package.json` does not establish that the project is non-web. Inspect the
+changed files, workspace configuration and affected package/runtime roots, including nested
+`web/`, `app/` and other application directories. For an affected web application, run the
+kit from its applicable package directory and prove its required browser/audit setup; retain
+the repository-root checklist and record that package's executed checks as evidence.
 
-- **Pass it on the repo's own CI and test config**, when that config already gates quality the
-  way the kit's tools gate a Node project (lint and tests running in CI on every PR). Evidence
-  names the CI workflow and test config found; the verifier re-checks both still exist:
+Use this non-web route only after establishing that no affected web runtime requires those
+checks. For Python, Go, Rust or other non-web work, prove the applicable test/build/CI setup
+with the project's actual commands. Record command output, exit codes, source identity,
+selected CI workflows and the reason each frontend tool does not apply. Retain configuration
+and checker files as instruments; use a repeatable executed check or a source-bound receipt
+read-back verifier. Merely checking whether configuration files exist does not prove working
+quality gates.
 
-  ```text
-  printf 'CI: %s\nTests: %s\n' .github/workflows/ci.yml pyproject.toml > .devproto/evidence/audit-setup.txt
-  python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id=<work-id> --step audit-setup --result pass --evidence .devproto/evidence/audit-setup.txt \
-    --verify "test -f .github/workflows/ci.yml && test -f pyproject.toml"
-  ```
-
-- **Make the row optional mid-run**, if there is no CI/test gate yet to point to, or the goal made
-  it required and it plainly does not apply this time:
-
-  ```text
-  python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> set-optional \
-    --id=<work-id> --step audit-setup --reason "pure Python repo, no package.json"
-  python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id=<work-id> --step audit-setup --result na --reason "pure Python repo, no package.json"
-  ```
-
-  Unlike `start`'s `--require`/`--optional`, `set-optional` works after earlier rows have already
-  passed -- it does not require abandoning the work id and re-proving rows 1 onward under a new
-  one just to mark one later row not applicable.
+Pass the existing audit-setup row only with this applicable proof. If required test or CI
+setup is missing, establish it within the authorized task or record the row as blocked.
+Do not make a mandatory row optional or mark it not-applicable merely because the project
+lacks Node tooling. A row already conditional for a genuinely trivial task may retain a
+reasoned skip where the initialized checklist permits it.
 
 ## Acceptance scenarios
 

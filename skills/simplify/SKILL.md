@@ -20,6 +20,8 @@ verification and independent review after the final commit.
 
 ## Checklist row
 
+After a mutating simplify changes files, rerun and re-record independent review on the new candidate before recording simplify. Only a read-only `--check` pass on an already re-reviewed candidate records directly; required test and review gaps still block its row.
+
 This skill satisfies the `simplify` row of the development-protocol checklist. Save the report
 below as the evidence, re-run the full suite as the verifier, and pass the test files as
 instruments so a weakened test cannot keep an old pass:

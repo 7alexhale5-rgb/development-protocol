@@ -278,11 +278,13 @@ Report the scaffold:
 
 ---
 
+Checklist currency checks hash the complete non-ignored candidate, including tracked binary assets. File hashing streams bounded chunks, but each check still reads the full candidate; account for that I/O cost on asset-heavy repositories.
+
 ## Step 4.5: Audit preflight (always on)
 
 **Skip if `--no-verify` is set.**
 
-Determine setup applicability first. When package.json is absent, do not invoke the Node initializer. Satisfy the required audit-setup row with executed checks of the applicable test/build/CI setup and evidence explaining why frontend tools do not apply. Never mark a mandatory setup row n/a. For applicable Node projects, Run `/audit-setup` before final Full Verify and independent reviews. If it runs later
+Determine setup applicability from the affected runtime and package roots, not just root package.json. Inspect changed files, workspace configuration and nested web/, app/ or other application packages. For an affected web application, run `/audit-setup` in its applicable package directory and retain that package's required browser/audit proof in the repository-root checklist. Only after establishing that no affected web runtime needs those checks, satisfy audit-setup with executed applicable test/build/CI setup checks and evidence explaining why frontend tools do not apply. Do not invoke the Node initializer in a directory without package.json, or mark a mandatory setup row n/a. Run applicable setup before final Full Verify and independent reviews. If it runs later
 or changes files, invalidate those receipts and rerun Full Verify and reviews on the
 complete new candidate before completion. It prepares the audit
 tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe

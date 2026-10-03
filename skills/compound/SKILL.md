@@ -246,7 +246,9 @@ If a pattern suggests a convention should be written down, ask:
 > "I noticed <pattern> across <N> commits. Want me to add this as a convention to
 > <project>/CLAUDE.md?"
 
-Only suggest. Never write to an agent instruction file without the user's yes. That file is
+During work-id compound, retain the proposed rule under `.devproto/learnings/` and
+promote it in a separate reviewed work item, even when its content was approved.
+Only a standalone run may write with the user's yes. That file is
 read every session, so a wrong line there costs every future session.
 
 ---

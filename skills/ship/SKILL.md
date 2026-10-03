@@ -288,6 +288,7 @@ Shipped.
 
 | Flag                        | Effect                           |
 | --------------------------- | -------------------------------- |
+| `--work-id=<id>`            | Bind the through-commit check and candidate review verifier to this work item |
 | `--skip-tests`              | Skip Step 2 entirely             |
 | `--draft`                   | Create the pull request as draft |
 | `--no-sync`                 | Skip Step 1 (merge with base)    |

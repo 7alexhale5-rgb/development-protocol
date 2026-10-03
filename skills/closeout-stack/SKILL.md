@@ -204,7 +204,7 @@ audit, a client approval record), run it before Step 4 and carry any failing con
 resume prompt under Blockers. If the gate cannot be run by a command, mark it `gate: manual` in
 the report. Never mark a manual gate as passed on a person's behalf.
 
-## Step 3.5: Renew the committed candidate locally
+## Step 3.6: Renew the committed candidate locally
 
 After Step 3 creates or preserves the final commit, run Full Verify, required independent
 review, read-only simplify and proof of that existing commit, in checklist order. Renew
@@ -379,7 +379,9 @@ If an entry exists, add a new dated line under it. Never create a duplicate entr
 
 If a correction is a standing project rule (not a one-off preference), propose adding it to the
 project's agent instruction file (`CLAUDE.md`, `AGENTS.md` or similar). Only propose. Write it
-only after the user says yes. Keep edits surgical: one rule at a time.
+only after the user says yes in a standalone run. During a work-id closeout, save the
+proposed rule under `.devproto/learnings/` and promote it in a separate reviewed work
+item, even when its content was approved. Keep edits surgical: one rule at a time.
 
 Skip Step 7 entirely with `--no-memory`, or when this session had no corrections or
 confirmations.

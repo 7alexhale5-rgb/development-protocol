@@ -33,8 +33,16 @@ def now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def _file_sha256(path: Path) -> bytes:
+    checksum = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            checksum.update(chunk)
+    return checksum.digest()
+
+
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
+    return _file_sha256(path).hex() if path.is_file() else ""
 
 
 @contextlib.contextmanager
@@ -316,7 +324,8 @@ def candidate_snapshot(project):
             kind, content = b'deleted', b''
         elif path.is_file():
             kind = b'executable' if path.stat().st_mode & 0o111 else b'file'
-            content = path.read_bytes()
+            digest.update(kind + b'\0' + _file_sha256(path))
+            continue
         elif path.is_dir() and head_entries.get(name) != b'160000' and index_modes.get(name) != b'160000':
             if (path / '.git').exists():
                 raise ValueError('candidate includes an unsupported nested repository')
