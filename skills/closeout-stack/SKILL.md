@@ -491,7 +491,8 @@ A failed persistence step keeps safety false while Step 10 still emits the resum
 ## Step 9.5: Record the closeout row (end of a work item only)
 
 Only when the work item is shipped and merged -- which by this point already required a remote
-(shipping is a pull request). Verify fresh default branch in a separate checkout, leaving the reviewed work checkout
+(shipping is a pull request). Verify fresh default branch in a separate checkout outside the reviewed repository tree
+(or under its excluded `.devproto/` directory), leaving the reviewed work checkout
 and its identity unchanged. Record its actual merged SHA and re-run the suite there.
 Detect the branch name rather than assume `main`:
 
@@ -499,7 +500,8 @@ Detect the branch name rather than assume `main`:
 default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
 default_branch="${default_branch:-main}"
 git fetch origin "$default_branch"
-# Create a separate fresh verification checkout of origin/<default_branch>.
+# Create a fresh verification checkout outside this repository (a sibling or mktemp directory).
+# Never place a nested clone/worktree elsewhere inside the reviewed repository.
 # Run the full suite there and bind the handoff to that exact merged SHA.
 ```
 
@@ -518,7 +520,7 @@ python3 <development-protocol skill folder>/scripts/devproto.py --project <repo>
   --id=<work-id> --step closeout --result pass \
   --evidence .devproto/handoffs/<YYYY-MM-DD>-<slug>.md \
   --verify 'grep -q "^## Unknowns" .devproto/handoffs/<YYYY-MM-DD>-<slug>.md &&
-    merged="<absolute-merged-checkout>" && sha="<recorded-merged-SHA>" && branch="<recorded-full-branch-ref-or-HEAD>" &&
+    merged="<absolute-checkout-outside-reviewed-repository>" && sha="<recorded-merged-SHA>" && branch="<recorded-full-branch-ref-or-HEAD>" &&
     test "$(git -C "$merged" rev-parse HEAD)" = "$sha" &&
     test "$(git -C "$merged" rev-parse --symbolic-full-name HEAD)" = "$branch" &&
     clean_status="$(git -C "$merged" status --porcelain --untracked-files=all)" && test -z "$clean_status" &&

@@ -48,7 +48,9 @@ sweep; otherwise name it with `--slug`.
 
 Each ledger folder holds `ledger.json` (the whole state), `RESUME.md` (rewritten on every
 change) and a `.lock` file. Commit the ledgers if the team should share a paused sweep;
-ignore `.sweeps/**/.lock` and `.sweeps/**/*.tmp` either way. Closed and abandoned sweeps
+ignore `.sweeps/**/.lock`, `.sweeps/**/*.tmp`, and `.sweeps/stop-hook.log` either way.
+The hook diagnostic log is excluded because a later hook failure can append to it
+after final review; it is not release proof. Closed and abandoned sweeps
 move to `.sweeps/_closed/`.
 
 **Session ownership.** A ledger belongs to the session that last changed it. The id comes

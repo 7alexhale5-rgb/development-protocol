@@ -540,8 +540,7 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
 
     Fixes the dead end where a goal's words (or the default) made a row
     required, and only partway through the checklist does it become clear
-    the row does not apply (e.g. audit-setup's Node-only checks on a pure
-    Python repo) -- with no way to flip it without abandoning the work id
+    the row does not apply (e.g. a design row for a verified nonvisual command-line change) -- with no way to flip it without abandoning the work id
     and re-proving every earlier row under a new one.
 
     Least-surprise rule: only a row that is (a) not one of the ALWAYS_REQUIRED

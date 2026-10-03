@@ -15,6 +15,22 @@ sys.path.insert(0, str(ROOT / "skills/development-protocol/scripts"))
 import _shared  # noqa: E402
 
 
+class CandidateGitTimeoutTest(unittest.TestCase):
+    def test_hung_git_becomes_explicit_unverified_candidate(self):
+        import subprocess
+        from unittest.mock import patch
+
+        def hung_git(*args, **kwargs):
+            self.assertEqual(kwargs.get("timeout"), 10)
+            raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+        with patch.object(_shared.subprocess, "run", side_effect=hung_git):
+            with self.assertRaisesRegex(
+                ValueError, "candidate Git state cannot be read"
+            ):
+                _shared.candidate_snapshot(ROOT)
+
+
 class RedactTest(unittest.TestCase):
     def assert_redacted(self, secret, text=None):
         text = text if text is not None else f"failure output: {secret}\n"

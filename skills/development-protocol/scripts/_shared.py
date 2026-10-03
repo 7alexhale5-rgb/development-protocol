@@ -3,7 +3,7 @@
 Canonical home for the pieces devproto.py, pathway.py and sweep.py would
 otherwise each hand-roll: the verifier runner (temp-file output, no stdin,
 whole-process-group kill), the per-store file lock, a file digest, a
-timestamp, a bash-with-pipefail runner, and an output redactor.
+timestamp, a complete candidate snapshot, a bash-with-pipefail runner, and an output redactor.
 
 Python 3.9+, standard library only. Importers outside this folder locate this
 file by relative path (see each caller's own docstring) and should raise a
@@ -254,41 +254,14 @@ def selftest() -> int:
     return 1 if fails else 0
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Check primitives or nonempty Markdown evidence sections."
-    )
-    parser.add_argument("--evidence", type=Path)
-    parser.add_argument("--section", action="append", default=[])
-    args = parser.parse_args()
-    if args.evidence is None:
-        if args.section:
-            parser.error("--section requires --evidence")
-        raise SystemExit(selftest())
-    if not args.section:
-        parser.error("--evidence requires at least one --section")
-    try:
-        passed = sections_have_content(
-            args.evidence.read_text(encoding="utf-8"), args.section
-        )
-    except (OSError, UnicodeError) as exc:
-        print(f"FAIL cannot read evidence: {exc}")
-        raise SystemExit(1)
-    print(
-        "PASS required sections contain text"
-        if passed
-        else "FAIL required sections are missing or empty"
-    )
-    raise SystemExit(0 if passed else 1)
-
-
 def candidate_snapshot(project):
     """Hash the complete nonignored candidate without modifying the user's Git index."""
     project = project.resolve()
     def git(*args):
-        result = subprocess.run(['git', '-C', str(project), *args], capture_output=True)
+        try:
+            result = subprocess.run(['git', '-C', str(project), *args], capture_output=True, timeout=10)
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError('candidate Git state cannot be read') from exc
         if result.returncode:
             raise ValueError('candidate Git state cannot be read')
         return result.stdout
@@ -334,3 +307,33 @@ def candidate_snapshot(project):
             raise ValueError('candidate includes an unsupported directory or submodule')
         digest.update(kind + b'\0' + hashlib.sha256(content).digest())
     return digest.hexdigest()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Check primitives or nonempty Markdown evidence sections."
+    )
+    parser.add_argument("--evidence", type=Path)
+    parser.add_argument("--section", action="append", default=[])
+    args = parser.parse_args()
+    if args.evidence is None:
+        if args.section:
+            parser.error("--section requires --evidence")
+        raise SystemExit(selftest())
+    if not args.section:
+        parser.error("--evidence requires at least one --section")
+    try:
+        passed = sections_have_content(
+            args.evidence.read_text(encoding="utf-8"), args.section
+        )
+    except (OSError, UnicodeError) as exc:
+        print(f"FAIL cannot read evidence: {exc}")
+        raise SystemExit(1)
+    print(
+        "PASS required sections contain text"
+        if passed
+        else "FAIL required sections are missing or empty"
+    )
+    raise SystemExit(0 if passed else 1)

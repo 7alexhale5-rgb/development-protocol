@@ -457,7 +457,7 @@ class DevprotoTest(unittest.TestCase):
             self.rows(devproto.status(self.project, "w1"))["audit-setup"]["required"]
         )
         out = devproto.set_optional(
-            self.project, "w1", "audit-setup", "pure Python repo, no package.json"
+            self.project, "w1", "audit-setup", "explicitly approved optional row, applicability verified"
         )
         self.assertFalse(self.rows(out)["audit-setup"]["required"])
         # Now na works where it was refused before.
@@ -788,7 +788,7 @@ class DevprotoTest(unittest.TestCase):
                 "--step",
                 "audit-setup",
                 "--reason",
-                "pure Python repo",
+                "explicit optional-row policy",
             ],
             capture_output=True,
             text=True,
