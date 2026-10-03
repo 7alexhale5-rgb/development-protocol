@@ -16,12 +16,89 @@ import _shared  # noqa: E402
 
 
 class CandidateStableScanTest(unittest.TestCase):
+    def test_directory_replaced_by_file_has_unstaged_staged_and_committed_snapshots(
+        self,
+    ):
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+
+            def git(*args):
+                subprocess.run(
+                    ["git", "-C", str(repo), *args], check=True, capture_output=True
+                )
+
+            git("init", "-q")
+            (repo / "config").mkdir()
+            (repo / "config/settings.json").write_text("{}")
+            git("add", ".")
+            git(
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.test",
+                "commit",
+                "-qm",
+                "directory fixture",
+            )
+            before = _shared.candidate_snapshot(repo)
+            (repo / "config/settings.json").unlink()
+            (repo / "config").rmdir()
+            (repo / "config").write_text("replacement file")
+            unstaged = _shared.candidate_snapshot(repo)
+            git("add", "-A")
+            staged = _shared.candidate_snapshot(repo)
+            git(
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.test",
+                "commit",
+                "-qm",
+                "replace directory",
+            )
+            committed = _shared.candidate_snapshot(repo)
+            self.assertNotEqual(before, unstaged)
+            self.assertNotEqual(unstaged, staged)
+            self.assertNotEqual(
+                staged,
+                committed,
+                "committing removes the prior HEAD descendant from the scan inventory",
+            )
+            self.assertEqual(committed, _shared.candidate_snapshot(repo))
+            from unittest.mock import patch
+
+            asset = repo / "z-asset.bin"
+            asset.write_bytes(b"later bytes")
+            original = _shared._file_sha256
+
+            def mutate_parent(path):
+                result = original(path)
+                if path == asset:
+                    (repo / "config").write_text("changed after earlier hash")
+                return result
+
+            with patch.object(_shared, "_file_sha256", side_effect=mutate_parent):
+                with self.assertRaisesRegex(
+                    ValueError, "changed during candidate scan"
+                ):
+                    _shared.candidate_snapshot(repo)
+
     def test_mutations_after_earlier_file_hash_are_rejected(self):
         import subprocess
         import tempfile
         from unittest.mock import patch
 
-        for mutation in ("earlier-file", "index", "new-file", "deleted-file", "head", "branch"):
+        for mutation in (
+            "earlier-file",
+            "index",
+            "new-file",
+            "deleted-file",
+            "head",
+            "branch",
+        ):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
                 repo = Path(tmp).resolve()
                 subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -30,9 +107,24 @@ class CandidateStableScanTest(unittest.TestCase):
                 asset = repo / "z-asset.bin"
                 asset.write_bytes(b"later asset bytes")
                 subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
-                subprocess.run(["git", "-C", str(repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "fixture"], check=True)
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(repo),
+                        "-c",
+                        "user.name=Fixture",
+                        "-c",
+                        "user.email=fixture@example.test",
+                        "commit",
+                        "-qm",
+                        "fixture",
+                    ],
+                    check=True,
+                )
                 original = _shared._file_sha256
                 changed = False
+
                 def hash_then_mutate(path):
                     nonlocal changed
                     value = original(path)
@@ -41,24 +133,64 @@ class CandidateStableScanTest(unittest.TestCase):
                         if mutation == "earlier-file":
                             source.write_text("answer = 2\n")
                         elif mutation == "index":
-                            subprocess.run(["git", "-C", str(repo), "update-index", "--chmod=+x", source.name], check=True)
+                            subprocess.run(
+                                [
+                                    "git",
+                                    "-C",
+                                    str(repo),
+                                    "update-index",
+                                    "--chmod=+x",
+                                    source.name,
+                                ],
+                                check=True,
+                            )
                         elif mutation == "new-file":
                             (repo / "new-input.py").write_text("answer = 3\n")
                         elif mutation == "deleted-file":
                             source.unlink()
                         elif mutation == "head":
-                            subprocess.run(["git", "-C", str(repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "changed identity"], check=True)
+                            subprocess.run(
+                                [
+                                    "git",
+                                    "-C",
+                                    str(repo),
+                                    "-c",
+                                    "user.name=Fixture",
+                                    "-c",
+                                    "user.email=fixture@example.test",
+                                    "commit",
+                                    "--allow-empty",
+                                    "-qm",
+                                    "changed identity",
+                                ],
+                                check=True,
+                            )
                         else:
-                            subprocess.run(["git", "-C", str(repo), "checkout", "-qb", "changed-branch"], check=True)
+                            subprocess.run(
+                                [
+                                    "git",
+                                    "-C",
+                                    str(repo),
+                                    "checkout",
+                                    "-qb",
+                                    "changed-branch",
+                                ],
+                                check=True,
+                            )
                     return value
+
                 rejection = None
-                with patch.object(_shared, "_file_sha256", side_effect=hash_then_mutate):
+                with patch.object(
+                    _shared, "_file_sha256", side_effect=hash_then_mutate
+                ):
                     try:
                         _shared.candidate_snapshot(repo)
                     except ValueError as error:
                         rejection = error
                 self.assertTrue(changed, "fixture must perform its controlled mutation")
-                self.assertIsNotNone(rejection, "the exercised mutation must invalidate the scan")
+                self.assertIsNotNone(
+                    rejection, "the exercised mutation must invalidate the scan"
+                )
                 self.assertRegex(str(rejection), "changed during candidate scan")
 
 

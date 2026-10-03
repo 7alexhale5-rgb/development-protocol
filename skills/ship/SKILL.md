@@ -238,16 +238,23 @@ Before creating a PR, query the authenticated repository for this exact head bra
 and intended base, including open and merged PRs. Reuse a unique matching open PR;
 verify its head equals the pushed SHA and renew the ship receipt from its current
 checks. Do not run `gh pr create` again merely because review evidence was renewed.
-If it is already merged, verify the recorded merged SHA in a separate checkout and
-continue closeout; never create a duplicate release PR. An ambiguous match or different
-base is a scope gap, not permission to choose another PR silently.
+A merged match is reusable only when its repository, retained PR identity, base,
+and `headRefOid` equal this work item's exact reviewed and pushed candidate. Verify
+that its recorded merge includes this candidate: ancestry for merge/rebase workflows,
+or the retained exact PR head and merged tree mapping for squash merges. Verify the
+merged SHA in a separate checkout before closeout. A historical PR sharing only the
+branch and base is not this release. If the branch has new commits, verify whether
+those exact changes are already integrated; otherwise create a new authorized PR.
+Never close current work using the old merge. An ambiguous match or unverified merge
+mapping remains a scope gap.
 
 ```bash
 gh pr list --state all --head "{head_branch}" --base "{base}" \
   --json number,url,state,headRefOid,baseRefName,headRefName,mergeCommit
 ```
 
-Create only when no matching PR exists. Retain the actual repository, branch, base,
+Create when no current-candidate PR exists. Historical branch matches do not suppress
+a new release PR. Retain the actual repository, branch, base,
 PR URL and exact head in the evidence so a resumed closeout follows this same path.
 
 Optional flags: if `--reviewers @a,@b` was passed, add `--reviewer a,b`; if `--draft`, add

@@ -502,6 +502,35 @@ def completion_digest(record: dict) -> str:
     ).hexdigest()
 
 
+def archive_directory(project: Path, record: dict) -> Path:
+    store_path(
+        project, record["work_id"]
+    )  # validate the work ID before path construction
+    return (
+        project.resolve()
+        / STORE_DIR
+        / "evidence"
+        / "completed"
+        / record["work_id"]
+        / completion_digest(record)
+    )
+
+
+def historical_artifact(project: Path, record: dict, source: str, sha: str) -> Path:
+    completion = record.get("completion", {})
+    if not completion.get("archive_dir"):
+        return resolve(project, source)
+    archive = archive_directory(project, record)
+    if completion["archive_dir"] != portable(project, archive) or not re.fullmatch(
+        r"[0-9a-f]{64}", sha
+    ):
+        raise ValueError("historical archive provenance is invalid")
+    path = archive / sha
+    if any(parent.is_symlink() for parent in (path, *path.parents)):
+        raise ValueError("historical archive cannot be redirected through symlinks")
+    return path
+
+
 def retained_completion(project: Path, record: dict) -> bool:
     """Historical completion needs retained executed proofs, not terminal labels."""
     try:
@@ -521,7 +550,9 @@ def retained_completion(project: Path, record: dict) -> bool:
                 or not row.get("evidence_sha256")
             ):
                 return False
-            ev = resolve(project, row["evidence_path"])
+            ev = historical_artifact(
+                project, record, row["evidence_path"], row["evidence_sha256"]
+            )
             if (
                 ev.is_symlink()
                 or not ev.is_file()
@@ -529,8 +560,8 @@ def retained_completion(project: Path, record: dict) -> bool:
             ):
                 return False
             for name, meta in row.get("instruments", {}).items():
-                path = resolve(project, name)
                 sha = meta.get("sha256") if isinstance(meta, dict) else meta
+                path = historical_artifact(project, record, name, sha)
                 if path.is_symlink() or not path.is_file() or digest(path) != sha:
                     return False
         review = next(r for r in rows if r["step_id"] == "review")
@@ -543,6 +574,13 @@ def retained_completion(project: Path, record: dict) -> bool:
                 / "evidence"
                 / (record["work_id"] + "-build-base.txt")
             )
+            if record.get("completion", {}).get("archive_dir"):
+                baseline = historical_artifact(
+                    project,
+                    record,
+                    portable(project, baseline),
+                    record["completion"]["baseline_sha256"],
+                )
             if baseline.is_symlink() or not baseline.is_file():
                 return False
             lines = baseline.read_text().splitlines()
@@ -595,7 +633,7 @@ def retained_completion(project: Path, record: dict) -> bool:
 
 
 def seal_completion(project: Path, record: dict) -> None:
-    record["completion"] = {
+    completion = {
         "state": "completed",
         "completed_at": record["steps"][-1]["verified_at"],
         "receipt_sha256": completion_digest(record),
@@ -604,7 +642,40 @@ def seal_completion(project: Path, record: dict) -> None:
         project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
     )
     if baseline.is_file():
-        record["completion"]["baseline_sha256"] = digest(baseline)
+        completion["baseline_sha256"] = digest(baseline)
+    archive = archive_directory(project, record)
+    if any(parent.is_symlink() for parent in (archive, *archive.parents)):
+        raise ValueError("historical archive cannot be redirected through symlinks")
+    archive.mkdir(parents=True, exist_ok=True)
+    sources = {}
+    for row in record["steps"]:
+        if row["status"] != "passed":
+            continue
+        sources[row["evidence_sha256"]] = resolve(project, row["evidence_path"])
+        for name, meta in row.get("instruments", {}).items():
+            sha = meta.get("sha256") if isinstance(meta, dict) else meta
+            sources[sha] = resolve(project, name)
+    if baseline.is_file():
+        sources[completion["baseline_sha256"]] = baseline
+    for sha, source in sources.items():
+        if (
+            not re.fullmatch(r"[0-9a-f]{64}", sha)
+            or source.is_symlink()
+            or not source.is_file()
+        ):
+            raise ValueError("completion proof cannot be archived")
+        destination = archive / sha
+        if not destination.exists():
+            with source.open("rb") as incoming, destination.open("xb") as outgoing:
+                shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
+        if (
+            destination.is_symlink()
+            or not destination.is_file()
+            or digest(destination) != sha
+        ):
+            raise ValueError("completion archive bytes do not match retained proof")
+    completion["archive_dir"] = portable(project, archive)
+    record["completion"] = completion
 
 
 def refresh(project: Path, record: dict) -> bool:
@@ -614,6 +685,14 @@ def refresh(project: Path, record: dict) -> bool:
     if not record.get("completion") and retained_completion(project, record):
         seal_completion(project, record)
         changed_any = True
+    if record.get("completion"):
+        if not record["completion"].get("archive_dir") and retained_completion(
+            project, record
+        ):
+            seal_completion(project, record)
+            return True
+        # Sealed rows are immutable; validity is reported separately from live work.
+        return changed_any
     historical = bool(record.get("completion"))
     identity = (
         git_identity(project)
@@ -683,6 +762,11 @@ def refresh(project: Path, record: dict) -> bool:
 
 
 def summary(project: Path, record: dict) -> dict:
+    # Rendering never relies on a mutating refresh to scrub legacy secrets.
+    record = json.loads(json.dumps(record))
+    for row in record["steps"]:
+        for key in ("verify_command", "output_tail"):
+            row[key] = redact(row.get(key, ""))
     open_steps = [s["step_id"] for s in record["steps"] if s["status"] not in TERMINAL]
     out = {
         "ok": True,
@@ -695,6 +779,7 @@ def summary(project: Path, record: dict) -> dict:
         "rule_notes": record.get("rule_notes", []),
         "steps": record["steps"],
         "completed": bool(record.get("completion")),
+        "completion": record.get("completion"),
         "historical_receipts_valid": retained_completion(project, record)
         if record.get("completion")
         else False,
@@ -979,10 +1064,18 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
         record = load(path)
         if not record.get("completion"):
             raise ValueError("work is not completed")
-        if git_identity(project) is not None:
+        if (
+            record["completion"].get("baseline_sha256")
+            or git_identity(project) is not None
+        ):
             baseline = project / STORE_DIR / "evidence" / (work_id + "-build-base.txt")
             if baseline.is_symlink() or not baseline.is_file():
                 raise ValueError("original baseline is missing; retain the scope gap")
+            if (
+                record["completion"].get("baseline_sha256")
+                and digest(baseline) != record["completion"]["baseline_sha256"]
+            ):
+                raise ValueError("original baseline changed; retain the scope gap")
         record.setdefault("completion_history", []).append(
             {
                 "completion": record.pop("completion"),
@@ -1101,7 +1194,13 @@ def print_human(result: dict) -> None:
     if result.get("error"):
         print(f"ERROR: {result['error']}")
     scope = f" through {result['through']}" if result.get("through") else ""
-    if result["ready"]:
+    if result.get("completed"):
+        print(
+            "HISTORICAL PROOF VERIFIED."
+            if result.get("historical_receipts_valid")
+            else "HISTORICAL PROOF GAP."
+        )
+    elif result["ready"]:
         print(f"READY{scope}.")
     elif result["next_step"] == "research" and result.get("research_focus"):
         print(f"Next step: research  (run {result['research_focus']})")

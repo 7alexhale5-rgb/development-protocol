@@ -582,6 +582,10 @@ class ReviewScopeTests(unittest.TestCase):
 
         self.complete_genuine_work()
         (self.proof.parent / "completed-proof.md").unlink()
+        record = json.loads((self.repo / ".devproto/job.json").read_text())
+        self.assertTrue(devproto.status(self.repo, "job")["historical_receipts_valid"])
+        archive = self.repo / record["completion"]["archive_dir"]
+        next(archive.iterdir()).unlink()
         out = devproto.status(self.repo, "job")
         self.assertFalse(out["historical_receipts_valid"])
         self.assertNotEqual(self.run_check(scoped=False).returncode, 0)
@@ -635,7 +639,29 @@ class ReviewScopeTests(unittest.TestCase):
             0,
         )
         (self.proof.parent / "completed-proof.md").unlink()
+        self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
+        record = json.loads((self.repo / ".devproto/job.json").read_text())
+        next((self.repo / record["completion"]["archive_dir"]).iterdir()).unlink()
         self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+
+    def test_pathway_close_accepts_completed_protocol_only_as_history(self):
+        import devproto
+        sys.path.insert(0, str(ROOT / "skills/pathway/scripts"))
+        import pathway
+
+        self.complete_genuine_work()
+        itinerary = pathway.start(self.repo, "trivial copy edit", "demoable", "job")
+        evidence = self.repo / ".devproto/evidence/pathway-proof.md"
+        evidence.write_text("executed itinerary check")
+        for name in itinerary["coverage"]["open"]:
+            pathway.log(self.repo, "job", name, str(evidence), "true")
+        self.assertTrue(pathway.close(self.repo, "job")["closed"])
+        command = [sys.executable, str(ROOT / "skills/development-protocol/scripts/devproto.py"),
+                   "check", "--project", str(self.repo), "--id", "job", "--json"]
+        self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+        out = subprocess.run(command + ["--historical"], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertFalse(json.loads(out.stdout)["current_candidate_ready"])
 
     def test_historical_check_rejects_active_work(self):
         import devproto

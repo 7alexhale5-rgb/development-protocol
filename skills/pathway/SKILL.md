@@ -268,8 +268,13 @@ Do not present a menu.
 
 1. Get the work id (as in LOG).
 2. Run `PATHWAY --project <repo> close --id=<work-id>`.
-3. If it closed, confirm in one line, then run `DEVPROTO check --id=<work-id>` and report its
-   answer too. The itinerary and the checklist are two different gates; both must be clear.
+3. If it closed, inspect `DEVPROTO --project <repo> status --id=<work-id> --json`.
+   For a completed checklist, run `DEVPROTO --project <repo> check --id=<work-id>
+   --historical`; this checks retained past proof and cannot certify a new candidate.
+   For an active checklist, run ordinary `DEVPROTO --project <repo> check --id=<work-id>`.
+   Report both answers. Missing, invalid, or unknown historical proof remains a gap;
+   itinerary closure alone does not clear the checklist. Do not reopen completed work
+   merely to make the ordinary current-candidate command pass.
 4. If it did not close, tell the user in plain English exactly what blocks it and the one thing to
    fix. **The coverage gate is usually the blocker.** `coverage.open` lists pathways still owed
    proof. For each, either run it (`/pathway <project> go`) or, if it genuinely does not apply,

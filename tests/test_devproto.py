@@ -23,6 +23,133 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_completed_proofs_survive_live_edits_and_archive_loss_is_recoverable(self):
+        self.start()
+        evidence = self.project / ".devproto/evidence/review.json"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text('{"verdict":"pass"}\n')
+        instrument = self.project / "tests/test_behavior.py"
+        instrument.parent.mkdir()
+        instrument.write_text("assert True\n")
+        for row in devproto.status(self.project, "w1")["steps"]:
+            if row["required"]:
+                self.pass_step(
+                    row["step_id"],
+                    evidence=str(evidence),
+                    instruments=(str(instrument),),
+                )
+            else:
+                devproto.step(
+                    self.project, "w1", row["step_id"], "na", reason="not needed"
+                )
+        path = self.project / ".devproto/w1.json"
+        receipt = path.read_bytes()
+        devproto.start(self.project, "next confirmed bug fix", "w2")
+        evidence.write_text('{"verdict":"later-task"}\n')
+        instrument.write_text("assert False\n")
+        devproto.step(
+            self.project,
+            "w2",
+            "pathway",
+            "pass",
+            str(evidence),
+            "true",
+            instruments=(str(instrument),),
+        )
+        devproto.list_items(self.project)
+        out = devproto.status(self.project, "w1")
+        self.assertTrue(out["historical_receipts_valid"])
+        self.assertEqual(
+            path.read_bytes(), receipt, "status must not mutate sealed rows"
+        )
+        archive = self.project / out["completion"]["archive_dir"]
+        artifact = next(archive.iterdir())
+        saved = artifact.read_bytes()
+        artifact.unlink()
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        self.assertEqual(path.read_bytes(), receipt)
+        artifact.write_bytes(saved)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        artifact.write_bytes(b"tampered proof")
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        artifact.write_bytes(saved)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        self.assertEqual(path.read_bytes(), receipt)
+
+        aliased_proof = self.project / "same-bytes-other-location"
+        aliased_proof.write_bytes(saved)
+        artifact.unlink()
+        artifact.symlink_to(aliased_proof)
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"],
+            "a redirected archive is invalid even with matching bytes",
+        )
+        artifact.unlink()
+        artifact.write_bytes(saved)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
+    def test_read_only_historical_output_scrubs_legacy_credentials(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        path = self.project / ".devproto/w1.json"
+        record = json.loads(path.read_text())
+        secret = "synthetic-private-password"
+        record["steps"][0]["verify_command"] = (
+            "echo postgres://fixture:" + secret + "@localhost/db"
+        )
+        record["steps"][0]["output_tail"] = (
+            "postgres://fixture:" + secret + "@localhost/db"
+        )
+        record["completion"]["receipt_sha256"] = "invalid receipt"
+        path.write_text(json.dumps(record))
+        saved = path.read_bytes()
+        for flags in ([], ["--json"]):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "check",
+                    "--project",
+                    str(self.project),
+                    "--id",
+                    "w1",
+                    "--historical",
+                    *flags,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn(secret, result.stdout + result.stderr)
+            self.assertEqual(path.read_bytes(), saved)
+
+    def test_reopening_cannot_replace_the_archived_git_baseline(self):
+        self.init_git()
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        saved = baseline.read_bytes()
+        baseline.write_text("base " + "0" * 40 + "\nwork-id w1\n")
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        with self.assertRaisesRegex(ValueError, "original baseline changed"):
+            devproto.reopen(self.project, "w1", "new work")
+        baseline.write_bytes(saved)
+        self.assertFalse(devproto.reopen(self.project, "w1", "new work")["completed"])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name).resolve()
