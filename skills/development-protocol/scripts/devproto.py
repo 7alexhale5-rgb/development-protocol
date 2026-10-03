@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -23,7 +24,14 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import candidate_snapshot, command_digest, digest, now, redact, run_verifier  # noqa: E402
+from _shared import (
+    candidate_snapshot,
+    command_digest,
+    digest,
+    now,
+    redact,
+    run_verifier,
+)  # noqa: E402
 from _shared import locked as _store_locked  # noqa: E402
 
 # (row id, skill that satisfies it, what the row proves)
@@ -97,10 +105,15 @@ STEPS = [
 STEP_IDS = [s[0] for s in STEPS]
 TERMINAL = {"passed", "not-applicable"}
 RECORD_KEYS = (
-    "status", "evidence_sha256", "instruments", "verify_command",
-    "verify_command_sha256", "git_identity", "candidate_sha256",
+    "status",
+    "evidence_sha256",
+    "instruments",
+    "verify_command",
+    "verify_command_sha256",
+    "git_identity",
+    "candidate_sha256",
 )
-RELEASE_STEPS = set(STEP_IDS[STEP_IDS.index("commit"):])
+RELEASE_STEPS = set(STEP_IDS[STEP_IDS.index("commit") :])
 CONDITIONAL = {"brainstorm", "research", "visual-spec", "design"}
 OPTIONAL_WHEN_TRIVIAL = {
     "spec",
@@ -126,18 +139,54 @@ RESEARCH_RE = re.compile(
 # skills/research-stack/references/focus/tags.json). These are its `triggers`, copied in tags.json
 # order; tests/test_devproto.py fails if they drift. Order breaks ties between equal matches.
 FOCUS_HINTS = [
-    ("seo", r"\b(seo|serp|keywords?|rankings?|backlinks?|search console|schema markup|structured data|rich results?|geo|aeo|ai overviews?|llm visibility|organic traffic)\b"),
-    ("content", r"\b(content|copywriting|blog|newsletter|ad creatives?|ads|creative|hooks?|social posts?|short-form|video|campaign|landing copy)\b"),
-    ("market", r"\b(market|competitors?|competitive|pricing|tam|vendors?|landscape|funding|positioning|alternatives)\b"),
-    ("ui-ux", r"\b(ui|ux|onboarding|user flows?|screens?|layout|design patterns?|figma|components?|dashboard|checkout|usability)\b"),
-    ("a11y", r"\b(a11y|accessibility|accessible|wcag|screen readers?|aria|colou?r contrast|keyboard navigation)\b"),
-    ("perf", r"\b(performance|perf|latency|core web vitals|cwv|lcp|inp|cls|bundle size|page ?speed|lighthouse|throughput)\b"),
-    ("security", r"\b(security|vulnerabilit(y|ies)|cves?|owasp|authn?|secrets?|xss|csrf|ssrf|injection|supply chain|sbom|pentest|threat model)\b"),
-    ("devtools", r"\b(librar(y|ies)|frameworks?|sdks?|apis?|integrations?|webhooks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b"),
-    ("ai-agents", r"\b(llms?|agents?|agentic|prompts?|rag|evals?|mcp|models?|fine-?tun\w*|embeddings?|claude|gpt|gemini)\b"),
-    ("data-infra", r"\b(databases?|postgres|schema|warehouse|etl|pipelines?|queues?|kafka|cach(e|ing)|redis|infra|kubernetes|serverless|cdn)\b"),
-    ("comms", r"\b(dialers?|dialing|telephony|voip|phone systems?|softphones?|webrtc|sms|text messag\w*|ivr|call (center|centre|recording|tracking|routing|logging|queues?)|contact cent(er|re)|cold call\w*|click-to-call|voicemail|ringcentral|twilio|aircall|dialpad|telnyx|10dlc|caller id|cpaas|ucaas)\b"),
-    ("legal", r"\b(legal|gdpr|ccpa|hipaa|compliance|regulations?|licen[cs]es?|terms of service|privacy policy|contracts?|ai act)\b"),
+    (
+        "seo",
+        r"\b(seo|serp|keywords?|rankings?|backlinks?|search console|schema markup|structured data|rich results?|geo|aeo|ai overviews?|llm visibility|organic traffic)\b",
+    ),
+    (
+        "content",
+        r"\b(content|copywriting|blog|newsletter|ad creatives?|ads|creative|hooks?|social posts?|short-form|video|campaign|landing copy)\b",
+    ),
+    (
+        "market",
+        r"\b(market|competitors?|competitive|pricing|tam|vendors?|landscape|funding|positioning|alternatives)\b",
+    ),
+    (
+        "ui-ux",
+        r"\b(ui|ux|onboarding|user flows?|screens?|layout|design patterns?|figma|components?|dashboard|checkout|usability)\b",
+    ),
+    (
+        "a11y",
+        r"\b(a11y|accessibility|accessible|wcag|screen readers?|aria|colou?r contrast|keyboard navigation)\b",
+    ),
+    (
+        "perf",
+        r"\b(performance|perf|latency|core web vitals|cwv|lcp|inp|cls|bundle size|page ?speed|lighthouse|throughput)\b",
+    ),
+    (
+        "security",
+        r"\b(security|vulnerabilit(y|ies)|cves?|owasp|authn?|secrets?|xss|csrf|ssrf|injection|supply chain|sbom|pentest|threat model)\b",
+    ),
+    (
+        "devtools",
+        r"\b(librar(y|ies)|frameworks?|sdks?|apis?|integrations?|webhooks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b",
+    ),
+    (
+        "ai-agents",
+        r"\b(llms?|agents?|agentic|prompts?|rag|evals?|mcp|models?|fine-?tun\w*|embeddings?|claude|gpt|gemini)\b",
+    ),
+    (
+        "data-infra",
+        r"\b(databases?|postgres|schema|warehouse|etl|pipelines?|queues?|kafka|cach(e|ing)|redis|infra|kubernetes|serverless|cdn)\b",
+    ),
+    (
+        "comms",
+        r"\b(dialers?|dialing|telephony|voip|phone systems?|softphones?|webrtc|sms|text messag\w*|ivr|call (center|centre|recording|tracking|routing|logging|queues?)|contact cent(er|re)|cold call\w*|click-to-call|voicemail|ringcentral|twilio|aircall|dialpad|telnyx|10dlc|caller id|cpaas|ucaas)\b",
+    ),
+    (
+        "legal",
+        r"\b(legal|gdpr|ccpa|hipaa|compliance|regulations?|licen[cs]es?|terms of service|privacy policy|contracts?|ai act)\b",
+    ),
 ]
 FOCUS_RES = [(tag, re.compile(rx, re.I)) for tag, rx in FOCUS_HINTS]
 MAX_FOCUS = 4
@@ -310,7 +359,11 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
                     )
                 for s in record["steps"]:
                     s["required"] = s["step_id"] in required
-                record["rule_notes"] = notes + [n for n in record.get("rule_notes", []) if n.startswith("Git intake baseline")]
+                record["rule_notes"] = notes + [
+                    n
+                    for n in record.get("rule_notes", [])
+                    if n.startswith("Git intake baseline")
+                ]
                 save(path, record)
             return summary(project, record)
         try:
@@ -319,17 +372,21 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
             if str(exc) == "Git identity lookup failed":
                 raise
             identity = None
-            notes.append(f'Git intake baseline unavailable: {exc}; required Git proof remains blocked')
+            notes.append(
+                f"Git intake baseline unavailable: {exc}; required Git proof remains blocked"
+            )
         if identity is not None:
-            baseline = project / STORE_DIR / 'evidence' / f'{work_id}-build-base.txt'
+            baseline = project / STORE_DIR / "evidence" / f"{work_id}-build-base.txt"
             baseline.parent.mkdir(parents=True, exist_ok=True)
             expected = f"base {identity['head']}\nwork-id {work_id}\n"
             try:
-                with baseline.open('x') as out:
+                with baseline.open("x") as out:
                     out.write(expected)
             except FileExistsError:
                 if baseline.read_text() != expected:
-                    raise ValueError('existing intake baseline conflicts; preserve it and recover provenance')
+                    raise ValueError(
+                        "existing intake baseline conflicts; preserve it and recover provenance"
+                    )
         record = {
             "work_id": work_id,
             "goal": goal,
@@ -379,10 +436,12 @@ def _stable(path: Path, sha: str, stat) -> tuple[bool, list | None]:
     return digest(path) == sha, cur
 
 
-
 def git_identity(project: Path) -> dict | None:
     """None means a confirmed ordinary folder, never a failed Git lookup."""
-    has_git = any((parent / ".git").exists() for parent in (project.resolve(), *project.resolve().parents))
+    has_git = any(
+        (parent / ".git").exists()
+        for parent in (project.resolve(), *project.resolve().parents)
+    )
     if shutil.which("git") is None:
         if has_git:
             raise ValueError("Git identity unavailable: git is missing")
@@ -390,10 +449,15 @@ def git_identity(project: Path) -> dict | None:
 
     def read(*args):
         try:
-            return subprocess.run(["git", "-C", str(project), *args],
-                                  capture_output=True, text=True, timeout=10)
+            return subprocess.run(
+                ["git", "-C", str(project), *args],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise ValueError("Git identity lookup failed") from exc
+
     inside = read("rev-parse", "--is-inside-work-tree")
     if inside.returncode != 0:
         if not has_git and "not a git repository" in inside.stderr.lower():
@@ -408,13 +472,159 @@ def git_identity(project: Path) -> dict | None:
     return {"head": head.stdout.strip(), "branch": branch.stdout.strip() or None}
 
 
+def completion_digest(record: dict) -> str:
+    """Bind immutable proof fields, excluding cheap file-stat caches."""
+    rows = []
+    for row in record["steps"]:
+        fields = {
+            k: row.get(k)
+            for k in (
+                "step_id",
+                "required",
+                "status",
+                "reason",
+                "evidence_path",
+                "evidence_sha256",
+                "verify_command_sha256",
+                "verifier_exit",
+                "verified_at",
+                "git_identity",
+                "candidate_sha256",
+            )
+        }
+        fields["instruments"] = {
+            name: meta.get("sha256") if isinstance(meta, dict) else meta
+            for name, meta in row.get("instruments", {}).items()
+        }
+        rows.append(fields)
+    return hashlib.sha256(
+        json.dumps([record["work_id"], rows], sort_keys=True).encode()
+    ).hexdigest()
+
+
+def retained_completion(project: Path, record: dict) -> bool:
+    """Historical completion needs retained executed proofs, not terminal labels."""
+    try:
+        rows = record["steps"]
+        if [r["step_id"] for r in rows] != STEP_IDS or rows[-1]["status"] != "passed":
+            return False
+        for row in rows:
+            if row["status"] == "not-applicable":
+                if row["required"] or not row.get("reason", "").strip():
+                    return False
+                continue
+            if (
+                row["status"] != "passed"
+                or row.get("verifier_exit") != 0
+                or not row.get("verified_at")
+                or not row.get("verify_command_sha256")
+                or not row.get("evidence_sha256")
+            ):
+                return False
+            ev = resolve(project, row["evidence_path"])
+            if (
+                ev.is_symlink()
+                or not ev.is_file()
+                or digest(ev) != row["evidence_sha256"]
+            ):
+                return False
+            for name, meta in row.get("instruments", {}).items():
+                path = resolve(project, name)
+                sha = meta.get("sha256") if isinstance(meta, dict) else meta
+                if path.is_symlink() or not path.is_file() or digest(path) != sha:
+                    return False
+        review = next(r for r in rows if r["step_id"] == "review")
+        if review.get("git_identity") is not None:
+            if not review.get("candidate_sha256"):
+                return False
+            baseline = (
+                project
+                / STORE_DIR
+                / "evidence"
+                / (record["work_id"] + "-build-base.txt")
+            )
+            if baseline.is_symlink() or not baseline.is_file():
+                return False
+            lines = baseline.read_text().splitlines()
+            if (
+                len(lines) != 2
+                or lines[1] != "work-id " + record["work_id"]
+                or not re.fullmatch(r"base [0-9a-f]{40}(?:[0-9a-f]{24})?", lines[0])
+            ):
+                return False
+            base = lines[0].split(" ", 1)[1]
+            ancestor = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "merge-base",
+                    "--is-ancestor",
+                    base,
+                    review["git_identity"]["head"],
+                ],
+                capture_output=True,
+                timeout=10,
+            )
+            if ancestor.returncode:
+                return False
+            if record.get("completion", {}).get(
+                "baseline_sha256", digest(baseline)
+            ) != digest(baseline):
+                return False
+            if any(
+                not r.get("git_identity")
+                for r in rows
+                if r["step_id"] in RELEASE_STEPS and r["status"] == "passed"
+            ):
+                return False
+        completion = record.get("completion")
+        return not completion or (
+            completion.get("state") == "completed"
+            and completion.get("receipt_sha256") == completion_digest(record)
+        )
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.TimeoutExpired,
+    ):
+        return False
+
+
+def seal_completion(project: Path, record: dict) -> None:
+    record["completion"] = {
+        "state": "completed",
+        "completed_at": record["steps"][-1]["verified_at"],
+        "receipt_sha256": completion_digest(record),
+    }
+    baseline = (
+        project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
+    )
+    if baseline.is_file():
+        record["completion"]["baseline_sha256"] = digest(baseline)
+
+
 def refresh(project: Path, record: dict) -> bool:
     """Reopen a passed step, and every later passed step, when its inputs changed."""
     changed_any, reopen = False, False
-    identity = git_identity(project) if any(
-        s["status"] == "passed" and (s["step_id"] in RELEASE_STEPS or s["step_id"] == "review")
-        for s in record["steps"]
-    ) else None
+    # Legacy records migrate only with complete, retained verifier provenance.
+    if not record.get("completion") and retained_completion(project, record):
+        seal_completion(project, record)
+        changed_any = True
+    historical = bool(record.get("completion"))
+    identity = (
+        git_identity(project)
+        if any(
+            s["status"] == "passed"
+            and (s["step_id"] in RELEASE_STEPS or s["step_id"] == "review")
+            for s in record["steps"]
+        )
+        and not historical
+        else None
+    )
     for step in record["steps"]:
         # Scrub old receipts on read, too; status must not expose old credentials.
         command = step.get("verify_command", "")
@@ -435,13 +645,20 @@ def refresh(project: Path, record: dict) -> bool:
         )
         step["evidence_stat"] = ev_stat
         identity_changed = (
-            (step["step_id"] in RELEASE_STEPS or step["step_id"] == "review")
+            not historical
+            and (step["step_id"] in RELEASE_STEPS or step["step_id"] == "review")
             and step.get("git_identity") != identity
         )
         candidate_changed = False
-        if step["step_id"] == "review" and git_identity(project) is not None:
+        if (
+            not historical
+            and step["step_id"] == "review"
+            and git_identity(project) is not None
+        ):
             try:
-                candidate_changed = step.get("candidate_sha256") != candidate_snapshot(project)
+                candidate_changed = step.get("candidate_sha256") != candidate_snapshot(
+                    project
+                )
             except (OSError, ValueError):
                 candidate_changed = True
         changed = not ev_ok or identity_changed or candidate_changed
@@ -456,10 +673,10 @@ def refresh(project: Path, record: dict) -> bool:
             step["status"] = "pending"
             step["reason"] = (
                 "Reviewed candidate changed or cannot be inspected. Repeat review and later steps."
-                if candidate_changed else
-                "Git HEAD or branch changed after it passed. Repeat this step."
-                if identity_changed else
-                "Evidence or instrument changed after it passed. Repeat this step."
+                if candidate_changed
+                else "Git HEAD or branch changed after it passed. Repeat this step."
+                if identity_changed
+                else "Evidence or instrument changed after it passed. Repeat this step."
             )
             reopen = changed_any = True
     return changed_any
@@ -477,6 +694,12 @@ def summary(project: Path, record: dict) -> dict:
         "open": open_steps,
         "rule_notes": record.get("rule_notes", []),
         "steps": record["steps"],
+        "completed": bool(record.get("completion")),
+        "historical_receipts_valid": retained_completion(project, record)
+        if record.get("completion")
+        else False,
+        "current_candidate_ready": not open_steps
+        and not bool(record.get("completion")),
     }
     research = next(s for s in record["steps"] if s["step_id"] == "research")
     hint = research_hint(record["goal"])
@@ -561,6 +784,10 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
         record = load(path)
         if refresh(project, record):
             save(path, record)
+        if record.get("completion"):
+            raise ValueError(
+                "completed work is historical; use reopen or start new work"
+            )
         target = _target(record, step_id)
         if target["status"] != "pending":
             raise ValueError(
@@ -601,6 +828,10 @@ def step(
         record = load(path)
         if refresh(project, record):
             save(path, record)
+        if record.get("completion"):
+            raise ValueError(
+                "completed work is historical; use reopen or start new work"
+            )
         target = _target(record, step_id)
         before = {k: target.get(k) for k in RECORD_KEYS}
         before_revision = target.get("revision", 0)
@@ -645,8 +876,16 @@ def step(
                 )
             deps[portable(project, q)] = digest(q)
         sha = digest(ev)
-        identity = git_identity(project) if step_id in RELEASE_STEPS or step_id == "review" else None
-        candidate = candidate_snapshot(project) if step_id == "review" and git_identity(project) is not None else None
+        identity = (
+            git_identity(project)
+            if step_id in RELEASE_STEPS or step_id == "review"
+            else None
+        )
+        candidate = (
+            candidate_snapshot(project)
+            if step_id == "review" and git_identity(project) is not None
+            else None
+        )
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     code, output = run_verifier(verify_cmd, project, timeout)
@@ -656,7 +895,10 @@ def step(
         record = load(path)
         refresh(project, record)
         target = _target(record, step_id)
-        if target.get("revision", 0) != before_revision or {k: target.get(k) for k in RECORD_KEYS} != before:
+        if (
+            target.get("revision", 0) != before_revision
+            or {k: target.get(k) for k in RECORD_KEYS} != before
+        ):
             raise ValueError(
                 "this step was changed by someone else while the verifier ran; retry"
             )
@@ -665,17 +907,27 @@ def step(
             digest(resolve(project, q)) == h for q, h in deps.items()
         )
         identity_stable = (
-            (step_id not in RELEASE_STEPS and step_id != "review") or identity == git_identity(project)
-        )
+            step_id not in RELEASE_STEPS and step_id != "review"
+        ) or identity == git_identity(project)
         try:
-            candidate_stable = candidate is None or candidate == candidate_snapshot(project)
+            candidate_stable = candidate is None or candidate == candidate_snapshot(
+                project
+            )
         except (OSError, ValueError):
             candidate_stable = False
-        passed = code == 0 and stable and identity_stable and candidate_stable and not earlier
+        passed = (
+            code == 0
+            and stable
+            and identity_stable
+            and candidate_stable
+            and not earlier
+        )
         if not identity_stable:
             why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
         elif earlier:
-            why = "An earlier step reopened while the verifier ran: " + ", ".join(earlier)
+            why = "An earlier step reopened while the verifier ran: " + ", ".join(
+                earlier
+            )
         elif not candidate_stable:
             why = "Reviewed candidate changed while the verifier ran. Repeat review."
         elif not stable:
@@ -709,10 +961,44 @@ def step(
             reason="" if passed else why,
         )
         _commit(project, path, record, target, before)
+        if passed and step_id == "closeout" and retained_completion(project, record):
+            seal_completion(project, record)
+            save(path, record)
         out = summary(project, record)
         if not passed:
             out.update(ok=False, error=why)
         return out
+
+
+def reopen(project: Path, work_id: str, reason: str) -> dict:
+    """Explicitly restart proof work, retaining history and the original baseline."""
+    if not reason.strip():
+        raise ValueError("reopen needs a written reason")
+    path = store_path(project, work_id)
+    with locked(path):
+        record = load(path)
+        if not record.get("completion"):
+            raise ValueError("work is not completed")
+        if git_identity(project) is not None:
+            baseline = project / STORE_DIR / "evidence" / (work_id + "-build-base.txt")
+            if baseline.is_symlink() or not baseline.is_file():
+                raise ValueError("original baseline is missing; retain the scope gap")
+        record.setdefault("completion_history", []).append(
+            {
+                "completion": record.pop("completion"),
+                "steps": json.loads(json.dumps(record["steps"])),
+                "reopened_at": now(),
+                "reason": reason.strip(),
+            }
+        )
+        for row in record["steps"]:
+            row.update(
+                status="pending",
+                reason="Explicitly reopened: " + reason.strip(),
+                revision=row.get("revision", 0) + 1,
+            )
+        save(path, record)
+    return summary(project, record)
 
 
 def list_items(project: Path) -> dict:
@@ -720,7 +1006,20 @@ def list_items(project: Path) -> dict:
     for f in sorted((project / STORE_DIR).glob("*.json")):
         try:
             s = status(project, f.stem)
-            items.append({k: s[k] for k in ("work_id", "goal", "ready", "next_step")})
+            items.append(
+                {
+                    k: s[k]
+                    for k in (
+                        "work_id",
+                        "goal",
+                        "ready",
+                        "next_step",
+                        "completed",
+                        "historical_receipts_valid",
+                        "current_candidate_ready",
+                    )
+                }
+            )
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             items.append({"work_id": f.stem, "error": str(exc)})
     return {"ok": True, "items": items}
@@ -774,6 +1073,16 @@ def print_human(result: dict) -> None:
             print(f"{item['work_id']}  {state}")
         return
     print(f"{result['work_id']}  {result['goal']}")
+    if result.get("completed"):
+        print(
+            "  historical completion: "
+            + (
+                "retained proof valid"
+                if result.get("historical_receipts_valid")
+                else "proof gap"
+            )
+            + "; not a current release gate"
+        )
     for note in result.get("rule_notes", []):
         print(f"  note: {note}")
     for s in result["steps"]:
@@ -853,6 +1162,12 @@ def main(argv=None) -> int:
             else "exit 0 only when every row is passed or n/a",
         )
         p.add_argument("--id", required=True)
+        if name == "check":
+            p.add_argument(
+                "--historical",
+                action="store_true",
+                help="verify retained completed-work receipts; never a current release gate",
+            )
         p.add_argument(
             "--through",
             choices=STEP_IDS,
@@ -890,6 +1205,13 @@ def main(argv=None) -> int:
         "steps", parents=[common], help="print the 17 rows and the skill for each"
     )
     sub.add_parser("list", parents=[common], help="list work items in this project")
+    p = sub.add_parser(
+        "reopen",
+        parents=[common],
+        help="restart completed work without changing its original baseline",
+    )
+    p.add_argument("--id", required=True)
+    p.add_argument("--reason", required=True)
     sub.add_parser(
         "doctor", parents=[common], help="check the install and the project folder"
     )
@@ -897,11 +1219,18 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     as_json = getattr(args, "json", False)
     project = Path(getattr(args, "project", ".")).expanduser().resolve()
+    if getattr(args, "historical", False) and args.through:
+        ap.error("--historical cannot be combined with --through")
     try:
         if args.cmd == "start":
             result = start(project, args.goal, args.id, args.require, args.optional)
         elif args.cmd in ("status", "check"):
-            result = status(project, args.id, args.through)
+            if getattr(args, "historical", False):
+                path = store_path(project, args.id)
+                with locked(path):
+                    result = summary(project, load(path))
+            else:
+                result = status(project, args.id, args.through)
         elif args.cmd == "step":
             result = step(
                 project,
@@ -923,6 +1252,8 @@ def main(argv=None) -> int:
             }
         elif args.cmd == "list":
             result = list_items(project)
+        elif args.cmd == "reopen":
+            result = reopen(project, args.id, args.reason)
         else:
             result = doctor(project)
     except KeyboardInterrupt:
@@ -943,7 +1274,13 @@ def main(argv=None) -> int:
     else:
         print_human(result)
     if args.cmd == "check":
-        return 0 if result["ready"] else 1
+        if args.historical:
+            return (
+                0
+                if result.get("completed") and result.get("historical_receipts_valid")
+                else 1
+            )
+        return 0 if result["ready"] and not result.get("completed") else 1
     return 0 if result.get("ok", True) else 1
 
 

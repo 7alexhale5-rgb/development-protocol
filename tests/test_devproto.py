@@ -75,13 +75,23 @@ class DevprotoTest(unittest.TestCase):
 
     def git(self, *args):
         return subprocess.check_output(
-            ["git", "-C", str(self.project), *args], stderr=subprocess.DEVNULL,
-            text=True).strip()
+            ["git", "-C", str(self.project), *args],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
 
     def init_git(self):
         self.git("init")
-        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-                 "commit", "--allow-empty", "-m", "first")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "first",
+        )
 
     def test_closeout_verifier_checks_merged_checkout_not_passing_feature(self):
         self.init_git()
@@ -90,50 +100,88 @@ class DevprotoTest(unittest.TestCase):
         self.close_until("closeout")
         merged = self.project / ".devproto" / "merged-checkout"
         merged.mkdir()
+
         def git(*args):
-            return subprocess.check_output(["git", "-C", str(merged), *args], text=True, stderr=subprocess.DEVNULL).strip()
+            return subprocess.check_output(
+                ["git", "-C", str(merged), *args], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+
         def commit(message):
             git("add", "mergedcheck.sh")
-            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", message)
+            git(
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.test",
+                "commit",
+                "-m",
+                message,
+            )
             return git("rev-parse", "HEAD")
+
         git("init")
         script = merged / "mergedcheck.sh"
         script.write_text("exit 1\n")
         sha = commit("failing merged code")
         branch = git("rev-parse", "--symbolic-full-name", "HEAD")
         # Original feature passes; only the committed separate merged checkout counts.
-        self.assertEqual(subprocess.run(["bash", "check.sh"], cwd=self.project).returncode, 0)
+        self.assertEqual(
+            subprocess.run(["bash", "check.sh"], cwd=self.project).returncode, 0
+        )
         import shlex
+
         path = shlex.quote(str(merged))
+
         def command(expected):
-            check = (f'test "$(git -C {path} rev-parse HEAD)" = {expected} && '
-                     f'test "$(git -C {path} rev-parse --symbolic-full-name HEAD)" = {shlex.quote(branch)} && '
-                     f'clean_status="$(git -C {path} status --porcelain --untracked-files=all)" && test -z "$clean_status"')
-            return f'{check} && (cd {path} && bash mergedcheck.sh) && {check}'
+            check = (
+                f'test "$(git -C {path} rev-parse HEAD)" = {expected} && '
+                f'test "$(git -C {path} rev-parse --symbolic-full-name HEAD)" = {shlex.quote(branch)} && '
+                f'clean_status="$(git -C {path} status --porcelain --untracked-files=all)" && test -z "$clean_status"'
+            )
+            return f"{check} && (cd {path} && bash mergedcheck.sh) && {check}"
+
         self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"])
         script.write_text("exit 0\n")
         out = self.pass_step("closeout", verify=command(sha))
-        self.assertFalse(out["ok"], "uncommitted green edit cannot certify failing merged SHA")
+        self.assertFalse(
+            out["ok"], "uncommitted green edit cannot certify failing merged SHA"
+        )
         self.assertEqual(self.rows(out)["closeout"]["status"], "blocked")
         git("add", "mergedcheck.sh")
-        self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"], "staged green edit is still not the recorded commit")
+        self.assertFalse(
+            self.pass_step("closeout", verify=command(sha))["ok"],
+            "staged green edit is still not the recorded commit",
+        )
         passing_sha = commit("passing merged code")
-        self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"], "wrong recorded SHA must fail")
+        self.assertFalse(
+            self.pass_step("closeout", verify=command(sha))["ok"],
+            "wrong recorded SHA must fail",
+        )
         (merged / "untracked-input.py").write_text("answer = 1\n")
-        self.assertFalse(self.pass_step("closeout", verify=command(passing_sha))["ok"], "untracked inputs must fail")
+        self.assertFalse(
+            self.pass_step("closeout", verify=command(passing_sha))["ok"],
+            "untracked inputs must fail",
+        )
         (merged / "untracked-input.py").unlink()
-        self.assertTrue(self.pass_step("closeout", verify=command(passing_sha))["ok"])
         # Each clean committed test below exits zero but changes the checkout while running.
-        for body in ("touch generated-input.py\nexit 0\n",
-                     "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -qm during-tests\nexit 0\n",
-                     "git checkout -qb during-tests\nexit 0\n"):
+        for body in (
+            "touch generated-input.py\nexit 0\n",
+            "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -qm during-tests\nexit 0\n",
+            "git checkout -qb during-tests\nexit 0\n",
+        ):
             with self.subTest(body=body):
                 script.write_text(body)
                 current_sha = commit("mutation probe")
                 out = self.pass_step("closeout", verify=command(current_sha))
-                self.assertFalse(out["ok"], "post-test cleanliness and identity changes must fail")
+                self.assertFalse(
+                    out["ok"], "post-test cleanliness and identity changes must fail"
+                )
                 if (merged / "generated-input.py").exists():
                     (merged / "generated-input.py").unlink()
+        script.write_text("exit 0\n")
+        passing_sha = commit("final passing merged code")
+        branch = git("rev-parse", "--symbolic-full-name", "HEAD")
+        self.assertTrue(self.pass_step("closeout", verify=command(passing_sha))["ok"])
 
     def test_post_ship_receipt_notes_allow_compound_and_closeout(self):
         self.init_git()
@@ -162,8 +210,20 @@ class DevprotoTest(unittest.TestCase):
         status = devproto.status(self.project, "w1")
         self.assertEqual(status["next_step"], "review")
         with self.assertRaisesRegex(ValueError, "earlier steps"):
-            devproto.step(self.project, "w1", "compound", "blocked", reason="upstream proof reopened")
-        out = devproto.step(self.project, "w1", "review", "blocked", reason="source changed after review")
+            devproto.step(
+                self.project,
+                "w1",
+                "compound",
+                "blocked",
+                reason="upstream proof reopened",
+            )
+        out = devproto.step(
+            self.project,
+            "w1",
+            "review",
+            "blocked",
+            reason="source changed after review",
+        )
         self.assertEqual(self.rows(out)["review"]["status"], "blocked")
         self.assertEqual(self.rows(out)["compound"]["status"], "pending")
 
@@ -182,7 +242,10 @@ class DevprotoTest(unittest.TestCase):
         self.init_git()
         self.start()
         self.close_until("review")
-        out = self.pass_step("review", "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -m changed")
+        out = self.pass_step(
+            "review",
+            "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -m changed",
+        )
         self.assertFalse(out["ok"])
         self.assertIn("Git HEAD or branch changed", out["error"])
 
@@ -194,7 +257,11 @@ class DevprotoTest(unittest.TestCase):
         self.assertFalse(out["ok"])
 
     def test_transient_intake_failure_can_retry_without_creating_record(self):
-        with patch.object(devproto, "git_identity", side_effect=ValueError("Git identity lookup failed")):
+        with patch.object(
+            devproto,
+            "git_identity",
+            side_effect=ValueError("Git identity lookup failed"),
+        ):
             with self.assertRaisesRegex(ValueError, "lookup failed"):
                 self.start()
         self.assertFalse(devproto.store_path(self.project, "w1").exists())
@@ -203,7 +270,9 @@ class DevprotoTest(unittest.TestCase):
         self.git("init")
         self.start(TRIVIAL)
         out = self.start(TRIVIAL, force=["research"])
-        self.assertTrue(any("baseline unavailable" in note for note in out["rule_notes"]))
+        self.assertTrue(
+            any("baseline unavailable" in note for note in out["rule_notes"])
+        )
 
     def test_commit_proof_reopens_on_head_change_only_from_commit_onward(self):
         self.init_git()
@@ -212,8 +281,16 @@ class DevprotoTest(unittest.TestCase):
         self.pass_step("commit")
         self.pass_step("ship")
         self.assertTrue(devproto.status(self.project, "w1", "ship")["ready"])
-        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-                 "commit", "--allow-empty", "-m", "second")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "second",
+        )
         out = devproto.status(self.project, "w1", "commit")
         self.assertFalse(out["ready"])
         rows = self.rows(out)
@@ -233,8 +310,16 @@ class DevprotoTest(unittest.TestCase):
         self.init_git()
         self.start()
         self.close_until("commit")
-        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-                 "commit", "--allow-empty", "-m", "work")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "work",
+        )
         out = devproto.status(self.project, "w1", "commit")
         self.assertEqual(self.rows(out)["build"]["status"], "passed")
         self.assertEqual(self.rows(out)["review"]["status"], "pending")
@@ -274,9 +359,12 @@ class DevprotoTest(unittest.TestCase):
         self.init_git()
         self.start()
         self.close_until("commit")
-        out = self.pass_step("commit", "git -c user.name=Fixture "
-                             "-c user.email=fixture@example.test "
-                             "commit --allow-empty -m changed")
+        out = self.pass_step(
+            "commit",
+            "git -c user.name=Fixture "
+            "-c user.email=fixture@example.test "
+            "commit --allow-empty -m changed",
+        )
         self.assertFalse(out["ok"])
         self.assertIn("Git HEAD or branch changed", out["error"])
         self.assertEqual(self.rows(out)["build"]["status"], "passed")
@@ -284,29 +372,33 @@ class DevprotoTest(unittest.TestCase):
     def test_missing_git_cannot_accept_legacy_release_receipt(self):
         self.init_git()
         self.start()
-        self.close_until('commit')
-        self.pass_step('commit')
-        path = devproto.store_path(self.project, 'w1')
+        self.close_until("commit")
+        self.pass_step("commit")
+        path = devproto.store_path(self.project, "w1")
         record = devproto.load(path)
-        self.rows(record)['commit'].pop('git_identity')
+        self.rows(record)["commit"].pop("git_identity")
         devproto.save(path, record)
-        with patch.object(devproto.shutil, 'which', return_value=None):
-            with self.assertRaisesRegex(ValueError, 'Git identity unavailable'):
-                devproto.status(self.project, 'w1')
+        with patch.object(devproto.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(ValueError, "Git identity unavailable"):
+                devproto.status(self.project, "w1")
 
     def test_older_success_cannot_overwrite_identical_newer_failure(self):
         self.start()
-        self.pass_step('pathway', 'false')
+        self.pass_step("pathway", "false")
+
         def older_verifier(*args):
-            with patch.object(devproto, 'run_verifier', return_value=(1, 'new failure')):
-                self.pass_step('pathway', 'false')
-            return 0, 'older success'
-        with patch.object(devproto, 'run_verifier', side_effect=older_verifier):
-            with self.assertRaisesRegex(ValueError, 'changed by someone else'):
-                self.pass_step('pathway', 'false')
-        row = self.rows(devproto.status(self.project, 'w1'))['pathway']
-        self.assertEqual(row['status'], 'blocked')
-        self.assertEqual(row['output_tail'], 'new failure')
+            with patch.object(
+                devproto, "run_verifier", return_value=(1, "new failure")
+            ):
+                self.pass_step("pathway", "false")
+            return 0, "older success"
+
+        with patch.object(devproto, "run_verifier", side_effect=older_verifier):
+            with self.assertRaisesRegex(ValueError, "changed by someone else"):
+                self.pass_step("pathway", "false")
+        row = self.rows(devproto.status(self.project, "w1"))["pathway"]
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["output_tail"], "new failure")
 
     # ---- row rules -------------------------------------------------------
 
@@ -396,7 +488,9 @@ class DevprotoTest(unittest.TestCase):
             self.project, "Research which auth library to pick for the checkout", "f1"
         )
         hint = "/research-stack --focus ui-ux,security,devtools"
-        self.assertIn(f"research focus suggested from the goal: {hint}", out["rule_notes"])
+        self.assertIn(
+            f"research focus suggested from the goal: {hint}", out["rule_notes"]
+        )
         self.assertEqual(out["research_focus"], hint)
         self.close_until_for("f1", "research")
         buf = io.StringIO()
@@ -424,7 +518,9 @@ class DevprotoTest(unittest.TestCase):
             if s["step_id"] == target:
                 return
             if s["required"]:
-                devproto.step(self.project, work_id, s["step_id"], "pass", "ev.md", "true")
+                devproto.step(
+                    self.project, work_id, s["step_id"], "pass", "ev.md", "true"
+                )
             else:
                 devproto.step(
                     self.project, work_id, s["step_id"], "na", reason="not needed"
@@ -457,7 +553,10 @@ class DevprotoTest(unittest.TestCase):
             self.rows(devproto.status(self.project, "w1"))["audit-setup"]["required"]
         )
         out = devproto.set_optional(
-            self.project, "w1", "audit-setup", "explicitly approved optional row, applicability verified"
+            self.project,
+            "w1",
+            "audit-setup",
+            "explicitly approved optional row, applicability verified",
         )
         self.assertFalse(self.rows(out)["audit-setup"]["required"])
         # Now na works where it was refused before.
@@ -897,9 +996,28 @@ class IntakeBaselineTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
             subprocess.run(["git", "init", "-q", directory], check=True)
+
             def commit(message):
-                subprocess.run(["git", "-C", directory, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", message], check=True)
-                return subprocess.check_output(["git", "-C", directory, "rev-parse", "HEAD"], text=True).strip()
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        directory,
+                        "-c",
+                        "user.name=Fixture",
+                        "-c",
+                        "user.email=fixture@example.test",
+                        "commit",
+                        "--allow-empty",
+                        "-qm",
+                        message,
+                    ],
+                    check=True,
+                )
+                return subprocess.check_output(
+                    ["git", "-C", directory, "rev-parse", "HEAD"], text=True
+                ).strip()
+
             base = commit("intake")
             devproto.start(project, TRIVIAL, "work")
             baseline = project / ".devproto/evidence/work-build-base.txt"
@@ -911,7 +1029,9 @@ class IntakeBaselineTest(unittest.TestCase):
             self.assertIn(base, original.decode())
             baseline.unlink()
             devproto.start(project, TRIVIAL, "work")
-            self.assertFalse(baseline.exists(), "resume must not invent missing intake evidence")
+            self.assertFalse(
+                baseline.exists(), "resume must not invent missing intake evidence"
+            )
 
     def test_unborn_repository_can_start_with_explicit_proof_gap(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -919,9 +1039,14 @@ class IntakeBaselineTest(unittest.TestCase):
             subprocess.run(["git", "init", "-q", directory], check=True)
             result = devproto.start(project, TRIVIAL, "new")
             self.assertTrue(result["ok"])
-            self.assertFalse((project / ".devproto/evidence/new-build-base.txt").exists())
+            self.assertFalse(
+                (project / ".devproto/evidence/new-build-base.txt").exists()
+            )
             record = json.loads((project / ".devproto/new.json").read_text())
-            self.assertTrue(any("baseline unavailable" in note for note in record["rule_notes"]))
+            self.assertTrue(
+                any("baseline unavailable" in note for note in record["rule_notes"])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

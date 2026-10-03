@@ -146,7 +146,7 @@ proves the real thing happened" means. Push a branch and open a pull request to 
    session with only the diff and spec, or a person. Record which one reviewed.
 6. Before merge, execute the exact candidate review verifier and `check --through commit`. Rows `ship`, `compound` and `closeout` can only
    be proven after the merge.
-7. At the end, execute current verification and the candidate review verifier, then require `check` to exit 0. Git review rows retain a candidate snapshot; changed or unreadable candidates reopen review and later rows. The checklist reports evidence, not an independently executed semantic review. Never answer completion from memory.
+7. At the end, execute current verification and the candidate review verifier, then require active-work `check` to exit 0 before final closeout. After completion, require `check --historical` with valid retained receipts, never use it as a release preflight. Git review rows retain a candidate snapshot; changed or unreadable candidates reopen review and later rows. The checklist reports evidence, not an independently executed semantic review. Never answer completion from memory.
 
 ## Loop mode
 
@@ -207,3 +207,17 @@ Git proof uses the repository root even for a monorepo package. An unborn reposi
 or missing Git may start intake with an explicit baseline-unavailable note. That does
 not create Git proof; later build/review/ship remain blocked until genuine intake
 provenance can be recovered. Resume never invents a missing baseline at a newer HEAD.
+
+## Completed work and a later candidate
+
+A successful closeout records durable completion provenance. `list` and `status`
+report completed work as historical; they do not reopen it merely because a later
+candidate changes HEAD or source bytes. Historical readiness cannot certify a new
+release. Use ordinary `check --through commit` only on the active work item.
+After closeout, `check --historical` verifies retained completion evidence and
+instruments; require valid historical receipts before claiming that past work is
+proved. It does not claim the current candidate is ready or rerun its old tests.
+Missing historical evidence remains unverified. Unknown legacy records are not
+silently treated as completed. For new work, create a new item with its own intake
+BASE. To deliberately continue completed work, use `reopen --id=<id> --reason <reason>`;
+retain its completion history and original BASE, then execute renewed proof rows.

@@ -232,13 +232,29 @@ Write:
 - **Title:** short (under 70 characters), describes the change.
 - **Body:** summary bullets, test plan, any notes (including any rails finding from Step 0d).
 
-### 4b: Create the pull request
+### 4b: Reuse or create the pull request
+
+Before creating a PR, query the authenticated repository for this exact head branch
+and intended base, including open and merged PRs. Reuse a unique matching open PR;
+verify its head equals the pushed SHA and renew the ship receipt from its current
+checks. Do not run `gh pr create` again merely because review evidence was renewed.
+If it is already merged, verify the recorded merged SHA in a separate checkout and
+continue closeout; never create a duplicate release PR. An ambiguous match or different
+base is a scope gap, not permission to choose another PR silently.
+
+```bash
+gh pr list --state all --head "{head_branch}" --base "{base}" \
+  --json number,url,state,headRefOid,baseRefName,headRefName,mergeCommit
+```
+
+Create only when no matching PR exists. Retain the actual repository, branch, base,
+PR URL and exact head in the evidence so a resumed closeout follows this same path.
 
 Optional flags: if `--reviewers @a,@b` was passed, add `--reviewer a,b`; if `--draft`, add
 `--draft`. Put them in `{flags}` below.
 
 ```bash
-gh pr create --title "{title}" {flags} --body "$(cat <<'EOF'
+gh pr create --base "{base}" --title "{title}" {flags} --body "$(cat <<'EOF'
 ## Summary
 {2-4 bullet points from the commit analysis}
 

@@ -675,3 +675,8 @@ does it answer a follow-up without re-nagging with the menu.
 ```
 
 Pass whatever flags the user gave straight through.
+
+After the closeout row passes, the work becomes completed history. Verify its
+retained proof with `devproto.py --project <repo> check --id=<work-id> --historical`;
+ordinary current-candidate checks cannot use a completed work item for a new release.
+A historical pass proves retained closeout receipts, not a fresh test execution.
