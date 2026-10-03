@@ -265,12 +265,38 @@ def candidate_binding(project: Path) -> dict:
     """Bind executed proof to observed source bytes, never to a session label."""
     from _shared import candidate_snapshot
 
-    probe = subprocess.run(
-        ["git", "-C", str(project), "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        timeout=10,
+    git_expected = any(
+        os.environ.get(key) for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR")
     )
-    if probe.returncode == 0:
+    for parent in (project, *project.parents):
+        try:
+            (parent / ".git").lstat()
+            git_expected = True
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise ValueError("candidate Git markers cannot be inspected") from exc
+    try:
+        probe = subprocess.run(
+            ["git", "-C", str(project), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            timeout=10,
+        )
+    except FileNotFoundError as exc:
+        if git_expected:
+            raise ValueError(
+                "Git is unavailable for this repository candidate"
+            ) from exc
+        probe = None
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError("candidate Git inspection failed") from exc
+    if (
+        probe is not None
+        and probe.returncode != 0
+        and (git_expected or b"not a git repository" not in probe.stderr.lower())
+    ):
+        raise ValueError("candidate Git identity cannot be established")
+    if probe is not None and probe.returncode == 0:
         if Path(os.fsdecode(probe.stdout).strip()).resolve() != project.resolve():
             raise ValueError("candidate must name the repository root")
         before = (
@@ -301,7 +327,13 @@ def candidate_binding(project: Path) -> dict:
     def scan():
         rows = []
         size = 0
-        for directory, dirs, files in os.walk(project, followlinks=False):
+
+        def inaccessible(error):
+            raise ValueError("candidate directory cannot be enumerated") from error
+
+        for directory, dirs, files in os.walk(
+            project, followlinks=False, onerror=inaccessible
+        ):
             base = Path(directory)
             if base == project:
                 dirs[:] = [name for name in dirs if name not in {".devproto", ".git"}]
@@ -695,6 +727,13 @@ def refresh(project: Path, item: dict) -> bool:
     if item.get("closed"):
         return False  # Historical validation must never rewrite sealed rows.
     changed = False
+    binding = None
+    binding_error = ""
+    if any(row["status"] == "proved" for row in item["pathways"].values()):
+        try:
+            binding = candidate_binding(project)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            binding_error = str(exc)
     for name, p in item["pathways"].items():
         raw = p.get("verify", "")
         if raw and not p.get("verify_sha256"):
@@ -707,12 +746,25 @@ def refresh(project: Path, item: dict) -> bool:
         if p["status"] == "proved":
             ev = Path(p["evidence"])
             ev = ev if ev.is_absolute() else project / ev
-            if digest(ev) != p["sha256"]:
+            evidence_changed = digest(ev) != p["sha256"]
+            if (
+                evidence_changed
+                or binding_error
+                or p.get("candidate_binding") != binding
+            ):
                 p.update(
                     status="open",
                     revision=p.get("revision", 0) + 1,
                     stale=True,
-                    reason="Evidence changed or vanished after it was proved. Prove it again.",
+                    reason=(
+                        "Evidence changed or vanished after it was proved. Prove it again."
+                        if evidence_changed
+                        else (
+                            "Candidate inspection failed: " + binding_error
+                            if binding_error
+                            else "Candidate changed after proof. Renew the read-only checks against the final candidate."
+                        )
+                    ),
                 )
                 changed = True
     return _reopen_if_incomplete(item) or changed
@@ -814,6 +866,14 @@ def _report_locked(project: Path, work_id: str) -> dict:
             "execution_tools": tools,
             "auto_eligible": pick in SAFE,
         }
+        if ways[pick].get("stale"):
+            card.update(
+                mode="renew-proof",
+                skill="/karpathy verify",
+                execution_stack=["/karpathy verify"],
+                auto_eligible=False,
+                one_percent_move="Renew this pathway's read-only acceptance checks against the final candidate; do not repeat its mutating implementation profile.",
+            )
     result = {
         "ok": historical_valid is not False,
         "work_id": item["work_id"],
@@ -1199,7 +1259,7 @@ def main(argv=None) -> int:
                 a.goal,
                 a.report or str(default),
             )
-    except ValueError as exc:
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
         r = {"ok": False, "error": str(exc)}
         print(json.dumps(r, indent=2) if as_json else f"ERROR: {exc}")
         return 2

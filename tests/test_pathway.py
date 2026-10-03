@@ -2,6 +2,8 @@
 
 import io
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -16,6 +18,52 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_changed_candidate_recommends_read_only_proof_renewal(self):
+        self.start()
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        (self.project / "final-docs.md").write_text("Final candidate documentation")
+        out = pathway.report(self.project, "w1")
+        self.assertEqual(out["trust"], "fail")
+        self.assertEqual(out["proof_rate"], 0)
+        self.assertEqual(out["card"]["mode"], "renew-proof")
+        self.assertNotIn("/build-stack", out["card"]["execution_stack"])
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        self.assertTrue(pathway.close(self.project, "w1")["closed"])
+
+    def test_ordinary_folder_proof_without_git(self):
+        self.start()
+        with patch.object(
+            pathway.subprocess, "run", side_effect=FileNotFoundError("git")
+        ):
+            binding = pathway.candidate_binding(self.project)
+        self.assertEqual(binding["kind"], "files")
+
+    def test_failed_git_inspection_is_not_a_non_git_candidate(self):
+        (self.project / ".git").mkdir()
+        with patch.object(
+            pathway.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                [], 128, b"", b"fatal: unsafe repository"
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "Git"):
+                pathway.candidate_binding(self.project)
+
+    @unittest.skipIf(os.geteuid() == 0, "permission-denial fixture requires non-root")
+    def test_unreadable_source_directory_cannot_be_certified(self):
+        folder = self.project / "private-source"
+        folder.mkdir()
+        (folder / "source.py").write_text("critical source")
+        folder.chmod(0)
+        try:
+            with self.assertRaisesRegex(ValueError, "candidate"):
+                pathway.candidate_binding(self.project)
+        finally:
+            folder.chmod(0o700)
+
     def test_inflight_verifier_cannot_cross_checklist_generation(self):
         import devproto
 
@@ -84,7 +132,6 @@ class PathwayTest(unittest.TestCase):
         self.assertEqual(current["pathways"]["govern"]["status"], "proved")
         self.assertEqual(pathway.load(self.project, "w1")["checklist_generation"], 2)
 
-
     def test_standalone_reopen_preserves_original_history_digest(self):
         self.start()
         for name in pathway.load(self.project, "w1")["pathways"]:
@@ -99,7 +146,6 @@ class PathwayTest(unittest.TestCase):
             pathway.completion_digest(history), pathway.completion_digest(original)
         )
         self.assertTrue(pathway.retained_completion(self.project, history))
-
 
     def test_retained_artifact_provider_preserves_proof_validation(self):
         import shutil
@@ -136,17 +182,18 @@ class PathwayTest(unittest.TestCase):
             pathway.retained_completion(self.project, item, artifact_provider=provider)
         )
 
-
     def test_stale_release_is_ineligible_while_docs_remain_owed(self):
         self.start(tier="demoable")
         for name in list(pathway.load(self.project, "w1")["pathways"]):
             pathway.log(self.project, "w1", name, "ev.md", "true")
         pathway.cover(self.project, "w1", "release", True, False)
-        (self.project / "release.md").write_text("released")
-        pathway.log(self.project, "w1", "release", "release.md", "true")
+        (self.project / ".devproto/release.md").write_text("released")
+        pathway.log(self.project, "w1", "release", ".devproto/release.md", "true")
         pathway.cover(self.project, "w1", "docs", True, False)
-        (self.project / "release.md").write_text("changed")
-        self.assertEqual(pathway.report(self.project, "w1")["recommended_pathway"], "docs")
+        (self.project / ".devproto/release.md").write_text("changed")
+        self.assertEqual(
+            pathway.report(self.project, "w1")["recommended_pathway"], "docs"
+        )
 
     def test_documentation_precedes_release_and_closeout_waits_for_itinerary(self):
         self.start()
@@ -369,7 +416,6 @@ class PathwayTest(unittest.TestCase):
         final = pathway.report(self.project, "w1")
         self.assertEqual(final["pathways"]["security"]["status"], "na")
 
-
     def test_persisted_verifier_command_is_redacted(self):
         self.start()
         fake = "example-bearer-value-123456"
@@ -381,6 +427,7 @@ class PathwayTest(unittest.TestCase):
         self.start()
         held = []
         real_load = pathway.load
+
         @contextmanager
         def guard(project):
             held.append(True)
@@ -388,32 +435,50 @@ class PathwayTest(unittest.TestCase):
                 yield
             finally:
                 held.pop()
+
         def guarded_load(project, work_id):
             self.assertTrue(held, "report loaded state without the store lock")
             return real_load(project, work_id)
-        with patch.object(pathway, "_store_lock", guard), patch.object(pathway, "load", guarded_load):
+
+        with (
+            patch.object(pathway, "_store_lock", guard),
+            patch.object(pathway, "load", guarded_load),
+        ):
             pathway.report(self.project, "w1")
 
     def test_slow_verifier_cannot_overwrite_newer_na(self):
         self.start()
+
         def changed(*args):
-            pathway.cover(self.project, "w1", "govern", add=False, na=True, reason="new decision")
+            pathway.cover(
+                self.project, "w1", "govern", add=False, na=True, reason="new decision"
+            )
             return 0, "ok"
+
         with patch.object(pathway, "_run_verifier", changed):
             with self.assertRaisesRegex(ValueError, "changed while"):
                 pathway.log(self.project, "w1", "govern", "ev.md", "true")
-        self.assertEqual(pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "na")
+        self.assertEqual(
+            pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "na"
+        )
 
     def test_slow_verifier_cannot_overwrite_newer_block(self):
         self.start()
+
         def changed(*args):
-            with patch.object(pathway, "_run_verifier", return_value=(1, "newer failure")):
+            with patch.object(
+                pathway, "_run_verifier", return_value=(1, "newer failure")
+            ):
                 pathway.log(self.project, "w1", "govern", "ev.md", "false")
             return 0, "old success"
+
         with patch.object(pathway, "_run_verifier", changed):
             with self.assertRaisesRegex(ValueError, "changed while"):
                 pathway.log(self.project, "w1", "govern", "ev.md", "true")
-        self.assertEqual(pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "blocked")
+        self.assertEqual(
+            pathway.report(self.project, "w1")["pathways"]["govern"]["status"],
+            "blocked",
+        )
 
     def close_demo(self):
         self.start(goal="Write a tiny tool", tier="demoable")
@@ -435,7 +500,9 @@ class PathwayTest(unittest.TestCase):
         artifact = next(archive.iterdir())
         content = artifact.read_bytes()
         artifact.unlink()
-        self.assertFalse(pathway.report(self.project, "w1")["historical_receipts_valid"])
+        self.assertFalse(
+            pathway.report(self.project, "w1")["historical_receipts_valid"]
+        )
         self.assertEqual(pathway.item_path(self.project, "w1").read_bytes(), record)
         artifact.write_bytes(content)
         self.assertTrue(pathway.report(self.project, "w1")["historical_receipts_valid"])
@@ -445,10 +512,12 @@ class PathwayTest(unittest.TestCase):
         for name in ("govern", "implementation", "quality"):
             pathway.log(self.project, "w1", name, "ev.md", "true")
         saved = []
+
         def late(*args):
             pathway.close(self.project, "w1")
             saved.append(pathway.item_path(self.project, "w1").read_bytes())
             return 0, "old verifier result"
+
         with patch.object(pathway, "_run_verifier", side_effect=late):
             with self.assertRaisesRegex(ValueError, "historical"):
                 pathway.log(self.project, "w1", "govern", "ev.md", "true")
@@ -457,6 +526,7 @@ class PathwayTest(unittest.TestCase):
 
     def test_old_verifier_is_rejected_after_close_and_explicit_reopen(self):
         self.start(goal="Write a tiny tool", tier="demoable")
+
         def old_result(*args):
             with patch.object(pathway, "_run_verifier", return_value=(0, "new result")):
                 for name in ("govern", "implementation", "quality"):
@@ -464,18 +534,23 @@ class PathwayTest(unittest.TestCase):
             pathway.close(self.project, "w1")
             pathway.reopen(self.project, "w1", "approved next phase")
             return 0, "result from before close"
+
         with patch.object(pathway, "_run_verifier", side_effect=old_result):
             with self.assertRaisesRegex(ValueError, "changed while"):
                 pathway.log(self.project, "w1", "govern", "ev.md", "true")
-        self.assertEqual(pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "open")
+        self.assertEqual(
+            pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "open"
+        )
 
     def test_interrupted_archive_can_resume_without_partial_final_blob(self):
         self.start(goal="Write a tiny tool", tier="demoable")
         for name in ("govern", "implementation", "quality"):
             pathway.log(self.project, "w1", name, "ev.md", "true")
+
         def interrupted(source, destination):
             destination.write(b"partial")
             raise KeyboardInterrupt()
+
         with patch.object(pathway.shutil, "copyfileobj", side_effect=interrupted):
             with self.assertRaises(KeyboardInterrupt):
                 pathway.close(self.project, "w1")
@@ -489,7 +564,9 @@ class PathwayTest(unittest.TestCase):
         record.pop("completion")
         path.write_text(json.dumps(record))
         before = path.read_bytes()
-        self.assertFalse(pathway.report(self.project, "w1")["historical_receipts_valid"])
+        self.assertFalse(
+            pathway.report(self.project, "w1")["historical_receipts_valid"]
+        )
         self.assertFalse(pathway.close(self.project, "w1")["ok"])
         self.assertEqual(path.read_bytes(), before)
 
@@ -516,7 +593,10 @@ class PathwayTest(unittest.TestCase):
         item["pathways"]["govern"]["verify"] = "echo AUTH_TOKEN=synthetic-private-value"
         pathway.save(self.project, item)
         pathway.report(self.project, "w1")
-        self.assertNotIn("synthetic-private-value", pathway.item_path(self.project, "w1").read_text())
+        self.assertNotIn(
+            "synthetic-private-value", pathway.item_path(self.project, "w1").read_text()
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

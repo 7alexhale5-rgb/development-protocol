@@ -406,5 +406,12 @@ The canonical catalog keeps its recorded order. Execution defers release until
 all other owed pathways, including documentation, are proved or legitimately not
 applicable. The release profile commits and ships; it does not run closeout.
 After recording release proof, close the fully proved itinerary with the shared
-work id, then run `/compound` and `/closeout-stack` for that checklist. Never seal
+work id, then run `/compound` and `/closeout-stack` for that checklist. Before closing,
+renew all stale proof against the final candidate after documentation and the final commit.
+The router marks changed-candidate rows stale, excludes them from earned autonomy, and
+recommends `renew-proof` through read-only acceptance checks. Validate those checks before
+executing them; use a fresh explicit command if a retained command was redacted. Keep proof
+artifacts under `.devproto`. Do not repeat implementation, migration, commit, or shipment
+profiles merely to renew proof. Record each executed check again and close only when the
+router reports no stale or open pathways. Never seal
 the checklist before later documentation or another candidate-changing pathway.
