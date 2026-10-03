@@ -14,12 +14,14 @@ Python 3.9 or newer.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -205,7 +207,7 @@ def _store_lock(project: Path):
 
 
 def item_path(project: Path, work_id: str) -> Path:
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", work_id):
+    if work_id in (".", "..") or not re.fullmatch(r"[A-Za-z0-9._-]+", work_id):
         raise ValueError(
             "work id may use letters, digits, dot, dash and underscore only"
         )
@@ -251,6 +253,100 @@ def blank() -> dict:
     }
 
 
+def completion_digest(item: dict) -> str:
+    return hashlib.sha256(
+        json.dumps([item["work_id"], item["pathways"]], sort_keys=True).encode()
+    ).hexdigest()
+
+
+def archive_directory(project: Path, item: dict) -> Path:
+    item_path(project, item["work_id"])
+    root = project.resolve()
+    path = root / STORE / "completed" / item["work_id"] / completion_digest(item)
+    current = path
+    while current != root:
+        if current.is_symlink():
+            raise ValueError("closed outcome archive cannot follow symlinks")
+        current = current.parent
+    return path
+
+
+def retained_completion(project: Path, item: dict) -> bool:
+    try:
+        completion = item["completion"]
+        archive = archive_directory(project, item)
+        if (
+            completion["receipt_sha256"] != completion_digest(item)
+            or completion["archive_dir"]
+            != archive.relative_to(project.resolve()).as_posix()
+        ):
+            return False
+        for row in item["pathways"].values():
+            if row["status"] == "na" and row.get("reason", "").strip():
+                continue
+            sha = row.get("sha256", "")
+            if (
+                row["status"] != "proved"
+                or row.get("exit") != 0
+                or not row.get("verified_at")
+                or not row.get("verify_sha256")
+                or not re.fullmatch(r"[0-9a-f]{64}", sha)
+            ):
+                return False
+            artifact = archive / sha
+            if (
+                artifact.is_symlink()
+                or not artifact.is_file()
+                or digest(artifact) != sha
+            ):
+                return False
+        return bool(item["pathways"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def seal_completion(project: Path, item: dict) -> None:
+    archive = archive_directory(project, item)
+    archive.mkdir(parents=True, exist_ok=True)
+    for row in item["pathways"].values():
+        if row["status"] == "na" and row.get("reason", "").strip():
+            continue
+        sha = row.get("sha256", "")
+        if (
+            row["status"] != "proved"
+            or row.get("exit") != 0
+            or not row.get("verified_at")
+            or not row.get("verify_sha256")
+            or not re.fullmatch(r"[0-9a-f]{64}", sha)
+        ):
+            raise ValueError("closed outcome needs executed proof provenance")
+        source = Path(row["evidence"])
+        source = source if source.is_absolute() else project / source
+        if source.is_symlink() or not source.is_file() or digest(source) != sha:
+            raise ValueError("closed outcome evidence changed before archival")
+        destination = archive / sha
+        if destination.is_symlink():
+            raise ValueError("closed outcome archive cannot follow symlinks")
+        if destination.is_file() and digest(destination) == sha:
+            continue
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=archive, delete=False) as out:
+                temporary = Path(out.name)
+                with source.open("rb") as incoming:
+                    shutil.copyfileobj(incoming, out)
+            if digest(temporary) != sha:
+                raise ValueError("closed outcome evidence changed during archival")
+            os.replace(temporary, destination)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
+    item["completion"] = {
+        "receipt_sha256": completion_digest(item),
+        "archive_dir": archive.relative_to(project.resolve()).as_posix(),
+    }
+
+
 def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> dict:
     goal = goal.strip()
     if not goal:
@@ -258,7 +354,9 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
     if tier not in TIERS:
         raise ValueError(f"tier must be one of: {', '.join(TIERS)}")
     with _store_lock(project):
-        for it in _live_items_locked(project):  # reuse even when stale proof reopens work
+        for it in _live_items_locked(
+            project
+        ):  # reuse even when stale proof reopens work
             if (
                 it["goal"] == goal
                 and not it.get("closed")
@@ -295,6 +393,8 @@ def cover(
         raise ValueError("choose exactly one of --add or --na")
     with _store_lock(project):
         item = load(project, work_id)
+        if item.get("closed"):
+            raise ValueError("closed outcome is historical; use reopen before changing coverage")
         ways = item["pathways"]
         if add:
             if pathway not in ways:
@@ -304,8 +404,11 @@ def cover(
             if not reason.strip():
                 raise ValueError("--na needs a written --reason")
             ways.setdefault(pathway, blank()).update(
-                status="na", reason=reason.strip(), stale=False, verified_at=now(),
-                revision=ways.get(pathway, {}).get("revision", 0) + 1
+                status="na",
+                reason=reason.strip(),
+                stale=False,
+                verified_at=now(),
+                revision=ways.get(pathway, {}).get("revision", 0) + 1,
             )
             item["pathways"] = {p: ways[p] for p in CATALOG if p in ways}
         item["log"].append(
@@ -332,6 +435,8 @@ def log(
     # Phase 1, under the lock: validate everything that does not need the verifier.
     with _store_lock(project):
         item = load(project, work_id)
+        if item.get("closed"):
+            raise ValueError("closed outcome is historical; use reopen before recording proof")
         if pathway not in item["pathways"]:
             raise ValueError(
                 f"{pathway} is not on this outcome's itinerary; add it with cover --add"
@@ -353,6 +458,8 @@ def log(
     # Phase 3, under the lock: write the result.
     with _store_lock(project):
         item = load(project, work_id)
+        if item.get("closed"):
+            raise ValueError("closed outcome is historical; use reopen before recording proof")
         if pathway not in item["pathways"]:
             raise ValueError(
                 f"{pathway} is not on this outcome's itinerary; add it with cover --add"
@@ -404,7 +511,9 @@ def log(
 
 
 def _reopen_if_incomplete(item: dict) -> bool:
-    if item.get("closed") and any(p["status"] not in ("proved", "na") for p in item["pathways"].values()):
+    if item.get("closed") and any(
+        p["status"] not in ("proved", "na") for p in item["pathways"].values()
+    ):
         item["closed"] = False
         item.pop("closed_at", None)
         return True
@@ -423,6 +532,8 @@ def _live_items_locked(project: Path) -> list:
 
 def refresh(project: Path, item: dict) -> bool:
     """Reopen a proved pathway whose evidence changed or vanished. Marks it stale."""
+    if item.get("closed"):
+        return False  # Historical validation must never rewrite sealed rows.
     changed = False
     for name, p in item["pathways"].items():
         raw = p.get("verify", "")
@@ -476,9 +587,15 @@ def scope(project: Path, work_id: str) -> dict:
             "goal": item["goal"],
             "tier": item["tier"],
             "pathways": [
-                {"name": name, "required": item["pathways"][name]["status"] != "na",
-                 "reason": item["pathways"][name]["reason"] if item["pathways"][name]["status"] == "na" else ""}
-                for name in CATALOG if name in item["pathways"]
+                {
+                    "name": name,
+                    "required": item["pathways"][name]["status"] != "na",
+                    "reason": item["pathways"][name]["reason"]
+                    if item["pathways"][name]["status"] == "na"
+                    else "",
+                }
+                for name in CATALOG
+                if name in item["pathways"]
             ],
         }
 
@@ -494,7 +611,8 @@ def _report_locked(project: Path, work_id: str) -> dict:
     stale = [p for p, v in ways.items() if v.get("stale")]
     owed = len(ways) - len(na)
     rate = round(len(proved) / owed, 2) if owed else 0.0
-    trust = "fail" if stale else "pass"
+    historical_valid = retained_completion(project, item) if item.get("closed") else None
+    trust = "fail" if stale or historical_valid is False else "pass"
     confidence, why_conf = checklist_confidence(project, work_id)
     if stale:
         pick, why = (
@@ -523,8 +641,8 @@ def _report_locked(project: Path, work_id: str) -> dict:
             "execution_tools": tools,
             "auto_eligible": pick in SAFE,
         }
-    return {
-        "ok": True,
+    result = {
+        "ok": historical_valid is not False,
         "work_id": item["work_id"],
         "goal": item["goal"],
         "tier": item["tier"],
@@ -547,7 +665,17 @@ def _report_locked(project: Path, work_id: str) -> dict:
         "suggested_autonomy_tier": tier,
         "autonomy_rationale": rationale,
         "pathways": ways,
+        "completion": item.get("completion"),
+        "historical_receipts_valid": historical_valid,
     }
+    if historical_valid is False:
+        result["error"] = "Historical proof is missing, changed, or lacks provenance."
+    # Render legacy verifier text safely without modifying sealed records.
+    for row in result["pathways"].values():
+        for key in ("verify", "output_tail"):
+            if key in row:
+                row[key] = redact(row[key])
+    return result
 
 
 def select(project: Path, work_id: str) -> str:
@@ -565,6 +693,8 @@ def select(project: Path, work_id: str) -> str:
 def close(project: Path, work_id: str) -> dict:
     with _store_lock(project):
         out = _report_locked(project, work_id)
+        if out["closed"]:
+            return out  # Never reseal invalid past proof from overwritten live paths.
         blockers = out["coverage"]["open"]
         if blockers:
             out.update(
@@ -574,11 +704,30 @@ def close(project: Path, work_id: str) -> dict:
             )
             return out
         item = load(project, work_id)
+        seal_completion(project, item)
         item.update(closed=True, closed_at=now())
         item["log"].append({"at": now(), "action": "close"})
         save(project, item)
-        out.update(closed=True)
-        return out
+        return _report_locked(project, work_id)
+
+
+def reopen(project: Path, work_id: str, reason: str) -> dict:
+    if not reason.strip():
+        raise ValueError("reopen needs a written reason")
+    with _store_lock(project):
+        item = load(project, work_id)
+        if not item.get("closed"):
+            raise ValueError("outcome is not closed")
+        item.setdefault("completion_history", []).append({
+            "closed_at": item.get("closed_at"), "completion": item.pop("completion", None),
+            "pathways": item["pathways"], "reason": reason.strip(), "at": now(),
+        })
+        item["pathways"] = {name: blank() for name in item["pathways"]}
+        item["closed"] = False
+        item.pop("closed_at", None)
+        item["log"].append({"at": now(), "action": "reopen", "reason": reason.strip()})
+        save(project, item)
+        return _report_locked(project, work_id)
 
 
 def pilot(projects: list, goal: str, report_file: str) -> dict:
@@ -751,7 +900,9 @@ def main(argv=None) -> int:
         help="coverage, trust and the next pathway (read-mostly)",
     )
     p.add_argument("--id", default="")
-    p = sub.add_parser("scope", parents=[common], help="stable intake and itinerary evidence as JSON")
+    p = sub.add_parser(
+        "scope", parents=[common], help="stable intake and itinerary evidence as JSON"
+    )
     p.add_argument("--id", required=True)
     p = sub.add_parser(
         "cover",
@@ -779,6 +930,9 @@ def main(argv=None) -> int:
         help="close the outcome when every pathway is proved or n/a",
     )
     p.add_argument("--id", required=True)
+    p = sub.add_parser("reopen", parents=[common], help="explicitly reopen a closed outcome")
+    p.add_argument("--id", required=True)
+    p.add_argument("--reason", required=True)
     p = sub.add_parser(
         "pilot",
         parents=[common],
@@ -810,6 +964,8 @@ def main(argv=None) -> int:
             r = log(project, a.id, a.pathway, a.evidence, a.verify, a.timeout)
         elif a.cmd == "close":
             r = close(project, a.id)
+        elif a.cmd == "reopen":
+            r = reopen(project, a.id, a.reason)
         elif a.cmd == "doctor":
             r = doctor(project)
         else:

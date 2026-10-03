@@ -267,7 +267,14 @@ Do not present a menu.
 ## CLOSE: "done with this outcome"
 
 1. Get the work id (as in LOG).
-2. Run `PATHWAY --project <repo> close --id=<work-id>`.
+2. Run `PATHWAY --project <repo> close --id=<work-id>`. Closed itineraries keep
+   content-addressed evidence copies under `.devproto/pathway/completed/`; later tasks
+   may reuse live report paths without reopening history. Missing or changed archived
+   proof remains explicitly unverified, and restoration recovers it. A read never
+   reseals history using a new task's live report. To change an old outcome, explicitly
+   run `PATHWAY --project <repo> reopen --id=<work-id> --reason "<approved new scope>"`
+   and reopen its matching checklist when applicable; original history remains saved.
+   Prefer a new work ID for an independent outcome.
 3. If it closed, inspect `DEVPROTO --project <repo> status --id=<work-id> --json`.
    For a completed checklist, run `DEVPROTO --project <repo> check --id=<work-id>
    --historical`; this checks retained past proof and cannot certify a new candidate.

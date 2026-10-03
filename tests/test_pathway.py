@@ -271,14 +271,69 @@ class PathwayTest(unittest.TestCase):
             pathway.log(self.project, "w1", name, "ev.md", "true")
         self.assertTrue(pathway.close(self.project, "w1")["closed"])
 
-    def test_changed_evidence_reopens_closed_work_and_implicit_selection(self):
+    def test_later_work_reuses_live_evidence_without_reopening_history(self):
         self.close_demo()
+        record = pathway.item_path(self.project, "w1").read_bytes()
+        pathway.start(self.project, "Second independent feature", "demoable", "w2")
         (self.project / "ev.md").write_text("new evidence")
-        self.assertEqual(pathway.select(self.project, ""), "w1")
-        self.assertFalse(pathway.report(self.project, "w1")["closed"])
+        self.assertEqual(pathway.select(self.project, ""), "w2")
+        out = pathway.report(self.project, "w1")
+        self.assertTrue(out["closed"])
+        self.assertTrue(out["historical_receipts_valid"])
+        self.assertEqual(pathway.item_path(self.project, "w1").read_bytes(), record)
+        archive = self.project / out["completion"]["archive_dir"]
+        artifact = next(archive.iterdir())
+        content = artifact.read_bytes()
+        artifact.unlink()
+        self.assertFalse(pathway.report(self.project, "w1")["historical_receipts_valid"])
+        self.assertEqual(pathway.item_path(self.project, "w1").read_bytes(), record)
+        artifact.write_bytes(content)
+        self.assertTrue(pathway.report(self.project, "w1")["historical_receipts_valid"])
 
-    def test_added_coverage_reopens_closed_work(self):
+    def test_closed_outcome_cannot_be_changed_by_late_verifier(self):
+        self.start(goal="Write a tiny tool", tier="demoable")
+        for name in ("govern", "implementation", "quality"):
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        saved = []
+        def late(*args):
+            pathway.close(self.project, "w1")
+            saved.append(pathway.item_path(self.project, "w1").read_bytes())
+            return 0, "old verifier result"
+        with patch.object(pathway, "_run_verifier", side_effect=late):
+            with self.assertRaisesRegex(ValueError, "historical"):
+                pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        self.assertEqual(pathway.item_path(self.project, "w1").read_bytes(), saved[0])
+        self.assertTrue(pathway.report(self.project, "w1")["historical_receipts_valid"])
+
+    def test_interrupted_archive_can_resume_without_partial_final_blob(self):
+        self.start(goal="Write a tiny tool", tier="demoable")
+        for name in ("govern", "implementation", "quality"):
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        def interrupted(source, destination):
+            destination.write(b"partial")
+            raise KeyboardInterrupt()
+        with patch.object(pathway.shutil, "copyfileobj", side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                pathway.close(self.project, "w1")
+        self.assertFalse(pathway.report(self.project, "w1")["closed"])
+        self.assertTrue(pathway.close(self.project, "w1")["historical_receipts_valid"])
+
+    def test_legacy_closed_claim_without_provenance_is_unverified(self):
         self.close_demo()
+        path = pathway.item_path(self.project, "w1")
+        record = json.loads(path.read_text())
+        record.pop("completion")
+        path.write_text(json.dumps(record))
+        before = path.read_bytes()
+        self.assertFalse(pathway.report(self.project, "w1")["historical_receipts_valid"])
+        self.assertFalse(pathway.close(self.project, "w1")["ok"])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_added_coverage_requires_explicit_reopen_of_closed_work(self):
+        self.close_demo()
+        with self.assertRaisesRegex(ValueError, "reopen"):
+            pathway.cover(self.project, "w1", "security", add=True, na=False)
+        pathway.reopen(self.project, "w1", "approved new security scope")
         result = pathway.cover(self.project, "w1", "security", add=True, na=False)
         self.assertFalse(result["closed"])
         self.assertEqual(pathway.select(self.project, ""), "w1")

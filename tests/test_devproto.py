@@ -23,6 +23,124 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_completed_ancestry_survives_squash_gc_and_fresh_clone_transfer(self):
+        import shutil
+
+        self.init_git()
+        original_branch = self.git("symbolic-ref", "--short", "HEAD")
+        self.start()
+        self.git("checkout", "-b", "feature")
+        (self.project / "feature.py").write_text("answer = 1\n")
+        self.git("add", "feature.py")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "-qm",
+            "feature",
+        )
+        reviewed = self.git("rev-parse", "HEAD")
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        self.git("checkout", original_branch)
+        self.git("merge", "--squash", "feature")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "-qm",
+            "squash feature",
+        )
+        self.git("branch", "-D", "feature")
+        self.git("reflog", "expire", "--expire=now", "--all")
+        self.git("gc", "--prune=now")
+        missing = subprocess.run(
+            ["git", "-C", str(self.project), "cat-file", "-e", reviewed],
+            capture_output=True,
+        )
+        self.assertNotEqual(
+            missing.returncode, 0, "fixture must actually remove reviewed Git object"
+        )
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp).resolve() / "fresh"
+            subprocess.run(
+                ["git", "clone", "--no-local", "-q", str(self.project), str(clone)],
+                check=True,
+            )
+            shutil.copytree(self.project / ".devproto", clone / ".devproto")
+            self.assertTrue(devproto.status(clone, "w1")["historical_receipts_valid"])
+
+    def test_interrupted_archive_publication_recovers_a_partial_old_destination(self):
+        self.start()
+        self.close_until("closeout")
+
+        def interrupted(incoming, outgoing, **kwargs):
+            outgoing.write(b"partial copy")
+            raise OSError("simulated copy interruption")
+
+        with patch.object(devproto.shutil, "copyfileobj", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.pass_step("closeout")
+        path = self.project / ".devproto/w1.json"
+        record = json.loads(path.read_text())
+        self.assertNotIn("completion", record)
+        archive = devproto.archive_directory(self.project, record)
+        (archive / record["steps"][0]["evidence_sha256"]).write_bytes(
+            b"older partial destination"
+        )
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
+    def test_slow_earlier_verifier_cannot_write_after_completion_seals(self):
+        self.start()
+        self.close_until("closeout")
+        entered, release = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        outcomes = []
+
+        def controlled(command, project, timeout):
+            if threading.current_thread().name == "slow-verifier":
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("fixture release deadline expired")
+            return original(command, project, timeout)
+
+        def slow():
+            try:
+                outcomes.append(self.pass_step("pathway"))
+            except Exception as error:
+                outcomes.append(error)
+
+        worker = threading.Thread(target=slow, name="slow-verifier")
+        with patch.object(devproto, "run_verifier", side_effect=controlled):
+            worker.start()
+            try:
+                self.assertTrue(
+                    entered.wait(5), "old verifier must enter its unlocked phase"
+                )
+                self.pass_step("closeout")
+                path = self.project / ".devproto/w1.json"
+                sealed = path.read_bytes()
+            finally:
+                release.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], ValueError)
+        self.assertIn("became completed", str(outcomes[0]))
+        self.assertEqual(path.read_bytes(), sealed)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
     def test_completed_proofs_survive_live_edits_and_archive_loss_is_recoverable(self):
         self.start()
         evidence = self.project / ".devproto/evidence/review.json"

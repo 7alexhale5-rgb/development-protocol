@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -531,6 +532,31 @@ def historical_artifact(project: Path, record: dict, source: str, sha: str) -> P
     return path
 
 
+def ancestry_valid(project: Path, record: dict, base: str, head: str) -> bool:
+    completion = record.get("completion", {})
+    if completion.get("ancestry_sha256"):
+        path = historical_artifact(project, record, "", completion["ancestry_sha256"])
+        if not path.is_file() or digest(path) != completion["ancestry_sha256"]:
+            return False
+        receipt = json.loads(path.read_text())
+        return (
+            receipt.get("kind") == "git-ancestry-receipt-v1"
+            and receipt.get("base") == base
+            and receipt.get("head") == head
+            and receipt.get("receipt_sha256") == completion_digest(record)
+            and receipt.get("argv")
+            == ["git", "merge-base", "--is-ancestor", base, head]
+            and receipt.get("exit_code") == 0
+            and bool(receipt.get("verified_at"))
+        )
+    result = subprocess.run(
+        ["git", "-C", str(project), "merge-base", "--is-ancestor", base, head],
+        capture_output=True,
+        timeout=10,
+    )
+    return result.returncode == 0
+
+
 def retained_completion(project: Path, record: dict) -> bool:
     """Historical completion needs retained executed proofs, not terminal labels."""
     try:
@@ -591,20 +617,9 @@ def retained_completion(project: Path, record: dict) -> bool:
             ):
                 return False
             base = lines[0].split(" ", 1)[1]
-            ancestor = subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(project),
-                    "merge-base",
-                    "--is-ancestor",
-                    base,
-                    review["git_identity"]["head"],
-                ],
-                capture_output=True,
-                timeout=10,
-            )
-            if ancestor.returncode:
+            if not ancestry_valid(
+                project, record, base, review["git_identity"]["head"]
+            ):
                 return False
             if record.get("completion", {}).get(
                 "baseline_sha256", digest(baseline)
@@ -632,6 +647,40 @@ def retained_completion(project: Path, record: dict) -> bool:
         return False
 
 
+def publish_archive(destination: Path, sha: str, source=None, payload=None) -> None:
+    """Publish verified bytes atomically; unsealed partial files may recover."""
+    if destination.is_symlink() or (destination.exists() and not destination.is_file()):
+        raise ValueError(
+            "completion archive cannot replace a redirected or non-file artifact"
+        )
+    if destination.is_file() and digest(destination) == sha:
+        return
+    if source is not None:
+        if source.is_symlink() or not source.is_file() or digest(source) != sha:
+            raise ValueError("completion source bytes changed before publication")
+    elif payload is None or hashlib.sha256(payload).hexdigest() != sha:
+        raise ValueError("completion payload does not match its content hash")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".copy-", dir=destination.parent, delete=False
+        ) as outgoing:
+            temporary = Path(outgoing.name)
+            if source is not None:
+                with source.open("rb") as incoming:
+                    shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
+            else:
+                outgoing.write(payload)
+            outgoing.flush()
+            os.fsync(outgoing.fileno())
+        if digest(temporary) != sha or (source is not None and digest(source) != sha):
+            raise ValueError("completion bytes changed during publication")
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
 def seal_completion(project: Path, record: dict) -> None:
     completion = {
         "state": "completed",
@@ -641,6 +690,15 @@ def seal_completion(project: Path, record: dict) -> None:
     baseline = (
         project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
     )
+    if record.get("completion", {}).get("archive_dir") and record["completion"].get(
+        "baseline_sha256"
+    ):
+        baseline = historical_artifact(
+            project,
+            record,
+            portable(project, baseline),
+            record["completion"]["baseline_sha256"],
+        )
     if baseline.is_file():
         completion["baseline_sha256"] = digest(baseline)
     archive = archive_directory(project, record)
@@ -651,10 +709,12 @@ def seal_completion(project: Path, record: dict) -> None:
     for row in record["steps"]:
         if row["status"] != "passed":
             continue
-        sources[row["evidence_sha256"]] = resolve(project, row["evidence_path"])
+        sources[row["evidence_sha256"]] = historical_artifact(
+            project, record, row["evidence_path"], row["evidence_sha256"]
+        )
         for name, meta in row.get("instruments", {}).items():
             sha = meta.get("sha256") if isinstance(meta, dict) else meta
-            sources[sha] = resolve(project, name)
+            sources[sha] = historical_artifact(project, record, name, sha)
     if baseline.is_file():
         sources[completion["baseline_sha256"]] = baseline
     for sha, source in sources.items():
@@ -664,16 +724,28 @@ def seal_completion(project: Path, record: dict) -> None:
             or not source.is_file()
         ):
             raise ValueError("completion proof cannot be archived")
-        destination = archive / sha
-        if not destination.exists():
-            with source.open("rb") as incoming, destination.open("xb") as outgoing:
-                shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
-        if (
-            destination.is_symlink()
-            or not destination.is_file()
-            or digest(destination) != sha
-        ):
-            raise ValueError("completion archive bytes do not match retained proof")
+        publish_archive(archive / sha, sha, source=source)
+    review = next(row for row in record["steps"] if row["step_id"] == "review")
+    if review.get("git_identity") is not None:
+        base = baseline.read_text().splitlines()[0].split(" ", 1)[1]
+        head = review["git_identity"]["head"]
+        if not ancestry_valid(project, record, base, head):
+            raise ValueError("completion Git ancestry cannot be verified")
+        payload = json.dumps(
+            {
+                "kind": "git-ancestry-receipt-v1",
+                "base": base,
+                "head": head,
+                "receipt_sha256": completion_digest(record),
+                "argv": ["git", "merge-base", "--is-ancestor", base, head],
+                "exit_code": 0,
+                "verified_at": now(),
+            },
+            sort_keys=True,
+        ).encode()
+        sha = hashlib.sha256(payload).hexdigest()
+        publish_archive(archive / sha, sha, payload=payload)
+        completion["ancestry_sha256"] = sha
     completion["archive_dir"] = portable(project, archive)
     record["completion"] = completion
 
@@ -686,9 +758,12 @@ def refresh(project: Path, record: dict) -> bool:
         seal_completion(project, record)
         changed_any = True
     if record.get("completion"):
-        if not record["completion"].get("archive_dir") and retained_completion(
-            project, record
-        ):
+        review = next(row for row in record["steps"] if row["step_id"] == "review")
+        needs_provenance = not record["completion"].get("archive_dir") or (
+            review.get("git_identity") is not None
+            and not record["completion"].get("ancestry_sha256")
+        )
+        if needs_provenance and retained_completion(project, record):
             seal_completion(project, record)
             return True
         # Sealed rows are immutable; validity is reported separately from live work.
@@ -979,6 +1054,10 @@ def step(
     with locked(path):
         record = load(path)
         refresh(project, record)
+        if record.get("completion"):
+            raise ValueError(
+                "work became completed while this verifier ran; historical rows are immutable"
+            )
         target = _target(record, step_id)
         if (
             target.get("revision", 0) != before_revision
