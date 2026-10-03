@@ -83,6 +83,32 @@ class DevprotoTest(unittest.TestCase):
         self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
                  "commit", "--allow-empty", "-m", "first")
 
+    def test_closeout_verifier_checks_merged_checkout_not_passing_feature(self):
+        self.init_git()
+        (self.project / "check.sh").write_text("exit 0\n")
+        self.start()
+        self.close_until("closeout")
+        merged = self.project / ".devproto" / "merged-checkout"
+        merged.mkdir()
+        subprocess.run(["git", "init", str(merged)], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(merged), "-c", "user.name=Fixture",
+                        "-c", "user.email=fixture@example.test", "commit", "--allow-empty",
+                        "-m", "merged"], check=True, capture_output=True)
+        sha = subprocess.check_output(["git", "-C", str(merged), "rev-parse", "HEAD"], text=True).strip()
+        (merged / "check.sh").write_text("exit 1\n")
+        # Original checkout passes, but it is not evidence that merged main passes.
+        self.assertEqual(subprocess.run(["bash", "check.sh"], cwd=self.project).returncode, 0)
+        import shlex
+        path = shlex.quote(str(merged))
+        command = f'test "$(git -C {path} rev-parse HEAD)" = {sha} && (cd {path} && bash check.sh)'
+        out = self.pass_step("closeout", verify=command)
+        self.assertFalse(out["ok"])
+        self.assertEqual(self.rows(out)["closeout"]["status"], "blocked")
+        (merged / "check.sh").write_text("exit 0\n")
+        wrong = command.replace(sha, "0" * 40)
+        self.assertFalse(self.pass_step("closeout", verify=wrong)["ok"])
+        self.assertTrue(self.pass_step("closeout", verify=command)["ok"])
+
     def test_post_ship_receipt_notes_allow_compound_and_closeout(self):
         self.init_git()
         self.start()
