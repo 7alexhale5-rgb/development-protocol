@@ -504,15 +504,28 @@ git fetch origin "$default_branch"
 ```
 
 Then record the row. The handoff is the evidence. The verifier reads it and re-runs the suite on
-the separate fresh-main checkout. The verifier asserts its HEAD equals the recorded
-merged SHA before executing tests there; testing the original feature checkout cannot
-certify the merged result:
+the separate fresh-main checkout. Require its HEAD to equal the recorded merged SHA,
+its branch identity to equal the recorded full symbolic ref (or `HEAD` when detached),
+and clean index/worktree status including all untracked files before and after tests.
+Tests must execute committed implementation and test inputs, never local replacements;
+inspect ignored inputs too and do not hide source or tests behind ignore rules. Keep test
+output outside this checkout when it would create untracked files. Testing the original
+feature checkout cannot certify the merged result. Preserve the original work checkout
+and checklist identity unchanged:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
   --id=<work-id> --step closeout --result pass \
   --evidence .devproto/handoffs/<YYYY-MM-DD>-<slug>.md \
-  --verify "grep -q '^## Unknowns' .devproto/handoffs/<YYYY-MM-DD>-<slug>.md && test \"\$(git -C <absolute-merged-checkout> rev-parse HEAD)\" = <recorded-merged-SHA> && (cd <absolute-merged-checkout> && <test command>)"
+  --verify 'grep -q "^## Unknowns" .devproto/handoffs/<YYYY-MM-DD>-<slug>.md &&
+    merged="<absolute-merged-checkout>" && sha="<recorded-merged-SHA>" && branch="<recorded-full-branch-ref-or-HEAD>" &&
+    test "$(git -C "$merged" rev-parse HEAD)" = "$sha" &&
+    test "$(git -C "$merged" rev-parse --symbolic-full-name HEAD)" = "$branch" &&
+    clean_status="$(git -C "$merged" status --porcelain --untracked-files=all)" && test -z "$clean_status" &&
+    (cd "$merged" && <test command>) &&
+    test "$(git -C "$merged" rev-parse HEAD)" = "$sha" &&
+    test "$(git -C "$merged" rev-parse --symbolic-full-name HEAD)" = "$branch" &&
+    clean_status="$(git -C "$merged" status --porcelain --untracked-files=all)" && test -z "$clean_status"'
 ```
 
 If earlier rows are still open, leave closeout pending. Record `blocked` on the earliest

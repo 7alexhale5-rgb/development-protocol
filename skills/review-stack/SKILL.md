@@ -410,10 +410,13 @@ one real control set, the automated layers answered 11 of 35 controls. The other
 named person and a date.
 
 If the project keeps such a list (for example `docs/release-controls.md` or an `AUDIT-<release>.md`
-file), refresh it for this release:
+file), inspect it without editing the sealed candidate. Save current control results under
+`.devproto/evidence/release-controls.md` and reference the existing control document.
+Any required update to shipped controls must occur before sealing, then be included in
+the complete reviewed candidate:
 
-- For each control the review layers answered, fill in the result and point to the evidence.
-- For each control that needs a person, fill in the owner and a date, or leave it in review.
+- In the local evidence report, record each checked control result and evidence.
+- In that report, record the verified owner and date for human controls, or leave unknowns in review.
 - Count and paste into the findings: pass, in review, not applicable, and launch-critical
   blockers.
 

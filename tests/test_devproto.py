@@ -90,24 +90,50 @@ class DevprotoTest(unittest.TestCase):
         self.close_until("closeout")
         merged = self.project / ".devproto" / "merged-checkout"
         merged.mkdir()
-        subprocess.run(["git", "init", str(merged)], check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(merged), "-c", "user.name=Fixture",
-                        "-c", "user.email=fixture@example.test", "commit", "--allow-empty",
-                        "-m", "merged"], check=True, capture_output=True)
-        sha = subprocess.check_output(["git", "-C", str(merged), "rev-parse", "HEAD"], text=True).strip()
-        (merged / "check.sh").write_text("exit 1\n")
-        # Original checkout passes, but it is not evidence that merged main passes.
+        def git(*args):
+            return subprocess.check_output(["git", "-C", str(merged), *args], text=True, stderr=subprocess.DEVNULL).strip()
+        def commit(message):
+            git("add", "mergedcheck.sh")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-m", message)
+            return git("rev-parse", "HEAD")
+        git("init")
+        script = merged / "mergedcheck.sh"
+        script.write_text("exit 1\n")
+        sha = commit("failing merged code")
+        branch = git("rev-parse", "--symbolic-full-name", "HEAD")
+        # Original feature passes; only the committed separate merged checkout counts.
         self.assertEqual(subprocess.run(["bash", "check.sh"], cwd=self.project).returncode, 0)
         import shlex
         path = shlex.quote(str(merged))
-        command = f'test "$(git -C {path} rev-parse HEAD)" = {sha} && (cd {path} && bash check.sh)'
-        out = self.pass_step("closeout", verify=command)
-        self.assertFalse(out["ok"])
+        def command(expected):
+            check = (f'test "$(git -C {path} rev-parse HEAD)" = {expected} && '
+                     f'test "$(git -C {path} rev-parse --symbolic-full-name HEAD)" = {shlex.quote(branch)} && '
+                     f'clean_status="$(git -C {path} status --porcelain --untracked-files=all)" && test -z "$clean_status"')
+            return f'{check} && (cd {path} && bash mergedcheck.sh) && {check}'
+        self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"])
+        script.write_text("exit 0\n")
+        out = self.pass_step("closeout", verify=command(sha))
+        self.assertFalse(out["ok"], "uncommitted green edit cannot certify failing merged SHA")
         self.assertEqual(self.rows(out)["closeout"]["status"], "blocked")
-        (merged / "check.sh").write_text("exit 0\n")
-        wrong = command.replace(sha, "0" * 40)
-        self.assertFalse(self.pass_step("closeout", verify=wrong)["ok"])
-        self.assertTrue(self.pass_step("closeout", verify=command)["ok"])
+        git("add", "mergedcheck.sh")
+        self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"], "staged green edit is still not the recorded commit")
+        passing_sha = commit("passing merged code")
+        self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"], "wrong recorded SHA must fail")
+        (merged / "untracked-input.py").write_text("answer = 1\n")
+        self.assertFalse(self.pass_step("closeout", verify=command(passing_sha))["ok"], "untracked inputs must fail")
+        (merged / "untracked-input.py").unlink()
+        self.assertTrue(self.pass_step("closeout", verify=command(passing_sha))["ok"])
+        # Each clean committed test below exits zero but changes the checkout while running.
+        for body in ("touch generated-input.py\nexit 0\n",
+                     "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -qm during-tests\nexit 0\n",
+                     "git checkout -qb during-tests\nexit 0\n"):
+            with self.subTest(body=body):
+                script.write_text(body)
+                current_sha = commit("mutation probe")
+                out = self.pass_step("closeout", verify=command(current_sha))
+                self.assertFalse(out["ok"], "post-test cleanliness and identity changes must fail")
+                if (merged / "generated-input.py").exists():
+                    (merged / "generated-input.py").unlink()
 
     def test_post_ship_receipt_notes_allow_compound_and_closeout(self):
         self.init_git()
