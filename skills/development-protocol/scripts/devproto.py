@@ -855,12 +855,15 @@ def summary(project: Path, record: dict) -> dict:
         for key in ("verify_command", "output_tail"):
             row[key] = redact(row.get(key, ""))
     open_steps = [s["step_id"] for s in record["steps"] if s["status"] not in TERMINAL]
+    current_ready = not open_steps and not bool(record.get("completion"))
+    if current_ready:
+        current_ready = retained_completion(project, record)
     out = {
         "ok": True,
         "work_id": record["work_id"],
         "goal": record["goal"],
         "file": portable(project, store_path(project, record["work_id"])),
-        "ready": not open_steps and not bool(record.get("completion")),
+        "ready": current_ready,
         "next_step": open_steps[0] if open_steps else None,
         "open": open_steps,
         "rule_notes": record.get("rule_notes", []),
@@ -870,8 +873,7 @@ def summary(project: Path, record: dict) -> dict:
         "historical_receipts_valid": retained_completion(project, record)
         if record.get("completion")
         else False,
-        "current_candidate_ready": not open_steps
-        and not bool(record.get("completion")),
+        "current_candidate_ready": current_ready,
     }
     research = next(s for s in record["steps"] if s["step_id"] == "research")
     hint = research_hint(record["goal"])
@@ -1136,8 +1138,20 @@ def step(
             verified_at=now(),
             reason="" if passed else why,
         )
+        if passed and step_id == "closeout":
+            itinerary = project / STORE_DIR / "pathway" / (work_id + ".json")
+            if itinerary.exists():
+                outcome = json.loads(itinerary.read_text())
+                if not outcome.get("closed") or not outcome.get("completion"):
+                    passed = False
+                    why = "Close the fully proved pathway itinerary before sealing the checklist."
+            if passed and not retained_completion(project, record):
+                passed = False
+                why = "Completion provenance is missing or invalid; closeout remains blocked."
+            if not passed:
+                target.update(status="blocked", reason=why)
         _commit(project, path, record, target, before)
-        if passed and step_id == "closeout" and retained_completion(project, record):
+        if passed and step_id == "closeout":
             seal_completion(project, record)
             save(path, record)
         out = summary(project, record)

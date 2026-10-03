@@ -392,3 +392,12 @@ pass.
 - For trials across several projects, run PILOT first. It assigns lead, critic, proof gate and
   review gate per project, snapshots the baseline proof rate, and writes the report without
   touching code.
+
+### Release and final checklist closure
+
+The canonical catalog keeps its recorded order. Execution defers release until
+all other owed pathways, including documentation, are proved or legitimately not
+applicable. The release profile commits and ships; it does not run closeout.
+After recording release proof, close the fully proved itinerary with the shared
+work id, then run `/compound` and `/closeout-stack` for that checklist. Never seal
+the checklist before later documentation or another candidate-changing pathway.

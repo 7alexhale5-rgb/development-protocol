@@ -15,6 +15,23 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_documentation_precedes_release_and_closeout_waits_for_itinerary(self):
+        self.start()
+        for name in pathway.CATALOG:
+            if name in ("docs", "release"):
+                continue
+            if name in pathway.load(self.project, "w1")["pathways"]:
+                pathway.log(self.project, "w1", name, "ev.md", "true")
+        out = pathway.report(self.project, "w1")
+        self.assertEqual(out["recommended_pathway"], "docs")
+        self.assertFalse(pathway.close(self.project, "w1")["ok"])
+        pathway.log(self.project, "w1", "docs", "ev.md", "true")
+        out = pathway.report(self.project, "w1")
+        self.assertEqual(out["recommended_pathway"], "release")
+        self.assertNotIn("/closeout-stack", out["card"]["execution_stack"])
+        pathway.log(self.project, "w1", "release", "ev.md", "true")
+        self.assertTrue(pathway.close(self.project, "w1")["closed"])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name).resolve()
@@ -36,8 +53,8 @@ class PathwayTest(unittest.TestCase):
                 "implementation",
                 "quality",
                 "observability",
-                "release",
                 "docs",
+                "release",
             ],
         )
         r = pathway.start(self.project, "Redesign the settings page", "demoable", "w2")

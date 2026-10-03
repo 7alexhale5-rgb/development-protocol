@@ -62,7 +62,8 @@ Adapt focus to the input shape: for brainstorm, challenge problem framing and in
 about scope. For planning, challenge whether the proposed architecture follows from actual
 constraints or from convention.
 
-Return 1 to 5 structured findings. Keep the output under about 2,000 tokens.
+Return zero to five supported findings. A scoped clean result states coverage limits.
+Keep the output under about 2,000 tokens.
 
 ## Output formats
 

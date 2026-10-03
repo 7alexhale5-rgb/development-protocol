@@ -490,6 +490,10 @@ A failed persistence step keeps safety false while Step 10 still emits the resum
 
 ## Step 9.5: Record the closeout row (end of a work item only)
 
+If a pathway itinerary shares this work id, finish every owed pathway, including
+documentation, and close that fully proved itinerary first. Release profiles do
+not seal the checklist. Final checklist sealing rejects an open itinerary.
+
 Only when the work item is shipped and merged -- which by this point already required a remote
 (shipping is a pull request). Verify fresh default branch in a separate checkout outside the reviewed repository tree
 (or under its excluded `.devproto/` directory), leaving the reviewed work checkout

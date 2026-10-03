@@ -177,7 +177,7 @@ CARDS = {
     ),
     "release": (
         "/ship",
-        ["/commit", "/ship", "/closeout-stack"],
+        ["/commit", "/ship"],
         "Ship the exact commit: pull request open, checks green on that commit.",
         "The pull request's checks are green on the exact commit that will merge.",
         ".devproto/evidence/ship.txt with the commit, the pull request link and the checks",
@@ -609,6 +609,10 @@ def _report_locked(project: Path, work_id: str) -> dict:
     na = [p for p, v in ways.items() if v["status"] == "na"]
     open_ = [p for p, v in ways.items() if v["status"] in ("open", "blocked")]
     stale = [p for p, v in ways.items() if v.get("stale")]
+    # Preserve the canonical catalog while deferring outward release until all
+    # candidate-changing work, including documentation, is proved.
+    open_ = [p for p in open_ if p != "release"] + (["release"] if "release" in open_ else [])
+    stale = [p for p in stale if p != "release"] + (["release"] if "release" in stale else [])
     owed = len(ways) - len(na)
     rate = round(len(proved) / owed, 2) if owed else 0.0
     historical_valid = retained_completion(project, item) if item.get("closed") else None

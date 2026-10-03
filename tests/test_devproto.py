@@ -23,6 +23,17 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_closeout_rejects_successful_verifier_without_completion_provenance(self):
+        self.start()
+        self.close_until("closeout")
+        with patch.object(devproto, "retained_completion", return_value=False):
+            out = self.pass_step("closeout")
+            self.assertFalse(out["ok"])
+            self.assertFalse(out["ready"])
+            self.assertFalse(out["current_candidate_ready"])
+            self.assertEqual(self.rows(out)["closeout"]["status"], "blocked")
+        self.assertIsNone(out.get("completion"))
+
     def test_prechange_git_record_cannot_migrate_without_review_binding(self):
         self.start()
         self.close_until("closeout")
