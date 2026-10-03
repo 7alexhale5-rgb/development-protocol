@@ -392,6 +392,7 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
         record = {
             "work_id": work_id,
             "goal": goal,
+            "execution_generation": 1,
             "itinerary_enrollment": {
                 "version": 1,
                 "mode": "required"
@@ -406,6 +407,10 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
             ],
         }
         save(path, record)
+        router = pathway_router()
+        if router.item_path(project, work_id).exists():
+            router._enroll_checklist_locked(project, work_id)
+            record = load(path)
         return summary(project, record)
 
 
@@ -510,6 +515,8 @@ def completion_digest(record: dict) -> str:
         payload.append(record["completion_provenance"])
     if "itinerary_enrollment" in record:
         payload.append(record["itinerary_enrollment"])
+    if "execution_generation" in record:
+        payload.append(record["execution_generation"])
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -601,6 +608,9 @@ def retained_completion(project: Path, record: dict) -> bool:
                 if path.is_symlink() or not path.is_file() or digest(path) != sha:
                     return False
         provenance = record.get("completion_provenance", {})
+        generation = record.get("execution_generation")
+        if type(generation) is not int or generation < 1:
+            return False
         enrollment = record.get("itinerary_enrollment", {})
         if (
             not isinstance(enrollment, dict)
@@ -651,6 +661,8 @@ def retained_completion(project: Path, record: dict) -> bool:
                 return False
             router = pathway_router()
             item = json.loads(retained.read_text())
+            if item.get("checklist_generation") != generation:
+                return False
             if item.get("work_id") != record["work_id"] or not item.get("closed"):
                 return False
             if not record.get("completion") and not router.retained_completion(
@@ -1070,11 +1082,15 @@ def pathway_router():
 
 
 @contextlib.contextmanager
-def itinerary_completion(project: Path, work_id: str, enrollment: dict):
+def itinerary_completion(project: Path, work_id: str, enrollment: dict, generation):
     """Hold the pathway lock while checking and retaining its closed proof."""
     path = project / STORE_DIR / "pathway" / (work_id + ".json")
     router = pathway_router()
     with router._store_lock(project):
+        if type(generation) is not int or generation < 1:
+            raise ValueError(
+                "Checklist execution generation is unknown; closeout remains blocked."
+            )
         if (
             not isinstance(enrollment, dict)
             or enrollment.get("version") != 1
@@ -1101,6 +1117,10 @@ def itinerary_completion(project: Path, work_id: str, enrollment: dict):
         if path.is_symlink():
             raise ValueError("Shared itinerary cannot follow a symlink.")
         item = router.load(project, work_id)
+        if item.get("checklist_generation") != generation:
+            raise ValueError(
+                "Shared itinerary belongs to another execution generation; explicitly reopen and re-prove it."
+            )
         if not item.get("closed") or not router.retained_completion(project, item):
             raise ValueError(
                 "Shared itinerary completion proof is open, missing, or invalid."
@@ -1277,7 +1297,10 @@ def step(
                 try:
                     itinerary_paths = closing.enter_context(
                         itinerary_completion(
-                            project, work_id, record.get("itinerary_enrollment", {})
+                            project,
+                            work_id,
+                            record.get("itinerary_enrollment", {}),
+                            record.get("execution_generation"),
                         )
                     )
                     itinerary_source = portable(
@@ -1317,10 +1340,15 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
     if not reason.strip():
         raise ValueError("reopen needs a written reason")
     path = store_path(project, work_id)
-    with locked(path):
+    with locked(path), pathway_router()._store_lock(project):
         record = load(path)
         if not record.get("completion"):
             raise ValueError("work is not completed")
+        generation = record.get("execution_generation")
+        if type(generation) is not int or generation < 1:
+            raise ValueError(
+                "Original execution generation is unknown; preserve the provenance gap."
+            )
         if (
             record["completion"].get("baseline_sha256")
             or git_identity(project) is not None
@@ -1343,6 +1371,7 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
                 "itinerary_enrollment": json.loads(
                     json.dumps(record.get("itinerary_enrollment"))
                 ),
+                "execution_generation": generation,
                 "reopened_at": now(),
                 "reason": reason.strip(),
             }
@@ -1353,7 +1382,10 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
                 reason="Explicitly reopened: " + reason.strip(),
                 revision=row.get("revision", 0) + 1,
             )
+        record["execution_generation"] = generation + 1
         save(path, record)
+        if record.get("itinerary_enrollment", {}).get("mode") == "required":
+            pathway_router()._enroll_checklist_locked(project, work_id)
     return summary(project, record)
 
 

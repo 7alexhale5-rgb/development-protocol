@@ -254,9 +254,10 @@ def blank() -> dict:
 
 
 def completion_digest(item: dict) -> str:
-    return hashlib.sha256(
-        json.dumps([item["work_id"], item["pathways"]], sort_keys=True).encode()
-    ).hexdigest()
+    payload = [item["work_id"], item["pathways"]]
+    if "checklist_generation" in item:
+        payload.append(item["checklist_generation"])
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 def archive_directory(project: Path, item: dict) -> Path:
@@ -413,8 +414,21 @@ def _enroll_checklist_locked(project: Path, work_id: str) -> None:
     record = devproto.load(path)
     if record.get("completion"):
         return
+    generation = record.get("execution_generation")
+    if type(generation) is not int or generation < 1:
+        raise ValueError(
+            "Checklist execution generation is unknown; preserve the provenance gap."
+        )
     record["itinerary_enrollment"] = {"version": 1, "mode": "required"}
     devproto.save(path, record)
+    item = load(project, work_id)
+    # Only freshly reset rows may enter a new cycle. Never relabel old proof.
+    if not item.get("closed") and all(
+        row["status"] == "open" and not row.get("verified_at") and not row.get("sha256")
+        for row in item["pathways"].values()
+    ):
+        item["checklist_generation"] = generation
+        save(project, item)
 
 
 def cover(
@@ -752,21 +766,34 @@ def close(project: Path, work_id: str) -> dict:
 def reopen(project: Path, work_id: str, reason: str) -> dict:
     if not reason.strip():
         raise ValueError("reopen needs a written reason")
-    with _store_lock(project):
+    with locked(project / ".devproto" / ".lock"), _store_lock(project):
         item = load(project, work_id)
         if not item.get("closed"):
             raise ValueError("outcome is not closed")
-        item.setdefault("completion_history", []).append({
-            "closed_at": item.get("closed_at"), "completion": item.pop("completion", None),
-            "pathways": item["pathways"], "reason": reason.strip(), "at": now(),
-        })
+        item.setdefault("completion_history", []).append(
+            {
+                **(
+                    {"checklist_generation": item["checklist_generation"]}
+                    if "checklist_generation" in item
+                    else {}
+                ),
+                "closed_at": item.get("closed_at"),
+                "completion": item.pop("completion", None),
+                "pathways": item["pathways"],
+                "reason": reason.strip(),
+                "at": now(),
+            }
+        )
         prior = item["pathways"]
-        item["pathways"] = {name: dict(blank(), revision=row.get("revision", 0) + 1)
-                            for name, row in prior.items()}
+        item["pathways"] = {
+            name: dict(blank(), revision=row.get("revision", 0) + 1)
+            for name, row in prior.items()
+        }
         item["closed"] = False
         item.pop("closed_at", None)
         item["log"].append({"at": now(), "action": "reopen", "reason": reason.strip()})
         save(project, item)
+        _enroll_checklist_locked(project, work_id)
         return _report_locked(project, work_id)
 
 

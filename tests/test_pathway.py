@@ -15,6 +15,22 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_standalone_reopen_preserves_original_history_digest(self):
+        self.start()
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        pathway.close(self.project, "w1")
+        original = pathway.load(self.project, "w1")
+        pathway.reopen(self.project, "w1", "new standalone phase")
+        current = pathway.load(self.project, "w1")
+        history = dict(current["completion_history"][0], work_id="w1")
+        self.assertNotIn("checklist_generation", history)
+        self.assertEqual(
+            pathway.completion_digest(history), pathway.completion_digest(original)
+        )
+        self.assertTrue(pathway.retained_completion(self.project, history))
+
+
     def test_retained_artifact_provider_preserves_proof_validation(self):
         import shutil
 

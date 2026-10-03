@@ -23,6 +23,95 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_missing_execution_generation_cannot_complete_legacy_work(self):
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        record = devproto.load(path)
+        record.pop("execution_generation", None)
+        devproto.save(path, record)
+        self.start()
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+
+    def test_closed_pre_intake_itinerary_is_not_relabelled_current(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        original = router.load(self.project, "w1")
+        self.start()
+        self.assertEqual(router.load(self.project, "w1"), original)
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+        router.reopen(self.project, "w1", "enroll current intake")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_checklist_reopen_requires_renewed_itinerary_generation(self):
+        for itinerary_first in (False, True):
+            with self.subTest(itinerary_reopened_first=itinerary_first):
+                work_id = "cycle-" + str(itinerary_first)
+                devproto.start(self.project, FEATURE, work_id)
+                router = devproto.pathway_router()
+                router.start(self.project, FEATURE, "live", work_id)
+                for name in router.load(self.project, work_id)["pathways"]:
+                    router.log(self.project, work_id, name, "ev.md", "true")
+                router.close(self.project, work_id)
+
+                def renew_checklist():
+                    for row in devproto.status(self.project, work_id)["steps"]:
+                        if row["step_id"] == "closeout":
+                            break
+                        if row["required"]:
+                            devproto.step(
+                                self.project,
+                                work_id,
+                                row["step_id"],
+                                "pass",
+                                "ev.md",
+                                "true",
+                            )
+                        else:
+                            devproto.step(
+                                self.project,
+                                work_id,
+                                row["step_id"],
+                                "na",
+                                reason="not applicable to fixture",
+                            )
+
+                renew_checklist()
+                self.assertTrue(
+                    devproto.step(
+                        self.project, work_id, "closeout", "pass", "ev.md", "true"
+                    )["completed"]
+                )
+                original = devproto.load(devproto.store_path(self.project, work_id))
+                if itinerary_first:
+                    router.reopen(self.project, work_id, "renew itinerary")
+                devproto.reopen(self.project, work_id, "renew changed work")
+                (self.project / "ev.md").write_text("renewed documentation " + work_id)
+                renew_checklist()
+                blocked = devproto.step(
+                    self.project, work_id, "closeout", "pass", "ev.md", "true"
+                )
+                self.assertFalse(blocked["ok"])
+                self.assertTrue(devproto.retained_completion(self.project, original))
+                if not itinerary_first:
+                    router.reopen(self.project, work_id, "renew itinerary")
+                for name in router.load(self.project, work_id)["pathways"]:
+                    router.log(self.project, work_id, name, "ev.md", "true")
+                router.close(self.project, work_id)
+                self.assertTrue(
+                    devproto.step(
+                        self.project, work_id, "closeout", "pass", "ev.md", "true"
+                    )["completed"]
+                )
+
+
     def test_deleted_enrolled_itinerary_cannot_become_standalone(self):
         self.start()
         router = devproto.pathway_router()
