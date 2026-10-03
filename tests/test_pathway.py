@@ -204,7 +204,10 @@ class PathwayTest(unittest.TestCase):
                 devproto.reopen(self.project, "w1", "renew checklist during verifier")
                 item = pathway.load(self.project, "w1")
                 self.assertEqual(item["checklist_generation"], 2)
-                self.assertEqual(item["pathways"]["govern"], row_before)
+                row = item["pathways"]["govern"]
+                self.assertEqual(row["status"], "open")
+                self.assertEqual(row["revision"], row_before["revision"] + 1)
+                self.assertEqual(row["verified_at"], "")
             finally:
                 resume.set()
                 thread.join(10)
@@ -214,7 +217,7 @@ class PathwayTest(unittest.TestCase):
         self.assertIsInstance(errors[0], ValueError)
         self.assertIn("generation", str(errors[0]))
         self.assertEqual(
-            pathway.load(self.project, "w1")["pathways"]["govern"], row_before
+            pathway.load(self.project, "w1")["pathways"]["govern"], row
         )
         self.assertTrue(devproto.retained_completion(self.project, historical))
         current = pathway.log(self.project, "w1", "govern", "ev.md", "true")
@@ -596,22 +599,43 @@ class PathwayTest(unittest.TestCase):
         artifact.write_bytes(content)
         self.assertTrue(pathway.report(self.project, "w1")["historical_receipts_valid"])
 
-    def test_closed_outcome_cannot_be_changed_by_late_verifier(self):
-        self.start(goal="Write a tiny tool", tier="demoable")
-        for name in ("govern", "implementation", "quality"):
-            pathway.log(self.project, "w1", name, "ev.md", "true")
-        saved = []
+    def test_outstanding_recheck_cannot_release_or_close(self):
+        import devproto
 
-        def late(*args):
-            pathway.close(self.project, "w1")
-            saved.append(pathway.item_path(self.project, "w1").read_bytes())
-            return 0, "old verifier result"
+        for result in ((1, "failed check"), (124, "timed out"), None, (0, "passed")):
+            with self.subTest(result=result):
+                # A separate store avoids conflating the four attempts.
+                with tempfile.TemporaryDirectory() as tmp:
+                    project = Path(tmp)
+                    (project / "ev.md").write_text("evidence")
+                    devproto.start(project, "bounded task", "w1")
+                    pathway.start(project, "bounded task", "demoable", "w1")
+                    for name in ("govern", "implementation", "quality"):
+                        pathway.log(project, "w1", name, "ev.md", "true")
+                    self.assertTrue(pathway.release_ready(project, "w1")["ok"])
 
-        with patch.object(pathway, "_run_verifier", side_effect=late):
-            with self.assertRaisesRegex(ValueError, "historical"):
-                pathway.log(self.project, "w1", "govern", "ev.md", "true")
-        self.assertEqual(pathway.item_path(self.project, "w1").read_bytes(), saved[0])
-        self.assertTrue(pathway.report(self.project, "w1")["historical_receipts_valid"])
+                    def outstanding(*args):
+                        self.assertFalse(pathway.release_ready(project, "w1")["ok"])
+                        self.assertFalse(pathway.close(project, "w1")["closed"])
+                        if result is None:
+                            raise KeyboardInterrupt()
+                        return result
+
+                    with patch.object(pathway, "_run_verifier", side_effect=outstanding):
+                        if result is None:
+                            with self.assertRaises(KeyboardInterrupt):
+                                pathway.log(project, "w1", "govern", "ev.md", "true")
+                        else:
+                            pathway.log(project, "w1", "govern", "ev.md", "true")
+                    row = pathway.load(project, "w1")["pathways"]["govern"]
+                    expected = "open" if result is None else (
+                        "proved" if result[0] == 0 else "blocked"
+                    )
+                    self.assertEqual(row["status"], expected)
+                    if result is None or result[0] != 0:
+                        self.assertFalse(pathway.close(project, "w1")["closed"])
+                        pathway.log(project, "w1", "govern", "ev.md", "true")
+                    self.assertTrue(pathway.close(project, "w1")["historical_receipts_valid"])
 
     def test_old_verifier_is_rejected_after_close_and_explicit_reopen(self):
         self.start(goal="Write a tiny tool", tier="demoable")

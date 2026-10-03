@@ -626,9 +626,21 @@ def log(
                 "log needs --evidence (an existing regular file) and --verify"
             )
         sha = digest(ev)
-        prior = json.dumps(item["pathways"][pathway], sort_keys=True)
-        prior_generation = item.get("checklist_generation")
         binding = candidate_binding(project)
+        # Retire an old pass before releasing the lock. A crash leaves an open
+        # attempt, and no concurrent release or close can certify that old pass.
+        row = item["pathways"][pathway]
+        row.update(
+            status="open",
+            revision=row.get("revision", 0) + 1,
+            verified_at="",
+            exit=None,
+            reason="Verification is in progress; fresh successful proof is owed.",
+            stale=False,
+        )
+        save(project, item)
+        prior = json.dumps(row, sort_keys=True)
+        prior_generation = item.get("checklist_generation")
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     # Reuses devproto's verifier runner: temp-file output (no pipe a background
