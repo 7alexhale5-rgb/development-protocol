@@ -1259,10 +1259,26 @@ def step(
             refresh(project, record)
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             inspection_error = redact(str(exc))
+        if record.get("completion"):
+            save(path, record)
+            raise ValueError(
+                "work became completed while this verifier ran; historical rows are immutable"
+            )
         earlier = _open_before(record, target)
-        stable = sha == digest(ev) and all(
-            digest(resolve(project, q)) == h for q, h in deps.items()
-        )
+        evidence_stat, instrument_stats = None, {}
+        try:
+            stable = sha == digest(ev) and all(
+                digest(resolve(project, q)) == h for q, h in deps.items()
+            )
+            if stable:
+                evidence_stat = _fp(ev)
+                instrument_stats = {q: _fp(resolve(project, q)) for q in deps}
+                stable = evidence_stat is not None and all(
+                    stat is not None for stat in instrument_stats.values()
+                )
+        except (OSError, ValueError) as exc:
+            stable = False
+            inspection_error = redact(str(exc))
         try:
             identity_stable = (
                 step_id not in RELEASE_STEPS and step_id != "review"
@@ -1286,7 +1302,7 @@ def step(
             and not inspection_error
         )
         if inspection_error:
-            why = f"Verifier exited {code}; candidate inspection failed: {inspection_error}"
+            why = f"Verifier exited {code}; proof or candidate inspection failed: {inspection_error}"
         elif not identity_stable:
             why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
         elif earlier:
@@ -1308,11 +1324,11 @@ def step(
             status="passed" if passed else "blocked",
             evidence_path=portable(project, ev),
             evidence_sha256=sha,
-            evidence_stat=_fp(ev) if passed else target.get("evidence_stat"),
+            evidence_stat=evidence_stat if passed else target.get("evidence_stat"),
             instruments={
                 name: {
                     "sha256": h,
-                    "stat": _fp(resolve(project, name)) if passed else None,
+                    "stat": instrument_stats.get(name) if passed else None,
                 }
                 for name, h in deps.items()
             },

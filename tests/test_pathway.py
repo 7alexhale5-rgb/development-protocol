@@ -18,6 +18,33 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_failed_recheck_survives_unreadable_evidence(self):
+        self.start()
+        pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        original = pathway.digest
+        executed = False
+
+        def fail_verifier(*args):
+            nonlocal executed
+            executed = True
+            return 1, "new pathway failure"
+
+        def read(path):
+            if executed and Path(path) == self.project / "ev.md":
+                raise PermissionError("temporary proof read denial")
+            return original(path)
+
+        with (
+            patch.object(pathway, "_run_verifier", side_effect=fail_verifier),
+            patch.object(pathway, "digest", side_effect=read),
+        ):
+            out = pathway.log(self.project, "w1", "govern", "ev.md", "false")
+        self.assertFalse(out["ok"])
+        row = pathway.load(self.project, "w1")["pathways"]["govern"]
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["exit"], 1)
+        self.assertIn("new pathway failure", row["output_tail"])
+
     def test_direct_release_requires_current_non_release_pathway_proof(self):
         import devproto
 

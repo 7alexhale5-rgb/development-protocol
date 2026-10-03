@@ -23,6 +23,93 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_failed_recheck_survives_unreadable_evidence_or_instrument(self):
+        self.start()
+        self.close_until("review")
+        instrument = self.project / "instrument.md"
+        instrument.write_text("frozen input")
+        for unreadable in (self.project / "ev.md", instrument):
+            with self.subTest(path=unreadable.name):
+                self.assertTrue(
+                    self.pass_step("review", instruments=["instrument.md"])["ok"]
+                )
+                original = devproto.digest
+                executed = False
+
+                def fail_verifier(*args):
+                    nonlocal executed
+                    executed = True
+                    return 1, "new review failed"
+
+                def read(path):
+                    if executed and Path(path) == unreadable:
+                        raise PermissionError("temporary proof read denial")
+                    return original(path)
+
+                with (
+                    patch.object(devproto, "run_verifier", side_effect=fail_verifier),
+                    patch.object(devproto, "digest", side_effect=read),
+                ):
+                    out = self.pass_step("review", instruments=["instrument.md"])
+                self.assertFalse(out["ok"])
+                row = next(
+                    r
+                    for r in devproto.status(self.project, "w1")["steps"]
+                    if r["step_id"] == "review"
+                )
+                self.assertEqual(row["status"], "blocked")
+                self.assertEqual(row["verifier_exit"], 1)
+                self.assertIn("new review failed", row["output_tail"])
+
+    def test_archive_recovery_cannot_accept_outstanding_earlier_verifier(self):
+        self.start()
+        self.close_until("closeout")
+        entered, release = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        outcomes = []
+
+        def controlled(command, project, timeout):
+            if threading.current_thread().name == "slow-verifier":
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("fixture release deadline expired")
+            return original(command, project, timeout)
+
+        def slow():
+            try:
+                outcomes.append(self.pass_step("pathway"))
+            except Exception as error:
+                outcomes.append(error)
+
+        def interrupted(incoming, outgoing, **kwargs):
+            outgoing.write(b"partial copy")
+            raise OSError("simulated copy interruption")
+
+        worker = threading.Thread(target=slow, name="slow-verifier")
+        with patch.object(devproto, "run_verifier", side_effect=controlled):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with patch.object(
+                    devproto.shutil, "copyfileobj", side_effect=interrupted
+                ):
+                    with self.assertRaises(OSError):
+                        self.pass_step("closeout")
+                path = self.project / ".devproto/w1.json"
+                self.assertNotIn("completion", json.loads(path.read_text()))
+            finally:
+                release.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], ValueError)
+        self.assertIn("became completed", str(outcomes[0]))
+        sealed = path.read_bytes()
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        self.assertEqual(path.read_bytes(), sealed)
+
     def test_failed_review_recheck_is_retained_after_git_recovers(self):
         self.init_git()
         self.start()
