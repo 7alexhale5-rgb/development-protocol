@@ -221,3 +221,11 @@ Missing historical evidence remains unverified. Unknown legacy records are not
 silently treated as completed. For new work, create a new item with its own intake
 BASE. To deliberately continue completed work, use `reopen --id=<id> --reason <reason>`;
 retain its completion history and original BASE, then execute renewed proof rows.
+
+An active checklist from an older version may lack execution generation or
+itinerary enrollment. Explicit `reopen --id=<id> --reason <reason>` preserves
+the complete prior record as migration history and the original BASE, establishes
+a new generation and enrollment, and resets every row to pending. A missing Git
+BASE must be recovered first; reset never writes a replacement. If a shared
+itinerary exists, explicitly reopen it too, then execute all proof rows again.
+Current active work and invalid known metadata cannot use this legacy reset.

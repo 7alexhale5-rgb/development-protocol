@@ -23,6 +23,79 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_legacy_active_reset_without_itinerary_requires_fresh_proof(self):
+        self.start()
+        self.pass_step("pathway")
+        path = devproto.store_path(self.project, "w1")
+        legacy = devproto.load(path)
+        legacy.pop("execution_generation")
+        legacy.pop("itinerary_enrollment")
+        devproto.save(path, legacy)
+        devproto.reopen(self.project, "w1", "explicit legacy upgrade")
+        current = devproto.load(path)
+        self.assertEqual(current["itinerary_enrollment"]["mode"], "standalone")
+        self.assertFalse(devproto.status(self.project, "w1")["ready"])
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_legacy_active_reset_cannot_replace_missing_git_baseline(self):
+        self.init_git()
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        legacy = devproto.load(path)
+        legacy.pop("execution_generation")
+        legacy.pop("itinerary_enrollment")
+        devproto.save(path, legacy)
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        baseline.rename(baseline.with_name("original.preserved"))
+        before = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "original baseline is missing"):
+            devproto.reopen(self.project, "w1", "upgrade cannot invent baseline")
+        self.assertEqual(path.read_bytes(), before)
+        self.assertFalse(baseline.exists())
+
+    def test_legacy_active_upgrade_resets_proof_and_preserves_baseline(self):
+        self.init_git()
+        self.start()
+        self.pass_step("pathway")
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        router.log(self.project, "w1", "govern", "ev.md", "true")
+        path = devproto.store_path(self.project, "w1")
+        legacy = devproto.load(path)
+        legacy.pop("execution_generation")
+        legacy.pop("itinerary_enrollment")
+        devproto.save(path, legacy)  # Fixture from the previous record shape.
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        original_baseline = baseline.read_bytes()
+        with redirect_stdout(io.StringIO()):
+            code = devproto.main(
+                [
+                    "reopen",
+                    "--project",
+                    str(self.project),
+                    "--id",
+                    "w1",
+                    "--reason",
+                    "upgrade active proof schema",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0)
+        current = devproto.load(path)
+        self.assertEqual(current["execution_generation"], 1)
+        self.assertEqual(current["itinerary_enrollment"]["mode"], "required")
+        self.assertEqual(current["migration_history"][-1]["legacy_record"], legacy)
+        self.assertTrue(all(row["status"] == "pending" for row in current["steps"]))
+        self.assertEqual(baseline.read_bytes(), original_baseline)
+        router.reopen(self.project, "w1", "fresh itinerary after upgrade")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        self.assertEqual(baseline.read_bytes(), original_baseline)
+
     @unittest.skipIf(os.geteuid() == 0, "read-only fixture requires ordinary user")
     def test_historical_check_needs_no_writable_store_or_lock(self):
         self.start()

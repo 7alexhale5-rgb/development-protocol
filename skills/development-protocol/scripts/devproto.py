@@ -1399,6 +1399,76 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
     path = store_path(project, work_id)
     with locked(path), pathway_router()._store_lock(project):
         record = load(path)
+        legacy_active = not record.get("completion") and (
+            "execution_generation" not in record or "itinerary_enrollment" not in record
+        )
+        if legacy_active:
+            generation = record.get("execution_generation", 0)
+            if (
+                type(generation) is not int
+                or generation < 0
+                or ("execution_generation" in record and generation < 1)
+            ):
+                raise ValueError(
+                    "invalid execution generation; retain the provenance gap"
+                )
+            enrollment = record.get("itinerary_enrollment")
+            if "itinerary_enrollment" in record and (
+                not isinstance(enrollment, dict)
+                or enrollment.get("version") != 1
+                or enrollment.get("mode") not in {"standalone", "required"}
+            ):
+                raise ValueError(
+                    "invalid itinerary enrollment; retain the provenance gap"
+                )
+            router = pathway_router()
+            itinerary = router.item_path(project, work_id)
+            if itinerary.is_symlink():
+                raise ValueError("shared itinerary cannot follow a symlink")
+            if (
+                itinerary.exists()
+                and router.load(project, work_id).get("goal") != record["goal"]
+            ):
+                raise ValueError(
+                    "Checklist and itinerary goals must match before enrollment."
+                )
+            baseline = project / STORE_DIR / "evidence" / (work_id + "-build-base.txt")
+            identity = git_identity(project)
+            if baseline.is_symlink() or (baseline.exists() and not baseline.is_file()):
+                raise ValueError(
+                    "original baseline is not a regular file; retain the scope gap"
+                )
+            if identity is not None and not baseline.is_file():
+                raise ValueError(
+                    "original baseline is missing; recover it before legacy reset"
+                )
+            prior = json.loads(json.dumps(record))
+            record.setdefault("migration_history", []).append(
+                {
+                    "legacy_record": prior,
+                    "baseline_sha256": digest(baseline) if baseline.is_file() else None,
+                    "reset_at": now(),
+                    "reason": reason.strip(),
+                }
+            )
+            for row in record["steps"]:
+                row.update(
+                    status="pending",
+                    reason="Explicit legacy reset: " + reason.strip(),
+                    revision=row.get("revision", 0) + 1,
+                )
+            record.pop("completion_provenance", None)
+            record["execution_generation"] = generation + 1
+            record["itinerary_enrollment"] = {
+                "version": 1,
+                "mode": "required"
+                if itinerary.exists() or (enrollment or {}).get("mode") == "required"
+                else "standalone",
+            }
+            save(path, record)
+            if itinerary.exists():
+                router._enroll_checklist_locked(project, work_id)
+            return summary(project, record)
         if not record.get("completion"):
             raise ValueError("work is not completed")
         generation = record.get("execution_generation")
@@ -1668,7 +1738,7 @@ def main(argv=None) -> int:
     p = sub.add_parser(
         "reopen",
         parents=[common],
-        help="restart completed work without changing its original baseline",
+        help="restart completed or legacy active work without changing its original baseline",
     )
     p.add_argument("--id", required=True)
     p.add_argument("--reason", required=True)
