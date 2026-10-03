@@ -1182,6 +1182,7 @@ def step(
         target = _target(record, step_id)
         before = {k: target.get(k) for k in RECORD_KEYS}
         before_revision = target.get("revision", 0)
+        before_generation = record.get("execution_generation")
         if result in {"na", "blocked"}:
             if result == "na" and target["required"]:
                 raise ValueError("n/a needs a conditional step; this row is required")
@@ -1240,7 +1241,6 @@ def step(
     # Phase 3, under the lock: re-check nothing moved while the verifier ran.
     with locked(path):
         record = load(path)
-        refresh(project, record)
         if record.get("completion"):
             raise ValueError(
                 "work became completed while this verifier ran; historical rows are immutable"
@@ -1248,32 +1248,46 @@ def step(
         target = _target(record, step_id)
         if (
             target.get("revision", 0) != before_revision
+            or record.get("execution_generation") != before_generation
             or {k: target.get(k) for k in RECORD_KEYS} != before
         ):
             raise ValueError(
                 "this step was changed by someone else while the verifier ran; retry"
             )
+        inspection_error = ""
+        try:
+            refresh(project, record)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            inspection_error = redact(str(exc))
         earlier = _open_before(record, target)
         stable = sha == digest(ev) and all(
             digest(resolve(project, q)) == h for q, h in deps.items()
         )
-        identity_stable = (
-            step_id not in RELEASE_STEPS and step_id != "review"
-        ) or identity == git_identity(project)
+        try:
+            identity_stable = (
+                step_id not in RELEASE_STEPS and step_id != "review"
+            ) or identity == git_identity(project)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            identity_stable = False
+            inspection_error = redact(str(exc))
         try:
             candidate_stable = candidate is None or candidate == candidate_snapshot(
                 project
             )
-        except (OSError, ValueError):
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
             candidate_stable = False
+            inspection_error = redact(str(exc))
         passed = (
             code == 0
             and stable
             and identity_stable
             and candidate_stable
             and not earlier
+            and not inspection_error
         )
-        if not identity_stable:
+        if inspection_error:
+            why = f"Verifier exited {code}; candidate inspection failed: {inspection_error}"
+        elif not identity_stable:
             why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
         elif earlier:
             why = "An earlier step reopened while the verifier ran: " + ", ".join(

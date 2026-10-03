@@ -23,6 +23,40 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_failed_review_recheck_is_retained_after_git_recovers(self):
+        self.init_git()
+        self.start()
+        self.close_until("review")
+        self.assertTrue(self.pass_step("review")["ok"])
+        original = devproto.git_identity
+        executed = False
+
+        def fail_verifier(*args):
+            nonlocal executed
+            executed = True
+            return 1, "new review failed"
+
+        def inspect(project):
+            if executed:
+                raise ValueError("Git identity temporarily unavailable")
+            return original(project)
+
+        with (
+            patch.object(devproto, "run_verifier", side_effect=fail_verifier),
+            patch.object(devproto, "git_identity", side_effect=inspect),
+        ):
+            out = self.pass_step("review")
+        self.assertFalse(out["ok"])
+        row = next(
+            r
+            for r in devproto.status(self.project, "w1")["steps"]
+            if r["step_id"] == "review"
+        )
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["verifier_exit"], 1)
+        self.assertIn("new review failed", row["output_tail"])
+        self.assertIn("inspection", row["reason"])
+
     def test_closed_itinerary_must_prove_the_current_candidate(self):
         self.init_git()
         self.start()

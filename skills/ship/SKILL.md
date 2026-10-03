@@ -63,6 +63,7 @@ Before push, release, or PR creation for a protocol work item, run:
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> check --id=<work-id> --through commit
 python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>
+python3 <pathway skill folder>/scripts/pathway.py --project <repo> release-check --id=<work-id> --json
 ```
 
 A nonzero result blocks release actions, subject only to the explicit CI bootstrap below. Report open rows and retain
@@ -90,6 +91,12 @@ mark ship passed, mark the PR ready, merge, deploy, publish, or run closeout rel
 actions. Re-read checks on the exact PR head, renew audit-setup and each subsequent
 required row in order, then run the ordinary through-commit and review checks above.
 Draft status alone grants no permission; use the session's existing push/PR authority.
+This bounded first-run bootstrap does not require the ordinary `release-check`
+to pass before creating the evidence-only draft. All ordinary outward releases,
+including direct `/ship` calls, require its successful result: current non-release
+itinerary proof or justified non-applicability, known enrollment and generation,
+and no missing, unreadable or stale required itinerary. The draft cannot become a
+release by skipping these checks later.
 
 ### 0b: Detect the base branch
 

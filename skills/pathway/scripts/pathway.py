@@ -964,6 +964,71 @@ def close(project: Path, work_id: str) -> dict:
         return _report_locked(project, work_id)
 
 
+def release_ready(project: Path, work_id: str) -> dict:
+    """Ordinary outward release owes every current non-release pathway."""
+    import devproto
+
+    result = {"ok": False, "work_id": work_id, "release_ready": False}
+    with locked(project / ".devproto" / ".lock"), _store_lock(project):
+        checklist = devproto.store_path(project, work_id)
+        if checklist.is_symlink() or not checklist.is_file():
+            return dict(result, error="Release requires a readable current checklist.")
+        record = devproto.load(checklist)
+        enrollment = record.get("itinerary_enrollment", {})
+        if (
+            not isinstance(enrollment, dict)
+            or enrollment.get("version") != 1
+            or enrollment.get("mode")
+            not in {
+                "standalone",
+                "required",
+            }
+        ):
+            return dict(result, error="Itinerary enrollment is unknown.")
+        path = item_path(project, work_id)
+        if (
+            enrollment["mode"] == "standalone"
+            and not path.exists()
+            and not path.is_symlink()
+        ):
+            return dict(result, ok=True, release_ready=True)
+        if enrollment["mode"] != "required" or path.is_symlink() or not path.is_file():
+            return dict(result, error="Required itinerary is missing or not enrolled.")
+        item = load(project, work_id)
+        generation = record.get("execution_generation")
+        if (
+            type(generation) is not int
+            or generation < 1
+            or item.get("checklist_generation") != generation
+            or item.get("goal") != record.get("goal")
+        ):
+            return dict(
+                result, error="Itinerary association or generation does not match."
+            )
+        report = _report_locked(project, work_id)
+        binding = candidate_binding(project)
+        blockers = [
+            name
+            for name, row in report["pathways"].items()
+            if name != "release"
+            and not (
+                (row["status"] == "na" and row.get("reason", "").strip())
+                or (
+                    row["status"] == "proved"
+                    and not row.get("stale")
+                    and row.get("candidate_binding") == binding
+                )
+            )
+        ]
+        if not report["ok"] or blockers:
+            return dict(
+                result,
+                blockers=blockers,
+                error="Non-release itinerary proof is missing, stale or invalid.",
+            )
+        return dict(result, ok=True, release_ready=True)
+
+
 def reopen(project: Path, work_id: str, reason: str) -> dict:
     if not reason.strip():
         raise ValueError("reopen needs a written reason")
@@ -1112,6 +1177,9 @@ def doctor(project: Path) -> dict:
 
 
 def print_human(r: dict) -> None:
+    if "release_ready" in r:
+        print("Release proof ready" if r["ok"] else "Release blocked: " + r["error"])
+        return
     if "checks" in r:
         for name, passed in r["checks"].items():
             print(f"{'PASS' if passed else 'FAIL'}  {name}")
@@ -1216,6 +1284,12 @@ def main(argv=None) -> int:
     )
     p.add_argument("--id", required=True)
     p = sub.add_parser(
+        "release-check",
+        parents=[common],
+        help="require current non-release itinerary proof",
+    )
+    p.add_argument("--id", required=True)
+    p = sub.add_parser(
         "reopen", parents=[common], help="explicitly reopen a closed outcome"
     )
     p.add_argument("--id", required=True)
@@ -1251,6 +1325,8 @@ def main(argv=None) -> int:
             r = log(project, a.id, a.pathway, a.evidence, a.verify, a.timeout)
         elif a.cmd == "close":
             r = close(project, a.id)
+        elif a.cmd == "release-check":
+            r = release_ready(project, a.id)
         elif a.cmd == "reopen":
             r = reopen(project, a.id, a.reason)
         elif a.cmd == "doctor":

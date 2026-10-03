@@ -18,6 +18,25 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_direct_release_requires_current_non_release_pathway_proof(self):
+        import devproto
+
+        goal = "Add a secure report"
+        devproto.start(self.project, goal, "w1")
+        pathway.start(self.project, goal, "live", "w1")
+        pathway.cover(self.project, "w1", "security", True, False)
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            if name not in {"docs", "security", "release"}:
+                pathway.log(self.project, "w1", name, "ev.md", "true")
+        self.assertFalse(pathway.release_ready(self.project, "w1")["ok"])
+        for name in ["docs", "security"]:
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        self.assertTrue(pathway.release_ready(self.project, "w1")["ok"])
+        (self.project / "source.py").write_text("changed candidate")
+        self.assertFalse(pathway.release_ready(self.project, "w1")["ok"])
+        pathway.item_path(self.project, "w1").unlink()
+        self.assertFalse(pathway.release_ready(self.project, "w1")["ok"])
+
     def test_failed_recheck_survives_candidate_reinspection_error(self):
         self.start()
         for name in pathway.load(self.project, "w1")["pathways"]:
