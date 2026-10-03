@@ -23,6 +23,61 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_prechange_git_record_cannot_migrate_without_review_binding(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        path = devproto.store_path(self.project, "w1")
+        original = json.loads(path.read_text())
+        original.pop("completion")
+        self.init_git()
+        identity = devproto.git_identity(self.project)
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        for provenance in ("release", "baseline", "both"):
+            with self.subTest(provenance=provenance):
+                record = json.loads(json.dumps(original))
+                for row in record["steps"]:
+                    row["git_identity"] = (
+                        identity
+                        if provenance != "baseline"
+                        and row["step_id"] in devproto.RELEASE_STEPS
+                        else None
+                    )
+                    row["candidate_sha256"] = ""
+                if provenance != "release":
+                    baseline.write_text(f"base {identity['head']}\nwork-id w1\n")
+                elif baseline.exists():
+                    baseline.unlink()
+                self.assertFalse(devproto.retained_completion(self.project, record))
+                devproto.refresh(self.project, record)
+                self.assertNotIn("completion", record)
+
+    def test_list_completed_proof_gap_never_reports_current_readiness(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        out = devproto.status(self.project, "w1")
+        self.assertFalse(out["ready"])
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            devproto.print_human(devproto.list_items(self.project))
+        self.assertIn("historical proof verified", stream.getvalue())
+        record = json.loads(devproto.store_path(self.project, "w1").read_text())
+        row = next(row for row in record["steps"] if row["status"] == "passed")
+        archived = devproto.historical_artifact(
+            self.project, record, row["evidence_path"], row["evidence_sha256"]
+        )
+        archived.unlink()
+        out = devproto.status(self.project, "w1")
+        self.assertFalse(out["ready"])
+        self.assertFalse(out["historical_receipts_valid"])
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            devproto.print_human(devproto.list_items(self.project))
+        self.assertIn("historical proof gap", stream.getvalue())
+        self.assertNotIn("ready", stream.getvalue())
+
     def test_completed_ancestry_survives_squash_gc_and_fresh_clone_transfer(self):
         import shutil
 
@@ -443,7 +498,8 @@ class DevprotoTest(unittest.TestCase):
         handoff.write_text("## Unknowns\nFresh merged SHA tested separately.\n")
         out = self.pass_step("closeout", evidence=str(handoff))
         self.assertTrue(out["ok"])
-        self.assertTrue(out["ready"])
+        self.assertFalse(out["ready"])
+        self.assertTrue(out["historical_receipts_valid"])
 
     def test_post_ship_source_changes_block_earliest_review_not_downstream(self):
         self.init_git()
@@ -869,12 +925,14 @@ class DevprotoTest(unittest.TestCase):
             "passed",
         )
 
-    def test_full_run_reaches_ready(self):
+    def test_full_run_completes_with_verified_history_not_current_readiness(self):
         self.start()
         self.close_until("closeout")
         self.pass_step("closeout")
         st = devproto.status(self.project, "w1")
-        self.assertTrue(st["ready"])
+        self.assertFalse(st["ready"])
+        self.assertTrue(st["historical_receipts_valid"])
+        self.assertFalse(devproto.status(self.project, "w1", through="commit")["ready"])
         self.assertIsNone(st["next_step"])
 
     def test_through_limits_the_gate(self):

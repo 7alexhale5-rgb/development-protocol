@@ -591,15 +591,27 @@ def retained_completion(project: Path, record: dict) -> bool:
                 if path.is_symlink() or not path.is_file() or digest(path) != sha:
                     return False
         review = next(r for r in rows if r["step_id"] == "review")
-        if review.get("git_identity") is not None:
+        baseline = (
+            project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
+        )
+        # Old Git records bound release rows but not review rows. A missing review
+        # identity is a provenance gap, never evidence that this was non-Git work.
+        git_obligations = (
+            review.get("git_identity") is not None
+            or any(r.get("git_identity") for r in rows if r["step_id"] in RELEASE_STEPS)
+            or bool(record.get("completion", {}).get("baseline_sha256"))
+            or baseline.exists()
+            or any(
+                portable(project, baseline) in r.get("instruments", {})
+                or str(baseline) in r.get("instruments", {})
+                for r in rows
+            )
+        )
+        if git_obligations:
+            if not review.get("git_identity"):
+                return False
             if not review.get("candidate_sha256"):
                 return False
-            baseline = (
-                project
-                / STORE_DIR
-                / "evidence"
-                / (record["work_id"] + "-build-base.txt")
-            )
             if record.get("completion", {}).get("archive_dir"):
                 baseline = historical_artifact(
                     project,
@@ -848,7 +860,7 @@ def summary(project: Path, record: dict) -> dict:
         "work_id": record["work_id"],
         "goal": record["goal"],
         "file": portable(project, store_path(project, record["work_id"])),
-        "ready": not open_steps,
+        "ready": not open_steps and not bool(record.get("completion")),
         "next_step": open_steps[0] if open_steps else None,
         "open": open_steps,
         "rule_notes": record.get("rule_notes", []),
@@ -882,7 +894,7 @@ def status(project: Path, work_id: str, through: str = "") -> dict:
         open_rows = [s for s in out["open"] if STEP_IDS.index(s) <= last]
         out.update(
             through=through,
-            ready=not open_rows,
+            ready=not open_rows and not out["completed"],
             open=open_rows,
             next_step=open_rows[0] if open_rows else None,
         )
@@ -1239,9 +1251,17 @@ def print_human(result: dict) -> None:
         return
     if "items" in result:
         for item in result["items"]:
-            state = item.get("error") or (
-                "ready" if item["ready"] else f"next: {item['next_step']}"
-            )
+            if item.get("completed"):
+                state = (
+                    "historical proof verified"
+                    if item.get("historical_receipts_valid")
+                    else "historical proof gap"
+                )
+            else:
+                state = (
+                    "ready" if item.get("ready") else f"next: {item.get('next_step')}"
+                )
+            state = item.get("error") or state
             print(f"{item['work_id']}  {state}")
         return
     print(f"{result['work_id']}  {result['goal']}")

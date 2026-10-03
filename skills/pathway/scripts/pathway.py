@@ -722,7 +722,9 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
             "closed_at": item.get("closed_at"), "completion": item.pop("completion", None),
             "pathways": item["pathways"], "reason": reason.strip(), "at": now(),
         })
-        item["pathways"] = {name: blank() for name in item["pathways"]}
+        prior = item["pathways"]
+        item["pathways"] = {name: dict(blank(), revision=row.get("revision", 0) + 1)
+                            for name, row in prior.items()}
         item["closed"] = False
         item.pop("closed_at", None)
         item["log"].append({"at": now(), "action": "reopen", "reason": reason.strip()})

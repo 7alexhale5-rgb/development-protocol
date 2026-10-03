@@ -305,6 +305,20 @@ class PathwayTest(unittest.TestCase):
         self.assertEqual(pathway.item_path(self.project, "w1").read_bytes(), saved[0])
         self.assertTrue(pathway.report(self.project, "w1")["historical_receipts_valid"])
 
+    def test_old_verifier_is_rejected_after_close_and_explicit_reopen(self):
+        self.start(goal="Write a tiny tool", tier="demoable")
+        def old_result(*args):
+            with patch.object(pathway, "_run_verifier", return_value=(0, "new result")):
+                for name in ("govern", "implementation", "quality"):
+                    pathway.log(self.project, "w1", name, "ev.md", "true")
+            pathway.close(self.project, "w1")
+            pathway.reopen(self.project, "w1", "approved next phase")
+            return 0, "result from before close"
+        with patch.object(pathway, "_run_verifier", side_effect=old_result):
+            with self.assertRaisesRegex(ValueError, "changed while"):
+                pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        self.assertEqual(pathway.report(self.project, "w1")["pathways"]["govern"]["status"], "open")
+
     def test_interrupted_archive_can_resume_without_partial_final_blob(self):
         self.start(goal="Write a tiny tool", tier="demoable")
         for name in ("govern", "implementation", "quality"):
