@@ -77,8 +77,10 @@ How it behaves:
   files as reviewable before sharing or committing them, not as pre-cleared.
 - The evidence file and each `--instrument` file are fingerprinted. If one changes later, that row
   and every later passed row reopen. Pass the test file or grader as an instrument so a weakened
-  test cannot keep an old pass. Re-recording an earlier row with new evidence also reopens later
-  passed rows.
+  test cannot keep an old pass. Before every verifier starts, the tool records a pending attempt
+  under the store lock and reopens later passed rows, even for identical evidence. Outstanding,
+  crashed, timed-out, or failed rechecks cannot certify shipping or closeout. Renew downstream
+  proofs after the recheck passes; historical completion requires explicit reopen first.
 - Write the evidence first, then verify it with a command that only reads it. A verifier that
   rewrites its own evidence is recorded as blocked.
 - Required rows cannot be marked n/a. The goal's words set which rows are required, and `start`

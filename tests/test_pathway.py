@@ -18,6 +18,24 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_standalone_release_requires_known_positive_generation(self):
+        import devproto
+
+        devproto.start(self.project, "bounded task", "w1")
+        path = devproto.store_path(self.project, "w1")
+        for generation in (None, 0, True, "1", -1):
+            with self.subTest(generation=generation):
+                record = devproto.load(path)
+                if generation is None:
+                    record.pop("execution_generation", None)
+                else:
+                    record["execution_generation"] = generation
+                devproto.save(path, record)
+                self.assertFalse(pathway.release_ready(self.project, "w1")["ok"])
+        record["execution_generation"] = 1
+        devproto.save(path, record)
+        self.assertTrue(pathway.release_ready(self.project, "w1")["ok"])
+
     def test_failed_recheck_survives_unreadable_evidence(self):
         self.start()
         pathway.log(self.project, "w1", "govern", "ev.md", "true")

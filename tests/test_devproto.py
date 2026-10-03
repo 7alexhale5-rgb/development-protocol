@@ -23,6 +23,95 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_failed_required_recheck_prevents_overlapping_closeout(self):
+        self.init_git()
+        self.start()
+        self.close_until("closeout")
+        entered, release = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        outcomes = []
+
+        def controlled(command, project, timeout):
+            if threading.current_thread().name == "failed-review":
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("fixture release deadline expired")
+                return 1, "required review recheck failed"
+            return original(command, project, timeout)
+
+        def slow():
+            try:
+                outcomes.append(self.pass_step("review"))
+            except Exception as error:
+                outcomes.append(error)
+
+        worker = threading.Thread(target=slow, name="failed-review")
+        with patch.object(devproto, "run_verifier", side_effect=controlled):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with self.assertRaisesRegex(ValueError, "earlier steps"):
+                    self.pass_step("closeout")
+            finally:
+                release.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], dict)
+        self.assertFalse(outcomes[0]["ok"])
+        current = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertNotIn("completion", current)
+        row = next(r for r in current["steps"] if r["step_id"] == "review")
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["verifier_exit"], 1)
+        self.assertIn("required review recheck failed", row["output_tail"])
+
+    def test_crashed_required_recheck_stays_pending_and_requires_renewal(self):
+        self.start()
+        self.close_until("closeout")
+        with patch.object(
+            devproto,
+            "run_verifier",
+            side_effect=RuntimeError("fixture verifier crashed"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "fixture verifier crashed"):
+                self.pass_step("review")
+        current = devproto.status(self.project, "w1")
+        self.assertEqual(self.rows(current)["review"]["status"], "pending")
+        self.assertIn(
+            "Verification in progress", self.rows(current)["review"]["reason"]
+        )
+        self.assertTrue(
+            all(
+                self.rows(current)[name]["status"] == "pending"
+                for name in ("simplify", "commit", "ship", "compound")
+            )
+        )
+        self.assertFalse(current["ready"])
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.assertTrue(self.pass_step("review")["ok"])
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_timed_out_required_recheck_cannot_restore_old_pass(self):
+        self.start()
+        self.close_until("closeout")
+        out = self.pass_step("review", verify="sleep 2", timeout=1)
+        self.assertFalse(out["ok"])
+        row = self.rows(out)["review"]
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["verifier_exit"], 124)
+        self.assertIn("timed out", row["reason"])
+        self.assertEqual(self.rows(out)["ship"]["status"], "pending")
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.assertNotIn(
+            "completion", devproto.load(devproto.store_path(self.project, "w1"))
+        )
+
     def test_legacy_active_reset_without_itinerary_requires_fresh_proof(self):
         self.start()
         self.pass_step("pathway")
@@ -183,7 +272,7 @@ class DevprotoTest(unittest.TestCase):
                 self.assertEqual(row["verifier_exit"], 1)
                 self.assertIn("new review failed", row["output_tail"])
 
-    def test_archive_recovery_cannot_accept_outstanding_earlier_verifier(self):
+    def test_archive_recovery_waits_for_outstanding_verifier_and_fresh_rows(self):
         self.start()
         self.close_until("closeout")
         entered, release = threading.Event(), threading.Event()
@@ -207,6 +296,7 @@ class DevprotoTest(unittest.TestCase):
             outgoing.write(b"partial copy")
             raise OSError("simulated copy interruption")
 
+        path = devproto.store_path(self.project, "w1")
         worker = threading.Thread(target=slow, name="slow-verifier")
         with patch.object(devproto, "run_verifier", side_effect=controlled):
             worker.start()
@@ -214,18 +304,26 @@ class DevprotoTest(unittest.TestCase):
                 self.assertTrue(entered.wait(5))
                 with patch.object(
                     devproto.shutil, "copyfileobj", side_effect=interrupted
-                ):
-                    with self.assertRaises(OSError):
+                ) as copying:
+                    with self.assertRaisesRegex(ValueError, "earlier steps"):
                         self.pass_step("closeout")
-                path = self.project / ".devproto/w1.json"
-                self.assertNotIn("completion", json.loads(path.read_text()))
+                    copying.assert_not_called()
+                self.assertNotIn("completion", devproto.load(path))
             finally:
                 release.set()
                 worker.join(10)
         self.assertFalse(worker.is_alive())
         self.assertEqual(len(outcomes), 1)
-        self.assertIsInstance(outcomes[0], ValueError)
-        self.assertIn("became completed", str(outcomes[0]))
+        self.assertIsInstance(outcomes[0], dict)
+        self.assertTrue(outcomes[0]["ok"])
+        self.close_until("closeout")
+        with patch.object(devproto.shutil, "copyfileobj", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.pass_step("closeout")
+        self.assertNotIn("completion", devproto.load(path))
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
         sealed = path.read_bytes()
         self.assertTrue(
             devproto.status(self.project, "w1")["historical_receipts_valid"]
@@ -787,7 +885,7 @@ class DevprotoTest(unittest.TestCase):
             devproto.status(self.project, "w1")["historical_receipts_valid"]
         )
 
-    def test_slow_earlier_verifier_cannot_write_after_completion_seals(self):
+    def test_slow_success_requires_fresh_downstream_before_immutable_closeout(self):
         self.start()
         self.close_until("closeout")
         entered, release = threading.Event(), threading.Event()
@@ -811,19 +909,26 @@ class DevprotoTest(unittest.TestCase):
         with patch.object(devproto, "run_verifier", side_effect=controlled):
             worker.start()
             try:
-                self.assertTrue(
-                    entered.wait(5), "old verifier must enter its unlocked phase"
-                )
-                self.pass_step("closeout")
-                path = self.project / ".devproto/w1.json"
-                sealed = path.read_bytes()
+                self.assertTrue(entered.wait(5))
+                with self.assertRaisesRegex(ValueError, "earlier steps"):
+                    self.pass_step("closeout")
             finally:
                 release.set()
                 worker.join(10)
         self.assertFalse(worker.is_alive())
         self.assertEqual(len(outcomes), 1)
-        self.assertIsInstance(outcomes[0], ValueError)
-        self.assertIn("became completed", str(outcomes[0]))
+        self.assertIsInstance(outcomes[0], dict)
+        self.assertTrue(outcomes[0]["ok"])
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        path = devproto.store_path(self.project, "w1")
+        sealed = path.read_bytes()
+        with patch.object(devproto, "run_verifier") as verifier:
+            with self.assertRaisesRegex(ValueError, "completed work is historical"):
+                self.pass_step("pathway")
+            verifier.assert_not_called()
         self.assertEqual(path.read_bytes(), sealed)
         self.assertTrue(
             devproto.status(self.project, "w1")["historical_receipts_valid"]
@@ -1721,14 +1826,15 @@ class DevprotoTest(unittest.TestCase):
         r = {k: v["status"] for k, v in self.rows(out).items()}
         self.assertEqual((r["pathway"], r["brainstorm"]), ("passed", "pending"))
 
-    def test_identical_repass_keeps_later_passes(self):
+    def test_identical_repass_requires_fresh_later_proof(self):
+        # Starting a recheck retires downstream proof before its result is known.
         self.start()
         self.pass_step("pathway")
         self.pass_step("brainstorm")
         self.pass_step("pathway")
         self.assertEqual(
             self.rows(devproto.status(self.project, "w1"))["brainstorm"]["status"],
-            "passed",
+            "pending",
         )
 
     def test_verifier_that_rewrites_evidence_gets_a_clear_reason(self):

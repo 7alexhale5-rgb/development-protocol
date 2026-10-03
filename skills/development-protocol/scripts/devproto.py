@@ -1181,8 +1181,6 @@ def step(
             )
         target = _target(record, step_id)
         before = {k: target.get(k) for k in RECORD_KEYS}
-        before_revision = target.get("revision", 0)
-        before_generation = record.get("execution_generation")
         if result in {"na", "blocked"}:
             if result == "na" and target["required"]:
                 raise ValueError("n/a needs a conditional step; this row is required")
@@ -1234,6 +1232,20 @@ def step(
             if step_id == "review" and git_identity(project) is not None
             else None
         )
+        # Publish the attempt before releasing the lock. An old pass cannot
+        # certify closeout while a required recheck is outstanding. A crash
+        # leaves pending proof, and even identical success needs later renewal.
+        target.update(
+            status="pending",
+            reason="Verification in progress. Repeat this check if interrupted.",
+            verifier_exit=None,
+            output_tail="",
+            verified_at="",
+        )
+        _commit(project, path, record, target, before)
+        before = {k: target.get(k) for k in RECORD_KEYS}
+        before_revision = target.get("revision", 0)
+        before_generation = record.get("execution_generation")
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     code, output = run_verifier(verify_cmd, project, timeout)

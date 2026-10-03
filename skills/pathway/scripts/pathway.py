@@ -989,6 +989,12 @@ def release_ready(project: Path, work_id: str) -> dict:
             }
         ):
             return dict(result, error="Itinerary enrollment is unknown.")
+        generation = record.get("execution_generation")
+        if type(generation) is not int or generation < 1:
+            return dict(
+                result,
+                error="Execution generation is unknown; explicitly reopen legacy work and re-prove it.",
+            )
         path = item_path(project, work_id)
         if (
             enrollment["mode"] == "standalone"
@@ -999,13 +1005,9 @@ def release_ready(project: Path, work_id: str) -> dict:
         if enrollment["mode"] != "required" or path.is_symlink() or not path.is_file():
             return dict(result, error="Required itinerary is missing or not enrolled.")
         item = load(project, work_id)
-        generation = record.get("execution_generation")
-        if (
-            type(generation) is not int
-            or generation < 1
-            or item.get("checklist_generation") != generation
-            or item.get("goal") != record.get("goal")
-        ):
+        if item.get("checklist_generation") != generation or item.get(
+            "goal"
+        ) != record.get("goal"):
             return dict(
                 result, error="Itinerary association or generation does not match."
             )
