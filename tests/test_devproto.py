@@ -23,6 +23,55 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    @unittest.skipIf(os.geteuid() == 0, "read-only fixture requires ordinary user")
+    def test_historical_check_needs_no_writable_store_or_lock(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        store = self.project / ".devproto"
+        for name in (".lock", ".gitignore"):
+            p = store / name
+            if p.exists():
+                p.rename(p.with_name(name + ".preserved"))
+        paths = [self.project, *self.project.rglob("*")]
+        modes = {p: p.stat().st_mode & 0o777 for p in paths}
+        for p in paths:
+            p.chmod(0o555 if p.is_dir() else 0o444)
+
+        def snapshot():
+            return {
+                str(p.relative_to(self.project)): (
+                    p.stat().st_mode,
+                    p.stat().st_mtime_ns,
+                    p.read_bytes() if p.is_file() else None,
+                )
+                for p in [self.project, *self.project.rglob("*")]
+            }
+
+        try:
+            before = snapshot()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "check",
+                    "--project",
+                    str(self.project),
+                    "--id",
+                    "w1",
+                    "--historical",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(json.loads(result.stdout)["historical_receipts_valid"])
+            self.assertEqual(snapshot(), before)
+        finally:
+            for p, mode in modes.items():
+                p.chmod(mode)
+
     def test_failed_recheck_survives_unreadable_evidence_or_instrument(self):
         self.start()
         self.close_until("review")

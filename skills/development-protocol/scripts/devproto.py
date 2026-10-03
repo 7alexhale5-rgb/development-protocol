@@ -1687,8 +1687,9 @@ def main(argv=None) -> int:
         elif args.cmd in ("status", "check"):
             if getattr(args, "historical", False):
                 path = store_path(project, args.id)
-                with locked(path):
-                    result = summary(project, load(path))
+                # Completed rows are immutable and saves atomically publish JSON.
+                # Historical inspection must also work on a read-only archive.
+                result = summary(project, load(path))
             else:
                 result = status(project, args.id, args.through)
         elif args.cmd == "step":
