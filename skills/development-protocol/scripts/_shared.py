@@ -271,6 +271,8 @@ def candidate_snapshot(project):
             raise ValueError("candidate Git state cannot be read") from exc
         if result.returncode:
             raise ValueError("candidate Git state cannot be read")
+        if args[0] == "ls-files" and result.stderr:
+            raise ValueError("candidate Git source enumeration is incomplete")
         return result.stdout
 
     if (

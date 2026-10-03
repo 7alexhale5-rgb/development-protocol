@@ -653,7 +653,12 @@ def log(
                 "checklist generation changed while the verifier ran; verify it again"
             )
         stable = digest(ev) == sha
-        candidate_stable = candidate_binding(project) == binding
+        inspection_error = ""
+        try:
+            candidate_stable = candidate_binding(project) == binding
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            candidate_stable = False
+            inspection_error = redact(str(exc))
         passed = code == 0 and stable and candidate_stable
         try:
             shown = ev.resolve().relative_to(project.resolve()).as_posix()
@@ -672,6 +677,8 @@ def log(
                 )
             )
         )
+        if inspection_error:
+            reason = f"Verifier exited {code}; candidate inspection failed: {inspection_error}"
         item["pathways"][pathway].update(
             status="proved" if passed else "blocked",
             evidence=shown,
@@ -685,6 +692,7 @@ def log(
             stale=False,
             output_tail=redact(output)[-2000:],
             candidate_binding=binding,
+            candidate_inspection_error=inspection_error,
         )
         item["log"].append(
             {

@@ -16,6 +16,42 @@ import _shared  # noqa: E402
 
 
 class CandidateStableScanTest(unittest.TestCase):
+    @unittest.skipIf(
+        __import__("os").geteuid() == 0, "requires non-root permission denial"
+    )
+    def test_unreadable_nonignored_git_source_cannot_be_certified(self):
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "-c",
+                    "user.name=Fixture",
+                    "-c",
+                    "user.email=fixture@example.test",
+                    "commit",
+                    "--allow-empty",
+                    "-qm",
+                    "fixture",
+                ],
+                check=True,
+            )
+            hidden = repo / "unreadable-source"
+            hidden.mkdir()
+            (hidden / "source.py").write_text("critical source")
+            hidden.chmod(0)
+            try:
+                with self.assertRaisesRegex(ValueError, "enumeration"):
+                    _shared.candidate_snapshot(repo)
+            finally:
+                hidden.chmod(0o700)
+
     def test_directory_replaced_by_file_has_unstaged_staged_and_committed_snapshots(
         self,
     ):

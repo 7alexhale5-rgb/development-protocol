@@ -46,7 +46,17 @@ git log --oneline -3
 
 - Uncommitted changes exist: "You have uncommitted changes. Run `/commit` first."
 - On `main` or `master`: "You're on the base branch. Create a feature branch first."
-- No commits ahead of base: "Nothing to ship. Your branch has no new commits."
+- No commits ahead of base and no verified exact-candidate merged PR to renew:
+  "Nothing to ship. Your branch has no new commits."
+
+Resolve the base using Step 0b before applying the no-new-commits condition. Query
+the authenticated repository for the retained exact PR identity, reviewed/pushed
+head and intended base using the checks in Step 4b. A unique verified merged match
+enters receipt-renewal mode even when the refreshed base already contains HEAD.
+In that mode, retain the PR and merge mapping, run the required candidate checks
+and merged-checkout checks, then renew the receipt. Skip sync mutations, push,
+PR creation, readiness and merge actions; this work was already released. Missing,
+ambiguous or mismatched prior release evidence never waives the empty-release abort.
 
 Before push, release, or PR creation for a protocol work item, run:
 
@@ -101,8 +111,10 @@ Check in order:
 2. `Makefile` has a `test` target: `make test`
 3. `pyproject.toml`: `pytest`
 4. `Cargo.toml`: `cargo test`
-5. If none is found, note "No test command detected. Skipping tests." and say so in the final
-   report.
+5. If none is found, record a verification gap. Behavior changes require an actual
+   failing-then-passing behavior check; missing tooling blocks that release. For a
+   change where behavior tests do not apply, choose and execute the smallest meaningful
+   validator and retain the reason. Skipping verification never satisfies this step.
 
 ### 0d: Rails check (does the repo carry its own proof?)
 
@@ -240,8 +252,14 @@ verify its head equals the pushed SHA and renew the ship receipt from its curren
 checks. Do not run `gh pr create` again merely because review evidence was renewed.
 A merged match is reusable only when its repository, retained PR identity, base,
 and `headRefOid` equal this work item's exact reviewed and pushed candidate. Verify
-that its recorded merge includes this candidate: ancestry for merge/rebase workflows,
-or the retained exact PR head and merged tree mapping for squash merges. Verify the
+that its recorded merge includes this candidate. Merge commits require ancestry.
+Rebase merges require a retained ordered one-to-one mapping from every reviewed PR
+commit to its integrated commit, with stable patch IDs and the recorded reviewed
+and merged commit ranges. Verify each integrated commit is in the actual merged
+history and retain the resulting merged tree. Original commit ancestry is not
+required after rebase. Ambiguous, missing or changed patches need independent
+review of the integrated candidate; do not claim equivalence from a branch name.
+Squash merges require the retained exact PR head and merged tree mapping. Verify the
 merged SHA in a separate checkout before closeout. A historical PR sharing only the
 branch and base is not this release. If the branch has new commits, verify whether
 those exact changes are already integrated; otherwise create a new authorized PR.

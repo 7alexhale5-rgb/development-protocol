@@ -18,6 +18,31 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_failed_recheck_survives_candidate_reinspection_error(self):
+        self.start()
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            if name != "govern":
+                pathway.cover(
+                    self.project, "w1", name, False, True, "fixture not applicable"
+                )
+        pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        binding = pathway.candidate_binding(self.project)
+        with patch.object(
+            pathway,
+            "candidate_binding",
+            side_effect=[binding, ValueError("Git inspection timed out")],
+        ):
+            out = pathway.log(
+                self.project, "w1", "govern", "ev.md", "printf 'new failure'; false"
+            )
+        self.assertFalse(out["ok"])
+        row = pathway.load(self.project, "w1")["pathways"]["govern"]
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["exit"], 1)
+        self.assertIn("new failure", row["output_tail"])
+        self.assertIn("inspection", row["reason"])
+        self.assertFalse(pathway.close(self.project, "w1")["ok"])
+
     def test_changed_candidate_recommends_read_only_proof_renewal(self):
         self.start()
         for name in pathway.load(self.project, "w1")["pathways"]:
