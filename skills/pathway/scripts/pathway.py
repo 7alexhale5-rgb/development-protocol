@@ -254,7 +254,7 @@ def blank() -> dict:
 
 
 def completion_digest(item: dict) -> str:
-    payload = [item["work_id"], item["pathways"]]
+    payload = [item["work_id"], item["goal"], item["pathways"]]
     if "checklist_generation" in item:
         payload.append(item["checklist_generation"])
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
@@ -371,14 +371,15 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
         raise ValueError(f"tier must be one of: {', '.join(TIERS)}")
     # Match checklist closeout's lock order: checklist store, then pathway store.
     with locked(project / ".devproto" / ".lock"), _store_lock(project):
-        for it in _live_items_locked(
-            project
-        ):  # reuse even when stale proof reopens work
+        if work_id:
+            _check_checklist_goal_locked(project, work_id, goal)
+        for it in items(project):  # Validate the association before refreshing proof.
             if (
                 it["goal"] == goal
                 and not it.get("closed")
                 and (not work_id or it["work_id"] == work_id)
             ):
+                _check_checklist_goal_locked(project, it["work_id"], goal)
                 out = _report_locked(project, it["work_id"])
                 _enroll_checklist_locked(project, it["work_id"])
                 out["note"] = (
@@ -386,6 +387,7 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
                 )
                 return out
         work_id = work_id or f"{datetime.now():%Y%m%d}-{slug(goal)}"
+        _check_checklist_goal_locked(project, work_id, goal)
         if item_path(project, work_id).exists():
             raise ValueError("that work id already exists with a different goal")
         seeded = set(TIERS[tier]) | {p for p, rx in GOAL_PULLS if rx.search(goal)}
@@ -403,6 +405,13 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
         return _report_locked(project, work_id)
 
 
+def _check_checklist_goal_locked(project: Path, work_id: str, goal: str) -> None:
+    import devproto
+
+    path = devproto.store_path(project, work_id)
+    if path.exists() and devproto.load(path).get("goal") != goal:
+        raise ValueError("Checklist and itinerary goals must match before enrollment.")
+
 
 def _enroll_checklist_locked(project: Path, work_id: str) -> None:
     """An actual enrollment adds an obligation; it never edits sealed history."""
@@ -411,6 +420,8 @@ def _enroll_checklist_locked(project: Path, work_id: str) -> None:
     path = devproto.store_path(project, work_id)
     if not path.exists():
         return
+    item = load(project, work_id)
+    _check_checklist_goal_locked(project, work_id, item.get("goal"))
     record = devproto.load(path)
     if record.get("completion"):
         return
@@ -421,7 +432,6 @@ def _enroll_checklist_locked(project: Path, work_id: str) -> None:
         )
     record["itinerary_enrollment"] = {"version": 1, "mode": "required"}
     devproto.save(path, record)
-    item = load(project, work_id)
     # Only freshly reset rows may enter a new cycle. Never relabel old proof.
     if not item.get("closed") and all(
         row["status"] == "open" and not row.get("verified_at") and not row.get("sha256")
@@ -787,6 +797,7 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
                     else {}
                 ),
                 "closed_at": item.get("closed_at"),
+                "goal": item["goal"],
                 "completion": item.pop("completion", None),
                 "pathways": item["pathways"],
                 "reason": reason.strip(),

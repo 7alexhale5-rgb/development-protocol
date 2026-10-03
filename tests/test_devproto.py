@@ -23,6 +23,53 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_conflicting_goal_intake_is_rejected_without_partial_enrollment(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "itinerary-first")
+        original = router.item_path(self.project, "itinerary-first").read_bytes()
+        with self.assertRaisesRegex(ValueError, "goal"):
+            devproto.start(self.project, "Different security goal", "itinerary-first")
+        self.assertFalse(devproto.store_path(self.project, "itinerary-first").exists())
+        self.assertEqual(
+            router.item_path(self.project, "itinerary-first").read_bytes(), original
+        )
+
+    def test_checklist_first_conflicting_itinerary_goal_leaves_both_stores_unchanged(
+        self,
+    ):
+        router = devproto.pathway_router()
+        devproto.start(self.project, FEATURE, "checklist-first")
+        original = devproto.store_path(self.project, "checklist-first").read_bytes()
+        with self.assertRaisesRegex(ValueError, "goal"):
+            router.start(
+                self.project, "Different security goal", "live", "checklist-first"
+            )
+        self.assertFalse(router.item_path(self.project, "checklist-first").exists())
+        self.assertEqual(
+            devproto.store_path(self.project, "checklist-first").read_bytes(), original
+        )
+
+    def test_goal_association_tampering_blocks_closeout_and_historical_proof(self):
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        original = router.load(self.project, "w1")
+        self.close_until("closeout")
+        changed = json.loads(json.dumps(original))
+        changed["goal"] = "Different security goal"
+        router.save(self.project, changed)
+        self.assertFalse(self.pass_step("closeout")["ok"])
+        router.save(self.project, original)
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertTrue(devproto.retained_completion(self.project, record))
+        record["goal"] = "Different security goal"
+        self.assertFalse(devproto.retained_completion(self.project, record))
+        self.assertFalse(router.retained_completion(self.project, changed))
+
     def test_missing_execution_generation_cannot_complete_legacy_work(self):
         self.start()
         path = devproto.store_path(self.project, "w1")
@@ -195,7 +242,7 @@ class DevprotoTest(unittest.TestCase):
         (legacy_archive / sha).write_bytes(payload)
         record["completion"]["ancestry_sha256"] = sha
         router = devproto.pathway_router()
-        router.start(self.project, "later unrelated itinerary", "live", "w1")
+        router.start(self.project, FEATURE, "live", "w1")
         for archived in (True, False):
             with self.subTest(archive_and_ancestry=archived):
                 legacy = json.loads(json.dumps(record))
@@ -215,7 +262,7 @@ class DevprotoTest(unittest.TestCase):
         self.assertEqual(record.get("completion_provenance", {}).get("version"), 2)
         self.assertIs(record["completion_provenance"]["itinerary_required"], False)
         router = devproto.pathway_router()
-        router.start(self.project, "future open itinerary", "live", "w1")
+        router.start(self.project, FEATURE, "live", "w1")
         self.assertTrue(
             devproto.status(self.project, "w1")["historical_receipts_valid"]
         )

@@ -346,12 +346,18 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
     path = store_path(project, work_id)
     required, notes = required_steps(goal, force, optional)
     with locked(path), pathway_router()._store_lock(project):
+        router = pathway_router()
+        if router.item_path(project, work_id).exists():
+            if router.load(project, work_id).get("goal") != goal:
+                raise ValueError(
+                    "Checklist and itinerary goals must match before enrollment."
+                )
         if path.exists():
             record = load(path)
-            if refresh(project, record):
-                save(path, record)
             if record["goal"] != goal:
                 raise ValueError("that work id already exists with a different goal")
+            if refresh(project, record):
+                save(path, record)
             stored = {s["step_id"] for s in record["steps"] if s["required"]}
             if (force or optional) and stored != required:
                 if any(s["status"] != "pending" for s in record["steps"]):
@@ -510,7 +516,7 @@ def completion_digest(record: dict) -> str:
             for name, meta in row.get("instruments", {}).items()
         }
         rows.append(fields)
-    payload = [record["work_id"], rows]
+    payload = [record["work_id"], record["goal"], rows]
     if "completion_provenance" in record:
         payload.append(record["completion_provenance"])
     if "itinerary_enrollment" in record:
@@ -661,6 +667,8 @@ def retained_completion(project: Path, record: dict) -> bool:
                 return False
             router = pathway_router()
             item = json.loads(retained.read_text())
+            if item.get("goal") != record.get("goal"):
+                return False
             if item.get("checklist_generation") != generation:
                 return False
             if item.get("work_id") != record["work_id"] or not item.get("closed"):
@@ -1082,7 +1090,9 @@ def pathway_router():
 
 
 @contextlib.contextmanager
-def itinerary_completion(project: Path, work_id: str, enrollment: dict, generation):
+def itinerary_completion(
+    project: Path, work_id: str, enrollment: dict, generation, goal
+):
     """Hold the pathway lock while checking and retaining its closed proof."""
     path = project / STORE_DIR / "pathway" / (work_id + ".json")
     router = pathway_router()
@@ -1117,6 +1127,8 @@ def itinerary_completion(project: Path, work_id: str, enrollment: dict, generati
         if path.is_symlink():
             raise ValueError("Shared itinerary cannot follow a symlink.")
         item = router.load(project, work_id)
+        if item.get("goal") != goal:
+            raise ValueError("Shared itinerary goal does not match this checklist.")
         if item.get("checklist_generation") != generation:
             raise ValueError(
                 "Shared itinerary belongs to another execution generation; explicitly reopen and re-prove it."
@@ -1301,6 +1313,7 @@ def step(
                             work_id,
                             record.get("itinerary_enrollment", {}),
                             record.get("execution_generation"),
+                            record.get("goal"),
                         )
                     )
                     itinerary_source = portable(
@@ -1372,6 +1385,7 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
                     json.dumps(record.get("itinerary_enrollment"))
                 ),
                 "execution_generation": generation,
+                "goal": record["goal"],
                 "reopened_at": now(),
                 "reason": reason.strip(),
             }

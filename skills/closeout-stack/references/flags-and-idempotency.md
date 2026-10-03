@@ -15,7 +15,7 @@
 | `--no-memory`   | Step 7        | Skip lessons from the user.                                                                   |
 | `--no-retro`    | Step 7.5      | Skip the retro audit and the handoff's Retro Findings section.                                |
 | `--no-wiki`     | Step 8        | Skip the docs refresh.                                                                        |
-| `--no-compound` | Step 9        | Skip `/compound`.                                                                             |
+| `--no-compound` | Step 9        | Skip report generation; cannot waive required compound proof or certify closeout.             |
 | `--dry-run`     | All           | Print the planned steps. Write nothing. Emit a sample resume prompt to show the format.       |
 | `--resume-only` | 1, 10         | Only the Step 1 probe and the Step 10 output. The escape hatch when you only need the prompt. |
 
@@ -41,7 +41,7 @@ The mode is detected automatically when no flag is given (see Step 0 in `SKILL.m
 | 7 lessons     | Read `.devproto/feedback.md` before writing. Add dated lines to an existing rule. Never duplicate a rule.                                                                                                                         |
 | 7.5 retro     | If `## Retro Findings` already exists in the handoff, add a `### Update HH:MM` subsection inside it instead of rewriting the section. This dedupes within a session only. Findings in a new session are surfaced fresh by design. |
 | 8 docs        | Only fire when the 3-session threshold is met AND the doc is missing or stale.                                                                                                                                                    |
-| 9 compound    | Skip if today's compound learning file already exists for this project.                                                                                                                                                           |
+| 9 compound    | Avoid duplicate report generation when today's learning file exists; after shipping prerequisites pass, validate current work coverage and execute and record fresh pending compound proof as Step 9 requires before closeout.    |
 | 9.5 checklist | Re-recording the same row with the same evidence is harmless. New evidence reopens later rows, which is the point.                                                                                                                |
 
 Running `/closeout-stack` twice in one session must not duplicate any write.
