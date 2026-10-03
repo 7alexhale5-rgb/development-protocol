@@ -146,7 +146,7 @@ proves the real thing happened" means. Push a branch and open a pull request to 
    session with only the diff and spec, or a person. Record which one reviewed.
 6. Before merge, execute the exact candidate review verifier and `check --through commit`. Rows `ship`, `compound` and `closeout` can only
    be proven after the merge.
-7. At the end, execute current verification and the candidate review verifier, then require active-work `check` to exit 0 before final closeout. After completion, require `check --historical` with valid retained receipts, never use it as a release preflight. Git review rows retain a candidate snapshot; changed or unreadable candidates reopen review and later rows. The checklist reports evidence, not an independently executed semantic review. Never answer completion from memory.
+7. At the end, execute current verification and the candidate review verifier, then require active-work `check --through compound` to exit 0 before final closeout. After completion, require `check --historical` with valid retained receipts, never use it as a release preflight. Git review rows retain a candidate snapshot; changed or unreadable candidates reopen review and later rows. The checklist reports evidence, not an independently executed semantic review. Never answer completion from memory.
 
 ## Loop mode
 
