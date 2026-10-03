@@ -13,7 +13,7 @@ _SHARED_DIR = Path(__file__).resolve().parents[2] / "development-protocol" / "sc
 if not (_SHARED_DIR / "devproto.py").is_file():
     raise ImportError("review-stack needs development-protocol installed beside it; reinstall the complete stack")
 sys.path.insert(0, str(_SHARED_DIR))
-from devproto import load as load_work_record, TERMINAL
+from devproto import load as load_work_record, TERMINAL, git_identity
 from _shared import candidate_snapshot
 
 
@@ -139,11 +139,20 @@ def main():
     if not args.result or not args.commit:
         parser.error('result and --commit are required for review verification')
     try:
+        identity = git_identity(args.project)
+        if identity is None or identity['head'] != args.commit:
+            raise ValueError('requested review commit must match actual Git HEAD')
         data = json.loads(args.result.read_text())
         validate(data, args.commit)
+        # Older ad-hoc reports need not supply branch metadata. When supplied,
+        # bind the full symbolic ref (or null for detached HEAD) to the report.
+        if 'branch' in data and data['branch'] != identity['branch']:
+            raise ValueError('review branch does not match the current Git branch')
         validate_scope(data, args.project, args.work_id)
         if data.get('candidate_sha256') != candidate_snapshot(args.project):
             raise ValueError('reviewed candidate snapshot changed or is missing')
+        if git_identity(args.project) != identity:
+            raise ValueError('Git HEAD or branch changed during review verification')
     except (OSError, ValueError, TypeError) as exc:
         print(f'review proof: FAIL: {exc}')
         return 1

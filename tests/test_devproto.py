@@ -83,6 +83,38 @@ class DevprotoTest(unittest.TestCase):
         self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
                  "commit", "--allow-empty", "-m", "first")
 
+    def test_post_ship_receipt_notes_allow_compound_and_closeout(self):
+        self.init_git()
+        self.start()
+        self.close_until("compound")
+        notes = self.project / ".devproto" / "learnings" / "decision.md"
+        notes.parent.mkdir(parents=True)
+        notes.write_text("### Learnings\nDecision draft, promotion is separate work.\n")
+        out = self.pass_step("compound", evidence=str(notes))
+        self.assertTrue(out["ok"])
+        self.assertTrue(devproto.status(self.project, "w1", "ship")["ready"])
+        handoff = self.project / ".devproto" / "handoffs" / "closeout.md"
+        handoff.parent.mkdir(parents=True)
+        handoff.write_text("## Unknowns\nFresh merged SHA tested separately.\n")
+        out = self.pass_step("closeout", evidence=str(handoff))
+        self.assertTrue(out["ok"])
+        self.assertTrue(out["ready"])
+
+    def test_post_ship_source_changes_block_earliest_review_not_downstream(self):
+        self.init_git()
+        self.start()
+        self.close_until("compound")
+        decision = self.project / "docs" / "decisions" / "x.md"
+        decision.parent.mkdir(parents=True)
+        decision.write_text("Unreviewed shipped documentation\n")
+        status = devproto.status(self.project, "w1")
+        self.assertEqual(status["next_step"], "review")
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            devproto.step(self.project, "w1", "compound", "blocked", reason="upstream proof reopened")
+        out = devproto.step(self.project, "w1", "review", "blocked", reason="source changed after review")
+        self.assertEqual(self.rows(out)["review"]["status"], "blocked")
+        self.assertEqual(self.rows(out)["compound"]["status"], "pending")
+
     def test_changed_candidate_reopens_review_and_later_rows(self):
         self.init_git()
         self.start()

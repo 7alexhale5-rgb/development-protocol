@@ -115,6 +115,48 @@ class ReviewScopeTests(unittest.TestCase):
         self.data["commit"] = self.head
         self.seal_snapshot()  # Simulate a new independent review of the final package.
         self.assertEqual(self.run_check().returncode, 0)
+    def test_intervening_empty_commit_invalidates_stale_requested_commit(self):
+        self.assertEqual(self.run_check().returncode, 0)
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "intervening identity change"], check=True)
+        self.assertNotEqual(self.run_check().returncode, 0,
+                            "unchanged tree cannot certify a stale requested commit")
+
+    def test_present_report_branch_must_match_current_branch(self):
+        self.data["branch"] = "refs/heads/not-the-current-branch"
+        self.assertNotEqual(self.run_check().returncode, 0)
+
+    def test_matching_report_branch_and_detached_identity_are_supported(self):
+        self.data["branch"] = subprocess.check_output(["git", "-C", str(self.repo), "symbolic-ref", "HEAD"], text=True).strip()
+        self.assertEqual(self.run_check().returncode, 0)
+        subprocess.run(["git", "-C", str(self.repo), "checkout", "--detach", self.head], check=True, capture_output=True)
+        self.data["branch"] = None
+        self.assertEqual(self.run_check().returncode, 0)
+
+    def test_identity_change_during_standalone_validation_fails(self):
+        import importlib.util
+        from unittest.mock import patch
+        for mutation in ("empty-commit", "branch"):
+            with self.subTest(mutation=mutation):
+                self.head = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+                self.data["commit"] = self.head
+                self.seal_snapshot()
+                report = self.proof.parent / "review.json"
+                report.write_text(json.dumps(self.data))
+                spec = importlib.util.spec_from_file_location("standalone_review_identity", SCRIPT)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                original_snapshot = module.candidate_snapshot
+                def changed_identity(project):
+                    snapshot = original_snapshot(project)
+                    if mutation == "empty-commit":
+                        subprocess.run(["git", "-C", str(project), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "during verification"], check=True)
+                    else:
+                        subprocess.run(["git", "-C", str(project), "checkout", "-qb", "intervening-branch"], check=True)
+                    return snapshot
+                argv = [str(SCRIPT), str(report), "--commit", self.head, "--project", str(self.repo), "--work-id", "job"]
+                with patch.object(module, "candidate_snapshot", side_effect=changed_identity), patch.object(sys, "argv", argv):
+                    self.assertEqual(module.main(), 1, "identity changes during verification must fail")
+
     def test_closeout_only_record_is_unknown_not_closed(self):
         (self.repo / ".devproto/job.json").write_text(json.dumps({"work_id": "job", "steps": [{"step_id": "closeout", "status": "passed"}]}))
         self.data.pop("base")

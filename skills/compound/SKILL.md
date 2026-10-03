@@ -215,6 +215,11 @@ search.
 
 ### 5b: Write decisions (only the significant ones)
 
+For a work-id compound after ship, write decision drafts under `.devproto/learnings/decisions/`.
+Do not modify reviewed files, instruction files or HEAD. Later promotion to shipped docs
+is a separate work item with fresh verification and review. The ordinary standalone
+locations below apply only outside a tracked release checklist.
+
 For each decision worth keeping:
 
 ```text
@@ -274,7 +279,9 @@ A retrospective is a natural weekly moment to catch docs that drifted from the c
 
    A doc older than its code on an active project is stale.
 
-3. **Refresh** only the stale docs for code that is still active. Leave archived areas alone.
+3. For a work-id compound, record proposed fixes under `.devproto/learnings/` without
+   editing shipped docs. For standalone work, refresh only active stale docs, then
+   verify and review those changes through their own work item.
 
 4. **Report.** Append to the compound report:
 
@@ -392,6 +399,10 @@ A read-only heading check may verify report structure only; it cannot prove meas
 If the goal, brief or owner request names adoption or promotion, use `--result blocked`
 until the reviewed measurement adapter proves the frozen contract. A `proved` word alone
 is insufficient. Otherwise the row may pass as a truthful retrospective with an unproved idea.
+
+If refresh reopens earlier proof, leave compound pending and record the blocker on the
+earliest eligible open prerequisite. Renew earlier rows before attempting compound;
+downstream blocked rows cannot skip prerequisites.
 
 If git was unreachable, or the window had no commits, record the row as `blocked` with the
 reason, not `pass`. Unknown is not pass.
