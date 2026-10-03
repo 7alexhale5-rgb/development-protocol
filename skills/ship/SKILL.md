@@ -16,7 +16,7 @@ request link and the check results, then record the row with a verifier that re-
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step ship --result pass --evidence .devproto/evidence/ship.txt \
+  --id=<work-id> --step ship --result pass --evidence .devproto/evidence/ship.txt \
   --verify 'expected=$(sed -n "s/^sha //p" .devproto/evidence/ship.txt); test -n "$expected" && test "$(git rev-parse HEAD)" = "$expected" && test "$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)" = "$expected" && gh pr checks <pr-number> && test "$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)" = "$expected"'
 ```
 
@@ -31,6 +31,9 @@ record a pass from a web page you read by eye.
 
 ### 0a: Verify state
 
+Accept `--work-id=<id>` or resolve the existing active checklist for this branch. An
+existing work item with unknown identity is a proof gap, never an ad-hoc bypass.
+
 ```bash
 git status --porcelain -- . ':!.devproto'
 git branch --show-current
@@ -43,7 +46,57 @@ git log --oneline -3
 
 - Uncommitted changes exist: "You have uncommitted changes. Run `/commit` first."
 - On `main` or `master`: "You're on the base branch. Create a feature branch first."
-- No commits ahead of base: "Nothing to ship. Your branch has no new commits."
+- No commits ahead of base and no verified exact-candidate merged PR to renew:
+  "Nothing to ship. Your branch has no new commits."
+
+Resolve the base using Step 0b before applying the no-new-commits condition. Query
+the authenticated repository for the retained exact PR identity, reviewed/pushed
+head and intended base using the checks in Step 4b. A unique verified merged match
+enters receipt-renewal mode even when the refreshed base already contains HEAD.
+In that mode, retain the PR and merge mapping, run the required candidate checks
+and merged-checkout checks, then renew the receipt. Skip sync mutations, push,
+PR creation, readiness and merge actions; this work was already released. Missing,
+ambiguous or mismatched prior release evidence never waives the empty-release abort.
+
+Before push, release, or PR creation for a protocol work item, run:
+
+```text
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> check --id=<work-id> --through commit
+python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>
+python3 <pathway skill folder>/scripts/pathway.py --project <repo> release-check --id=<work-id> --json
+```
+
+A nonzero result blocks release actions, subject only to the explicit CI bootstrap below. Report open rows and retain
+resume evidence. Never reinterpret a missing work ID as permission to bypass an existing
+work item. Re-run these checks after a sync changes the commit or candidate; stale reviews
+must be renewed. An ad-hoc release still needs the declared checks and independent review.
+
+The seventeen rows preserve their order. Simplification may change files and commit
+moves HEAD, so after the final commit run Full Verify and an independent review of the
+committed candidate. Re-record review, then re-pass simplify with `/simplify --check`
+(read-only on that same BASE..HEAD) and commit using the existing commit's proof without
+creating another commit. These renewed receipts allow `check --through commit` to pass.
+If read-only simplification finds a defect, fix it, test, commit and repeat final review.
+Do not refresh a review hash or commit field without the required independent review.
+
+### CI bootstrap: obtain first-run evidence without releasing
+
+When a newly configured workflow needs its first PR run before audit-setup can pass,
+use an authorized draft PR solely to collect that CI evidence. Record this purpose
+and the unresolved audit/checklist rows under `.devproto/` before pushing. Require
+the actual committed candidate, local applicable tests, privacy checks and independent
+code review first; missing review or other required correctness proof still blocks
+this path. Push the feature branch normally and create or reuse a draft PR. Do not
+mark ship passed, mark the PR ready, merge, deploy, publish, or run closeout release
+actions. Re-read checks on the exact PR head, renew audit-setup and each subsequent
+required row in order, then run the ordinary through-commit and review checks above.
+Draft status alone grants no permission; use the session's existing push/PR authority.
+This bounded first-run bootstrap does not require the ordinary `release-check`
+to pass before creating the evidence-only draft. All ordinary outward releases,
+including direct `/ship` calls, require its successful result: current non-release
+itinerary proof or justified non-applicability, known enrollment and generation,
+and no missing, unreadable or stale required itinerary. The draft cannot become a
+release by skipping these checks later.
 
 ### 0b: Detect the base branch
 
@@ -65,8 +118,10 @@ Check in order:
 2. `Makefile` has a `test` target: `make test`
 3. `pyproject.toml`: `pytest`
 4. `Cargo.toml`: `cargo test`
-5. If none is found, note "No test command detected. Skipping tests." and say so in the final
-   report.
+5. If none is found, record a verification gap. Behavior changes require an actual
+   failing-then-passing behavior check; missing tooling blocks that release. For a
+   change where behavior tests do not apply, choose and execute the smallest meaningful
+   validator and retain the reason. Skipping verification never satisfies this step.
 
 ### 0d: Rails check (does the repo carry its own proof?)
 
@@ -104,7 +159,7 @@ never edits anything.
    `git merge-base --is-ancestor <prod-sha> origin/{base}`. A production deploy with no commit
    attached came from someone's laptop, and that is drift too.
 5. **receipts.** Are the checklist's evidence files current? Run
-   `python3 <development-protocol skill folder>/scripts/devproto.py --project . status --id <work-id>`;
+   `python3 <development-protocol skill folder>/scripts/devproto.py --project . status --id=<work-id>`;
    any step it reopened has evidence that changed after it passed.
 
 Why this step exists: on 2026-09-04 one project had nine verifier scripts, zero CI workflows,
@@ -137,6 +192,10 @@ git merge origin/{base_branch} --no-edit
 **If the merge is clean:** continue without comment.
 
 ---
+
+After synchronization changes HEAD or any candidate bytes, repeat Full Verify, required
+independent review, and the review/simplify/commit receipt sequence above before push.
+Never continue silently from a changed merge with stale review evidence.
 
 ## Step 2: Run tests
 
@@ -192,13 +251,42 @@ Write:
 - **Title:** short (under 70 characters), describes the change.
 - **Body:** summary bullets, test plan, any notes (including any rails finding from Step 0d).
 
-### 4b: Create the pull request
+### 4b: Reuse or create the pull request
+
+Before creating a PR, query the authenticated repository for this exact head branch
+and intended base, including open and merged PRs. Reuse a unique matching open PR;
+verify its head equals the pushed SHA and renew the ship receipt from its current
+checks. Do not run `gh pr create` again merely because review evidence was renewed.
+A merged match is reusable only when its repository, retained PR identity, base,
+and `headRefOid` equal this work item's exact reviewed and pushed candidate. Verify
+that its recorded merge includes this candidate. Merge commits require ancestry.
+Rebase merges require a retained ordered one-to-one mapping from every reviewed PR
+commit to its integrated commit, with stable patch IDs and the recorded reviewed
+and merged commit ranges. Verify each integrated commit is in the actual merged
+history and retain the resulting merged tree. Original commit ancestry is not
+required after rebase. Ambiguous, missing or changed patches need independent
+review of the integrated candidate; do not claim equivalence from a branch name.
+Squash merges require the retained exact PR head and merged tree mapping. Verify the
+merged SHA in a separate checkout before closeout. A historical PR sharing only the
+branch and base is not this release. If the branch has new commits, verify whether
+those exact changes are already integrated; otherwise create a new authorized PR.
+Never close current work using the old merge. An ambiguous match or unverified merge
+mapping remains a scope gap.
+
+```bash
+gh pr list --state all --head "{head_branch}" --base "{base}" \
+  --json number,url,state,headRefOid,baseRefName,headRefName,mergeCommit
+```
+
+Create when no current-candidate PR exists. Historical branch matches do not suppress
+a new release PR. Retain the actual repository, branch, base,
+PR URL and exact head in the evidence so a resumed closeout follows this same path.
 
 Optional flags: if `--reviewers @a,@b` was passed, add `--reviewer a,b`; if `--draft`, add
 `--draft`. Put them in `{flags}` below.
 
 ```bash
-gh pr create --title "{title}" {flags} --body "$(cat <<'EOF'
+gh pr create --base "{base}" --title "{title}" {flags} --body "$(cat <<'EOF'
 ## Summary
 {2-4 bullet points from the commit analysis}
 
@@ -258,12 +346,15 @@ Shipped.
 
 ## Flags
 
-| Flag                        | Effect                           |
-| --------------------------- | -------------------------------- |
-| `--skip-tests`              | Skip Step 2 entirely             |
-| `--draft`                   | Create the pull request as draft |
-| `--no-sync`                 | Skip Step 1 (merge with base)    |
-| `--reviewers @user1,@user2` | Request reviewers on the PR      |
+| Flag                        | Effect                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `--work-id=<id>`            | Bind the through-commit check and candidate review verifier to this work item |
+| `--skip-tests`              | Skip Step 2 entirely                                                          |
+| `--draft`                   | Create the pull request as draft                                              |
+| `--no-sync`                 | Skip Step 1 (merge with base)                                                 |
+| `--reviewers @user1,@user2` | Request reviewers on the PR                                                   |
 
 `--skip-tests` is an exception, not a pass: say so in the report and in the pull request body,
 and the local test line reads "skipped".
+
+Receipt renewal always follows checklist order after source or evidence changes: renew affected setup proof first, current build proof next, then required verify (karpathy-verify on the native host), independent review, read-only simplify and the existing commit proof. Re-recording an earlier row reopens later rows; close each prerequisite before recording review. Run the final through-commit check and the exact candidate review verifier before outward release.

@@ -23,6 +23,1085 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_inflight_dependent_proof_rejects_reproved_prerequisite(self):
+        self.start()
+        self.close_until("build")
+        (self.project / "build.md").write_text("candidate A build proof")
+        self.pass_step("build", evidence="build.md")
+        self.close_until("verify")
+        entered, resume = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        results = []
+
+        def verifier(command, project, timeout):
+            if threading.current_thread().name == "dependent-verifier":
+                entered.set()
+                if not resume.wait(10):
+                    raise RuntimeError("fixture timeout")
+                return 0, "old candidate A verification"
+            return original(command, project, timeout)
+
+        def visit():
+            try:
+                results.append(self.pass_step("verify"))
+            except Exception as error:
+                results.append(error)
+
+        worker = threading.Thread(target=visit, name="dependent-verifier")
+        with patch.object(devproto, "run_verifier", side_effect=verifier):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                (self.project / "build.md").write_text("candidate B build proof")
+                self.assertTrue(self.pass_step("build", evidence="build.md")["ok"])
+            finally:
+                resume.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertIsInstance(results[0], ValueError)
+        self.assertNotEqual(
+            self.rows(devproto.status(self.project, "w1"))["verify"]["status"], "passed"
+        )
+        self.assertTrue(self.pass_step("verify")["ok"])
+
+    def test_failed_required_recheck_prevents_overlapping_closeout(self):
+        self.init_git()
+        self.start()
+        self.close_until("closeout")
+        entered, release = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        outcomes = []
+
+        def controlled(command, project, timeout):
+            if threading.current_thread().name == "failed-review":
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("fixture release deadline expired")
+                return 1, "required review recheck failed"
+            return original(command, project, timeout)
+
+        def slow():
+            try:
+                outcomes.append(self.pass_step("review"))
+            except Exception as error:
+                outcomes.append(error)
+
+        worker = threading.Thread(target=slow, name="failed-review")
+        with patch.object(devproto, "run_verifier", side_effect=controlled):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with self.assertRaisesRegex(ValueError, "earlier steps"):
+                    self.pass_step("closeout")
+            finally:
+                release.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], dict)
+        self.assertFalse(outcomes[0]["ok"])
+        current = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertNotIn("completion", current)
+        row = next(r for r in current["steps"] if r["step_id"] == "review")
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["verifier_exit"], 1)
+        self.assertIn("required review recheck failed", row["output_tail"])
+
+    def test_crashed_required_recheck_stays_pending_and_requires_renewal(self):
+        self.start()
+        self.close_until("closeout")
+        with patch.object(
+            devproto,
+            "run_verifier",
+            side_effect=RuntimeError("fixture verifier crashed"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "fixture verifier crashed"):
+                self.pass_step("review")
+        current = devproto.status(self.project, "w1")
+        self.assertEqual(self.rows(current)["review"]["status"], "pending")
+        self.assertIn(
+            "Verification in progress", self.rows(current)["review"]["reason"]
+        )
+        self.assertTrue(
+            all(
+                self.rows(current)[name]["status"] == "pending"
+                for name in ("simplify", "commit", "ship", "compound")
+            )
+        )
+        self.assertFalse(current["ready"])
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.assertTrue(self.pass_step("review")["ok"])
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_timed_out_required_recheck_cannot_restore_old_pass(self):
+        self.start()
+        self.close_until("closeout")
+        out = self.pass_step("review", verify="sleep 2", timeout=1)
+        self.assertFalse(out["ok"])
+        row = self.rows(out)["review"]
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["verifier_exit"], 124)
+        self.assertIn("timed out", row["reason"])
+        self.assertEqual(self.rows(out)["ship"]["status"], "pending")
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.assertNotIn(
+            "completion", devproto.load(devproto.store_path(self.project, "w1"))
+        )
+
+    def test_legacy_active_reset_without_itinerary_requires_fresh_proof(self):
+        self.start()
+        self.pass_step("pathway")
+        path = devproto.store_path(self.project, "w1")
+        legacy = devproto.load(path)
+        legacy.pop("execution_generation")
+        legacy.pop("itinerary_enrollment")
+        devproto.save(path, legacy)
+        devproto.reopen(self.project, "w1", "explicit legacy upgrade")
+        current = devproto.load(path)
+        self.assertEqual(current["itinerary_enrollment"]["mode"], "standalone")
+        self.assertFalse(devproto.status(self.project, "w1")["ready"])
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_legacy_active_reset_cannot_replace_missing_git_baseline(self):
+        self.init_git()
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        legacy = devproto.load(path)
+        legacy.pop("execution_generation")
+        legacy.pop("itinerary_enrollment")
+        devproto.save(path, legacy)
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        baseline.rename(baseline.with_name("original.preserved"))
+        before = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "original baseline is missing"):
+            devproto.reopen(self.project, "w1", "upgrade cannot invent baseline")
+        self.assertEqual(path.read_bytes(), before)
+        self.assertFalse(baseline.exists())
+
+    def test_legacy_active_upgrade_resets_proof_and_preserves_baseline(self):
+        self.init_git()
+        self.start()
+        self.pass_step("pathway")
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        router.log(self.project, "w1", "govern", "ev.md", "true")
+        path = devproto.store_path(self.project, "w1")
+        legacy = devproto.load(path)
+        legacy.pop("execution_generation")
+        legacy.pop("itinerary_enrollment")
+        devproto.save(path, legacy)  # Fixture from the previous record shape.
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        original_baseline = baseline.read_bytes()
+        with redirect_stdout(io.StringIO()):
+            code = devproto.main(
+                [
+                    "reopen",
+                    "--project",
+                    str(self.project),
+                    "--id",
+                    "w1",
+                    "--reason",
+                    "upgrade active proof schema",
+                    "--json",
+                ]
+            )
+        self.assertEqual(code, 0)
+        current = devproto.load(path)
+        self.assertEqual(current["execution_generation"], 1)
+        self.assertEqual(current["itinerary_enrollment"]["mode"], "required")
+        self.assertEqual(current["migration_history"][-1]["legacy_record"], legacy)
+        self.assertTrue(all(row["status"] == "pending" for row in current["steps"]))
+        self.assertEqual(baseline.read_bytes(), original_baseline)
+        router.reopen(self.project, "w1", "fresh itinerary after upgrade")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        self.assertEqual(baseline.read_bytes(), original_baseline)
+
+    @unittest.skipIf(os.geteuid() == 0, "read-only fixture requires ordinary user")
+    def test_historical_check_needs_no_writable_store_or_lock(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        store = self.project / ".devproto"
+        for name in (".lock", ".gitignore"):
+            p = store / name
+            if p.exists():
+                p.rename(p.with_name(name + ".preserved"))
+        paths = [self.project, *self.project.rglob("*")]
+        modes = {p: p.stat().st_mode & 0o777 for p in paths}
+        for p in paths:
+            p.chmod(0o555 if p.is_dir() else 0o444)
+
+        def snapshot():
+            return {
+                str(p.relative_to(self.project)): (
+                    p.stat().st_mode,
+                    p.stat().st_mtime_ns,
+                    p.read_bytes() if p.is_file() else None,
+                )
+                for p in [self.project, *self.project.rglob("*")]
+            }
+
+        try:
+            before = snapshot()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "check",
+                    "--project",
+                    str(self.project),
+                    "--id",
+                    "w1",
+                    "--historical",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(json.loads(result.stdout)["historical_receipts_valid"])
+            self.assertEqual(snapshot(), before)
+        finally:
+            for p, mode in modes.items():
+                p.chmod(mode)
+
+    def test_failed_recheck_survives_unreadable_evidence_or_instrument(self):
+        self.start()
+        self.close_until("review")
+        instrument = self.project / "instrument.md"
+        instrument.write_text("frozen input")
+        for unreadable in (self.project / "ev.md", instrument):
+            with self.subTest(path=unreadable.name):
+                self.assertTrue(
+                    self.pass_step("review", instruments=["instrument.md"])["ok"]
+                )
+                original = devproto.digest
+                executed = False
+
+                def fail_verifier(*args):
+                    nonlocal executed
+                    executed = True
+                    return 1, "new review failed"
+
+                def read(path):
+                    if executed and Path(path) == unreadable:
+                        raise PermissionError("temporary proof read denial")
+                    return original(path)
+
+                with (
+                    patch.object(devproto, "run_verifier", side_effect=fail_verifier),
+                    patch.object(devproto, "digest", side_effect=read),
+                ):
+                    out = self.pass_step("review", instruments=["instrument.md"])
+                self.assertFalse(out["ok"])
+                row = next(
+                    r
+                    for r in devproto.status(self.project, "w1")["steps"]
+                    if r["step_id"] == "review"
+                )
+                self.assertEqual(row["status"], "blocked")
+                self.assertEqual(row["verifier_exit"], 1)
+                self.assertIn("new review failed", row["output_tail"])
+
+    def test_archive_recovery_waits_for_outstanding_verifier_and_fresh_rows(self):
+        self.start()
+        self.close_until("closeout")
+        entered, release = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        outcomes = []
+
+        def controlled(command, project, timeout):
+            if threading.current_thread().name == "slow-verifier":
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("fixture release deadline expired")
+            return original(command, project, timeout)
+
+        def slow():
+            try:
+                outcomes.append(self.pass_step("pathway"))
+            except Exception as error:
+                outcomes.append(error)
+
+        def interrupted(incoming, outgoing, **kwargs):
+            outgoing.write(b"partial copy")
+            raise OSError("simulated copy interruption")
+
+        path = devproto.store_path(self.project, "w1")
+        worker = threading.Thread(target=slow, name="slow-verifier")
+        with patch.object(devproto, "run_verifier", side_effect=controlled):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with patch.object(
+                    devproto.shutil, "copyfileobj", side_effect=interrupted
+                ) as copying:
+                    with self.assertRaisesRegex(ValueError, "earlier steps"):
+                        self.pass_step("closeout")
+                    copying.assert_not_called()
+                self.assertNotIn("completion", devproto.load(path))
+            finally:
+                release.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], dict)
+        self.assertTrue(outcomes[0]["ok"])
+        self.close_until("closeout")
+        with patch.object(devproto.shutil, "copyfileobj", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.pass_step("closeout")
+        self.assertNotIn("completion", devproto.load(path))
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        sealed = path.read_bytes()
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        self.assertEqual(path.read_bytes(), sealed)
+
+    def test_failed_review_recheck_is_retained_after_git_recovers(self):
+        self.init_git()
+        self.start()
+        self.close_until("review")
+        self.assertTrue(self.pass_step("review")["ok"])
+        original = devproto.git_identity
+        executed = False
+
+        def fail_verifier(*args):
+            nonlocal executed
+            executed = True
+            return 1, "new review failed"
+
+        def inspect(project):
+            if executed:
+                raise ValueError("Git identity temporarily unavailable")
+            return original(project)
+
+        with (
+            patch.object(devproto, "run_verifier", side_effect=fail_verifier),
+            patch.object(devproto, "git_identity", side_effect=inspect),
+        ):
+            out = self.pass_step("review")
+        self.assertFalse(out["ok"])
+        row = next(
+            r
+            for r in devproto.status(self.project, "w1")["steps"]
+            if r["step_id"] == "review"
+        )
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["verifier_exit"], 1)
+        self.assertIn("new review failed", row["output_tail"])
+        self.assertIn("inspection", row["reason"])
+
+    def test_closed_itinerary_must_prove_the_current_candidate(self):
+        self.init_git()
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        (self.project / "check.sh").write_text("# corrected implementation\nexit 0\n")
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+        router.reopen(self.project, "w1", "renew proof for corrected candidate")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_progressed_open_itinerary_can_explicitly_reset_for_checklist(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        router.log(self.project, "w1", "govern", "ev.md", "true")
+        prior = router.load(self.project, "w1")["pathways"]["govern"]
+        self.start()
+        reset = router.reopen(self.project, "w1", "enroll fresh checklist proof")
+        self.assertFalse(reset["closed"])
+        item = router.load(self.project, "w1")
+        self.assertEqual(item["completion_history"][-1]["pathways"]["govern"], prior)
+        self.assertIsNone(item["completion_history"][-1]["completion"])
+        self.assertEqual(item["checklist_generation"], 1)
+        self.assertTrue(
+            all(row["status"] == "open" for row in item["pathways"].values())
+        )
+        for name in item["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_itinerary_cannot_seal_old_candidate_rows_under_new_binding(self):
+        self.init_git()
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        (self.project / "check.sh").write_text(
+            "# changed after pathway proof\nexit 0\n"
+        )
+        self.assertFalse(router.close(self.project, "w1")["ok"])
+
+    def test_conflicting_goal_intake_is_rejected_without_partial_enrollment(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "itinerary-first")
+        original = router.item_path(self.project, "itinerary-first").read_bytes()
+        with self.assertRaisesRegex(ValueError, "goal"):
+            devproto.start(self.project, "Different security goal", "itinerary-first")
+        self.assertFalse(devproto.store_path(self.project, "itinerary-first").exists())
+        self.assertEqual(
+            router.item_path(self.project, "itinerary-first").read_bytes(), original
+        )
+
+    def test_checklist_first_conflicting_itinerary_goal_leaves_both_stores_unchanged(
+        self,
+    ):
+        router = devproto.pathway_router()
+        devproto.start(self.project, FEATURE, "checklist-first")
+        original = devproto.store_path(self.project, "checklist-first").read_bytes()
+        with self.assertRaisesRegex(ValueError, "goal"):
+            router.start(
+                self.project, "Different security goal", "live", "checklist-first"
+            )
+        self.assertFalse(router.item_path(self.project, "checklist-first").exists())
+        self.assertEqual(
+            devproto.store_path(self.project, "checklist-first").read_bytes(), original
+        )
+
+    def test_goal_association_tampering_blocks_closeout_and_historical_proof(self):
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        original = router.load(self.project, "w1")
+        self.close_until("closeout")
+        changed = json.loads(json.dumps(original))
+        changed["goal"] = "Different security goal"
+        router.save(self.project, changed)
+        self.assertFalse(self.pass_step("closeout")["ok"])
+        router.save(self.project, original)
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertTrue(devproto.retained_completion(self.project, record))
+        record["goal"] = "Different security goal"
+        self.assertFalse(devproto.retained_completion(self.project, record))
+        self.assertFalse(router.retained_completion(self.project, changed))
+
+    def test_missing_execution_generation_cannot_complete_legacy_work(self):
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        record = devproto.load(path)
+        record.pop("execution_generation", None)
+        devproto.save(path, record)
+        self.start()
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+
+    def test_closed_pre_intake_itinerary_is_not_relabelled_current(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        original = router.load(self.project, "w1")
+        self.start()
+        self.assertEqual(router.load(self.project, "w1"), original)
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+        router.reopen(self.project, "w1", "enroll current intake")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_checklist_reopen_requires_renewed_itinerary_generation(self):
+        for itinerary_first in (False, True):
+            with self.subTest(itinerary_reopened_first=itinerary_first):
+                work_id = "cycle-" + str(itinerary_first)
+                devproto.start(self.project, FEATURE, work_id)
+                router = devproto.pathway_router()
+                router.start(self.project, FEATURE, "live", work_id)
+                for name in router.load(self.project, work_id)["pathways"]:
+                    router.log(self.project, work_id, name, "ev.md", "true")
+                router.close(self.project, work_id)
+
+                def renew_checklist():
+                    for row in devproto.status(self.project, work_id)["steps"]:
+                        if row["step_id"] == "closeout":
+                            break
+                        if row["required"]:
+                            devproto.step(
+                                self.project,
+                                work_id,
+                                row["step_id"],
+                                "pass",
+                                "ev.md",
+                                "true",
+                            )
+                        else:
+                            devproto.step(
+                                self.project,
+                                work_id,
+                                row["step_id"],
+                                "na",
+                                reason="not applicable to fixture",
+                            )
+
+                renew_checklist()
+                self.assertTrue(
+                    devproto.step(
+                        self.project, work_id, "closeout", "pass", "ev.md", "true"
+                    )["completed"]
+                )
+                original = devproto.load(devproto.store_path(self.project, work_id))
+                if itinerary_first:
+                    router.reopen(self.project, work_id, "renew itinerary")
+                devproto.reopen(self.project, work_id, "renew changed work")
+                (self.project / "ev.md").write_text("renewed documentation " + work_id)
+                renew_checklist()
+                blocked = devproto.step(
+                    self.project, work_id, "closeout", "pass", "ev.md", "true"
+                )
+                self.assertFalse(blocked["ok"])
+                self.assertTrue(devproto.retained_completion(self.project, original))
+                if not itinerary_first:
+                    router.reopen(self.project, work_id, "renew itinerary")
+                for name in router.load(self.project, work_id)["pathways"]:
+                    router.log(self.project, work_id, name, "ev.md", "true")
+                router.close(self.project, work_id)
+                self.assertTrue(
+                    devproto.step(
+                        self.project, work_id, "closeout", "pass", "ev.md", "true"
+                    )["completed"]
+                )
+
+    def test_deleted_enrolled_itinerary_cannot_become_standalone(self):
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        (self.project / ".devproto/pathway/w1.json").unlink()
+        self.close_until("closeout")
+        out = self.pass_step("closeout")
+        self.assertFalse(out["ok"])
+        self.assertFalse(out["completed"])
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertEqual(record["itinerary_enrollment"]["mode"], "required")
+
+    def test_unknown_enrollment_cannot_close_as_standalone(self):
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        record = devproto.load(path)
+        record.pop("itinerary_enrollment", None)
+        devproto.save(path, record)
+        self.start()  # Resume cannot manufacture an absent historical obligation.
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+
+    def test_pathway_first_intake_records_required_enrollment(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        self.assertEqual(
+            devproto.load(path)["itinerary_enrollment"]["mode"], "required"
+        )
+        (self.project / ".devproto/pathway/w1.json").unlink()
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+
+    def test_reopen_retains_each_completion_provenance_independently(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        path = devproto.store_path(self.project, "w1")
+        first = devproto.load(path)
+        devproto.reopen(self.project, "w1", "Add shared pathway coverage")
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        current = devproto.load(path)
+        prior = dict(current["completion_history"][0], work_id="w1")
+        self.assertEqual(
+            prior.get("completion_provenance"), first["completion_provenance"]
+        )
+        self.assertTrue(devproto.retained_completion(self.project, prior))
+        self.assertTrue(devproto.retained_completion(self.project, current))
+        self.assertFalse(prior["completion_provenance"]["itinerary_required"])
+        self.assertTrue(current["completion_provenance"]["itinerary_required"])
+
+    def test_sealed_legacy_unknown_itinerary_provenance_stays_unverified(self):
+        import shutil
+
+        self.init_git()
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        old_archive = devproto.archive_directory(self.project, record)
+        record.pop("completion_provenance", None)
+        legacy_archive = devproto.archive_directory(self.project, record)
+        if legacy_archive != old_archive:
+            shutil.copytree(old_archive, legacy_archive)
+        record["completion"]["archive_dir"] = devproto.portable(
+            self.project, legacy_archive
+        )
+        record["completion"]["receipt_sha256"] = devproto.completion_digest(record)
+        ancestry = json.loads(
+            (old_archive / record["completion"]["ancestry_sha256"]).read_text()
+        )
+        ancestry["receipt_sha256"] = devproto.completion_digest(record)
+        payload = json.dumps(ancestry, sort_keys=True).encode()
+        sha = __import__("hashlib").sha256(payload).hexdigest()
+        (legacy_archive / sha).write_bytes(payload)
+        record["completion"]["ancestry_sha256"] = sha
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for archived in (True, False):
+            with self.subTest(archive_and_ancestry=archived):
+                legacy = json.loads(json.dumps(record))
+                if not archived:
+                    legacy["completion"].pop("archive_dir")
+                    legacy["completion"].pop("ancestry_sha256")
+                original = json.dumps(legacy, sort_keys=True)
+                self.assertFalse(devproto.retained_completion(self.project, legacy))
+                self.assertFalse(devproto.refresh(self.project, legacy))
+                self.assertEqual(json.dumps(legacy, sort_keys=True), original)
+
+    def test_explicit_itinerary_absence_is_immutable_and_bound(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertEqual(record.get("completion_provenance", {}).get("version"), 2)
+        self.assertIs(record["completion_provenance"]["itinerary_required"], False)
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        changed = json.loads(json.dumps(record))
+        changed["completion_provenance"]["itinerary_required"] = True
+        self.assertFalse(devproto.retained_completion(self.project, changed))
+
+    def test_required_itinerary_proof_survives_origin_loss_and_archive_transfer(self):
+        import shutil
+
+        self.start()
+        self.close_until("closeout")
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.pass_step("closeout")
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertIs(
+            record.get("completion_provenance", {}).get("itinerary_required"), True
+        )
+        item = router.load(self.project, "w1")
+        shutil.rmtree(router.archive_directory(self.project, item))
+        (self.project / ".devproto/pathway/w1.json").unlink()
+        self.assertTrue(devproto.retained_completion(self.project, record))
+        with tempfile.TemporaryDirectory() as directory:
+            transferred = Path(directory).resolve()
+            shutil.copytree(self.project / ".devproto", transferred / ".devproto")
+            self.assertTrue(devproto.retained_completion(transferred, record))
+            provenance = record["completion_provenance"]
+            copied_json = devproto.historical_artifact(
+                transferred,
+                record,
+                provenance["itinerary_source"],
+                provenance["itinerary_sha256"],
+            )
+            original = copied_json.read_bytes()
+            copied_json.write_bytes(b"corrupt")
+            self.assertFalse(devproto.retained_completion(transferred, record))
+            copied_json.write_bytes(original)
+            proof_sha = next(
+                row["sha256"]
+                for row in item["pathways"].values()
+                if row["status"] == "proved"
+            )
+            proof = devproto.historical_artifact(transferred, record, "", proof_sha)
+            proof.unlink()
+            self.assertFalse(devproto.retained_completion(transferred, record))
+
+    def test_shared_itinerary_missing_archive_blocks_checklist_closeout(self):
+        import importlib.util
+
+        script = ROOT / "skills/pathway/scripts/pathway.py"
+        spec = importlib.util.spec_from_file_location("itinerary_test", script)
+        router = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router)
+        self.start()
+        self.close_until("closeout")
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        item = router.load(self.project, "w1")
+        archive = router.archive_directory(self.project, item)
+        sha = next(row["sha256"] for row in item["pathways"].values())
+        artifact = archive / sha
+        original = artifact.read_bytes()
+        artifact.unlink()
+        out = self.pass_step("closeout")
+        self.assertFalse(out["ok"])
+        self.assertFalse(out["ready"])
+        artifact.write_bytes(original)
+        out = self.pass_step("closeout")
+        self.assertTrue(out["completed"])
+        artifact.unlink()
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        row = self.rows(out)["closeout"]
+        retained = devproto.historical_artifact(
+            self.project, record, str(artifact), sha
+        )
+        retained.write_bytes(b"corrupt")
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
+    def test_closeout_rejects_successful_verifier_without_completion_provenance(self):
+        self.start()
+        self.close_until("closeout")
+        with patch.object(devproto, "retained_completion", return_value=False):
+            out = self.pass_step("closeout")
+            self.assertFalse(out["ok"])
+            self.assertFalse(out["ready"])
+            self.assertFalse(out["current_candidate_ready"])
+            self.assertEqual(self.rows(out)["closeout"]["status"], "blocked")
+        self.assertIsNone(out.get("completion"))
+
+    def test_prechange_git_record_cannot_migrate_without_review_binding(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        path = devproto.store_path(self.project, "w1")
+        original = json.loads(path.read_text())
+        original.pop("completion")
+        self.init_git()
+        identity = devproto.git_identity(self.project)
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        for provenance in ("release", "baseline", "both"):
+            with self.subTest(provenance=provenance):
+                record = json.loads(json.dumps(original))
+                for row in record["steps"]:
+                    row["git_identity"] = (
+                        identity
+                        if provenance != "baseline"
+                        and row["step_id"] in devproto.RELEASE_STEPS
+                        else None
+                    )
+                    row["candidate_sha256"] = ""
+                if provenance != "release":
+                    baseline.write_text(f"base {identity['head']}\nwork-id w1\n")
+                elif baseline.exists():
+                    baseline.unlink()
+                self.assertFalse(devproto.retained_completion(self.project, record))
+                devproto.refresh(self.project, record)
+                self.assertNotIn("completion", record)
+
+    def test_list_completed_proof_gap_never_reports_current_readiness(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        out = devproto.status(self.project, "w1")
+        self.assertFalse(out["ready"])
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            devproto.print_human(devproto.list_items(self.project))
+        self.assertIn("historical proof verified", stream.getvalue())
+        record = json.loads(devproto.store_path(self.project, "w1").read_text())
+        row = next(row for row in record["steps"] if row["status"] == "passed")
+        archived = devproto.historical_artifact(
+            self.project, record, row["evidence_path"], row["evidence_sha256"]
+        )
+        archived.unlink()
+        out = devproto.status(self.project, "w1")
+        self.assertFalse(out["ready"])
+        self.assertFalse(out["historical_receipts_valid"])
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            devproto.print_human(devproto.list_items(self.project))
+        self.assertIn("historical proof gap", stream.getvalue())
+        self.assertNotIn("ready", stream.getvalue())
+
+    def test_completed_ancestry_survives_squash_gc_and_fresh_clone_transfer(self):
+        import shutil
+
+        self.init_git()
+        original_branch = self.git("symbolic-ref", "--short", "HEAD")
+        self.start()
+        self.git("checkout", "-b", "feature")
+        (self.project / "feature.py").write_text("answer = 1\n")
+        self.git("add", "feature.py")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "-qm",
+            "feature",
+        )
+        reviewed = self.git("rev-parse", "HEAD")
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        self.git("checkout", original_branch)
+        self.git("merge", "--squash", "feature")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "-qm",
+            "squash feature",
+        )
+        self.git("branch", "-D", "feature")
+        self.git("reflog", "expire", "--expire=now", "--all")
+        self.git("gc", "--prune=now")
+        missing = subprocess.run(
+            ["git", "-C", str(self.project), "cat-file", "-e", reviewed],
+            capture_output=True,
+        )
+        self.assertNotEqual(
+            missing.returncode, 0, "fixture must actually remove reviewed Git object"
+        )
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp).resolve() / "fresh"
+            subprocess.run(
+                ["git", "clone", "--no-local", "-q", str(self.project), str(clone)],
+                check=True,
+            )
+            shutil.copytree(self.project / ".devproto", clone / ".devproto")
+            self.assertTrue(devproto.status(clone, "w1")["historical_receipts_valid"])
+
+    def test_interrupted_archive_publication_recovers_a_partial_old_destination(self):
+        self.start()
+        self.close_until("closeout")
+
+        def interrupted(incoming, outgoing, **kwargs):
+            outgoing.write(b"partial copy")
+            raise OSError("simulated copy interruption")
+
+        with patch.object(devproto.shutil, "copyfileobj", side_effect=interrupted):
+            with self.assertRaises(OSError):
+                self.pass_step("closeout")
+        path = self.project / ".devproto/w1.json"
+        record = json.loads(path.read_text())
+        self.assertNotIn("completion", record)
+        archive = devproto.archive_directory(self.project, record)
+        (archive / record["steps"][0]["evidence_sha256"]).write_bytes(
+            b"older partial destination"
+        )
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
+    def test_slow_success_requires_fresh_downstream_before_immutable_closeout(self):
+        self.start()
+        self.close_until("closeout")
+        entered, release = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        outcomes = []
+
+        def controlled(command, project, timeout):
+            if threading.current_thread().name == "slow-verifier":
+                entered.set()
+                if not release.wait(10):
+                    raise RuntimeError("fixture release deadline expired")
+            return original(command, project, timeout)
+
+        def slow():
+            try:
+                outcomes.append(self.pass_step("pathway"))
+            except Exception as error:
+                outcomes.append(error)
+
+        worker = threading.Thread(target=slow, name="slow-verifier")
+        with patch.object(devproto, "run_verifier", side_effect=controlled):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with self.assertRaisesRegex(ValueError, "earlier steps"):
+                    self.pass_step("closeout")
+            finally:
+                release.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(outcomes), 1)
+        self.assertIsInstance(outcomes[0], dict)
+        self.assertTrue(outcomes[0]["ok"])
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        path = devproto.store_path(self.project, "w1")
+        sealed = path.read_bytes()
+        with patch.object(devproto, "run_verifier") as verifier:
+            with self.assertRaisesRegex(ValueError, "completed work is historical"):
+                self.pass_step("pathway")
+            verifier.assert_not_called()
+        self.assertEqual(path.read_bytes(), sealed)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
+    def test_completed_proofs_survive_live_edits_and_archive_loss_is_recoverable(self):
+        self.start()
+        evidence = self.project / ".devproto/evidence/review.json"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text('{"verdict":"pass"}\n')
+        instrument = self.project / "tests/test_behavior.py"
+        instrument.parent.mkdir()
+        instrument.write_text("assert True\n")
+        for row in devproto.status(self.project, "w1")["steps"]:
+            if row["required"]:
+                self.pass_step(
+                    row["step_id"],
+                    evidence=str(evidence),
+                    instruments=(str(instrument),),
+                )
+            else:
+                devproto.step(
+                    self.project, "w1", row["step_id"], "na", reason="not needed"
+                )
+        path = self.project / ".devproto/w1.json"
+        receipt = path.read_bytes()
+        devproto.start(self.project, "next confirmed bug fix", "w2")
+        evidence.write_text('{"verdict":"later-task"}\n')
+        instrument.write_text("assert False\n")
+        devproto.step(
+            self.project,
+            "w2",
+            "pathway",
+            "pass",
+            str(evidence),
+            "true",
+            instruments=(str(instrument),),
+        )
+        devproto.list_items(self.project)
+        out = devproto.status(self.project, "w1")
+        self.assertTrue(out["historical_receipts_valid"])
+        self.assertEqual(
+            path.read_bytes(), receipt, "status must not mutate sealed rows"
+        )
+        archive = self.project / out["completion"]["archive_dir"]
+        artifact = next(archive.iterdir())
+        saved = artifact.read_bytes()
+        artifact.unlink()
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        self.assertEqual(path.read_bytes(), receipt)
+        artifact.write_bytes(saved)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        artifact.write_bytes(b"tampered proof")
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        artifact.write_bytes(saved)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        self.assertEqual(path.read_bytes(), receipt)
+
+        aliased_proof = self.project / "same-bytes-other-location"
+        aliased_proof.write_bytes(saved)
+        artifact.unlink()
+        artifact.symlink_to(aliased_proof)
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"],
+            "a redirected archive is invalid even with matching bytes",
+        )
+        artifact.unlink()
+        artifact.write_bytes(saved)
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+
+    def test_read_only_historical_output_scrubs_legacy_credentials(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        path = self.project / ".devproto/w1.json"
+        record = json.loads(path.read_text())
+        secret = "synthetic-private-password"
+        record["steps"][0]["verify_command"] = (
+            "echo postgres://fixture:" + secret + "@localhost/db"
+        )
+        record["steps"][0]["output_tail"] = (
+            "postgres://fixture:" + secret + "@localhost/db"
+        )
+        record["completion"]["receipt_sha256"] = "invalid receipt"
+        path.write_text(json.dumps(record))
+        saved = path.read_bytes()
+        for flags in ([], ["--json"]):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "check",
+                    "--project",
+                    str(self.project),
+                    "--id",
+                    "w1",
+                    "--historical",
+                    *flags,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn(secret, result.stdout + result.stderr)
+            self.assertEqual(path.read_bytes(), saved)
+
+    def test_reopening_cannot_replace_the_archived_git_baseline(self):
+        self.init_git()
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        baseline = self.project / ".devproto/evidence/w1-build-base.txt"
+        saved = baseline.read_bytes()
+        baseline.write_text("base " + "0" * 40 + "\nwork-id w1\n")
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        with self.assertRaisesRegex(ValueError, "original baseline changed"):
+            devproto.reopen(self.project, "w1", "new work")
+        baseline.write_bytes(saved)
+        self.assertFalse(devproto.reopen(self.project, "w1", "new work")["completed"])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name).resolve()
@@ -75,13 +1154,239 @@ class DevprotoTest(unittest.TestCase):
 
     def git(self, *args):
         return subprocess.check_output(
-            ["git", "-C", str(self.project), *args], stderr=subprocess.DEVNULL,
-            text=True).strip()
+            ["git", "-C", str(self.project), *args],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
 
     def init_git(self):
         self.git("init")
-        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-                 "commit", "--allow-empty", "-m", "first")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "first",
+        )
+
+    def test_closeout_verifier_checks_merged_checkout_not_passing_feature(self):
+        self.init_git()
+        (self.project / "check.sh").write_text("exit 0\n")
+        self.start()
+        self.close_until("closeout")
+        merged = self.project / ".devproto" / "merged-checkout"
+        merged.mkdir()
+
+        def git(*args):
+            return subprocess.check_output(
+                ["git", "-C", str(merged), *args], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+
+        def commit(message):
+            git("add", "mergedcheck.sh")
+            git(
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.test",
+                "commit",
+                "-m",
+                message,
+            )
+            return git("rev-parse", "HEAD")
+
+        git("init")
+        script = merged / "mergedcheck.sh"
+        script.write_text("exit 1\n")
+        sha = commit("failing merged code")
+        branch = git("rev-parse", "--symbolic-full-name", "HEAD")
+        # Original feature passes; only the committed separate merged checkout counts.
+        self.assertEqual(
+            subprocess.run(["bash", "check.sh"], cwd=self.project).returncode, 0
+        )
+        import shlex
+
+        path = shlex.quote(str(merged))
+
+        def command(expected):
+            check = (
+                f'test "$(git -C {path} rev-parse HEAD)" = {expected} && '
+                f'test "$(git -C {path} rev-parse --symbolic-full-name HEAD)" = {shlex.quote(branch)} && '
+                f'clean_status="$(git -C {path} status --porcelain --untracked-files=all)" && test -z "$clean_status"'
+            )
+            return f"{check} && (cd {path} && bash mergedcheck.sh) && {check}"
+
+        self.assertFalse(self.pass_step("closeout", verify=command(sha))["ok"])
+        script.write_text("exit 0\n")
+        out = self.pass_step("closeout", verify=command(sha))
+        self.assertFalse(
+            out["ok"], "uncommitted green edit cannot certify failing merged SHA"
+        )
+        self.assertEqual(self.rows(out)["closeout"]["status"], "blocked")
+        git("add", "mergedcheck.sh")
+        self.assertFalse(
+            self.pass_step("closeout", verify=command(sha))["ok"],
+            "staged green edit is still not the recorded commit",
+        )
+        passing_sha = commit("passing merged code")
+        self.assertFalse(
+            self.pass_step("closeout", verify=command(sha))["ok"],
+            "wrong recorded SHA must fail",
+        )
+        (merged / "untracked-input.py").write_text("answer = 1\n")
+        self.assertFalse(
+            self.pass_step("closeout", verify=command(passing_sha))["ok"],
+            "untracked inputs must fail",
+        )
+        (merged / "untracked-input.py").unlink()
+        # Each clean committed test below exits zero but changes the checkout while running.
+        for body in (
+            "touch generated-input.py\nexit 0\n",
+            "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -qm during-tests\nexit 0\n",
+            "git checkout -qb during-tests\nexit 0\n",
+        ):
+            with self.subTest(body=body):
+                script.write_text(body)
+                current_sha = commit("mutation probe")
+                out = self.pass_step("closeout", verify=command(current_sha))
+                self.assertFalse(
+                    out["ok"], "post-test cleanliness and identity changes must fail"
+                )
+                if (merged / "generated-input.py").exists():
+                    (merged / "generated-input.py").unlink()
+        script.write_text("exit 0\n")
+        passing_sha = commit("final passing merged code")
+        branch = git("rev-parse", "--symbolic-full-name", "HEAD")
+        self.assertTrue(self.pass_step("closeout", verify=command(passing_sha))["ok"])
+
+    def test_post_ship_receipt_notes_allow_compound_and_closeout(self):
+        self.init_git()
+        self.start()
+        self.close_until("compound")
+        notes = self.project / ".devproto" / "learnings" / "decision.md"
+        notes.parent.mkdir(parents=True)
+        notes.write_text("### Learnings\nDecision draft, promotion is separate work.\n")
+        out = self.pass_step("compound", evidence=str(notes))
+        self.assertTrue(out["ok"])
+        self.assertTrue(devproto.status(self.project, "w1", "ship")["ready"])
+        handoff = self.project / ".devproto" / "handoffs" / "closeout.md"
+        handoff.parent.mkdir(parents=True)
+        handoff.write_text("## Unknowns\nFresh merged SHA tested separately.\n")
+        out = self.pass_step("closeout", evidence=str(handoff))
+        self.assertTrue(out["ok"])
+        self.assertFalse(out["ready"])
+        self.assertTrue(out["historical_receipts_valid"])
+
+    def test_retained_compound_report_requires_renewal_after_review_changes(self):
+        # The instruction assertion checks structure; the real checklist below
+        # proves that retaining today's report alone cannot complete closeout.
+        instructions = (ROOT / "skills/closeout-stack/SKILL.md").read_text()
+        self.assertIn("Renew retained compound proof", instructions)
+        self.init_git()
+        self.start()
+        self.close_until("compound")
+        report = self.project / ".devproto/learnings/retained.md"
+        report.parent.mkdir(parents=True)
+        report.write_text("### Learnings\nWork w1: retain the confirmed finding.\n")
+        self.assertTrue(self.pass_step("compound", evidence=str(report))["ok"])
+        renewed = self.project / ".devproto/reviews/renewed.md"
+        renewed.parent.mkdir(parents=True)
+        renewed.write_text("Renewed independent review of this candidate.\n")
+        self.assertTrue(self.pass_step("review", evidence=str(renewed))["ok"])
+        self.assertEqual(
+            self.rows(devproto.status(self.project, "w1"))["compound"]["status"],
+            "pending",
+        )
+        self.close_until("compound")
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        verifier = "test -f .devproto/learnings/retained.md && grep -q 'Work w1:' .devproto/learnings/retained.md && printf renewed-compound-proof"
+        renewed_proof = self.pass_step(
+            "compound", evidence=str(report), verify=verifier
+        )
+        self.assertTrue(renewed_proof["ok"])
+        self.assertIn(
+            "renewed-compound-proof",
+            self.rows(renewed_proof)["compound"]["output_tail"],
+        )
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_post_ship_source_changes_block_earliest_review_not_downstream(self):
+        self.init_git()
+        self.start()
+        self.close_until("compound")
+        decision = self.project / "docs" / "decisions" / "x.md"
+        decision.parent.mkdir(parents=True)
+        decision.write_text("Unreviewed shipped documentation\n")
+        status = devproto.status(self.project, "w1")
+        self.assertEqual(status["next_step"], "review")
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            devproto.step(
+                self.project,
+                "w1",
+                "compound",
+                "blocked",
+                reason="upstream proof reopened",
+            )
+        out = devproto.step(
+            self.project,
+            "w1",
+            "review",
+            "blocked",
+            reason="source changed after review",
+        )
+        self.assertEqual(self.rows(out)["review"]["status"], "blocked")
+        self.assertEqual(self.rows(out)["compound"]["status"], "pending")
+
+    def test_changed_candidate_reopens_review_and_later_rows(self):
+        self.init_git()
+        self.start()
+        self.close_until("commit")
+        self.pass_step("commit")
+        (self.project / "source.py").write_text("changed implementation\n")
+        out = devproto.status(self.project, "w1", "commit")
+        self.assertFalse(out["ready"])
+        self.assertEqual(self.rows(out)["review"]["status"], "pending")
+        self.assertEqual(self.rows(out)["commit"]["status"], "pending")
+
+    def test_head_change_during_review_verifier_blocks_without_file_changes(self):
+        self.init_git()
+        self.start()
+        self.close_until("review")
+        out = self.pass_step(
+            "review",
+            "git -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -m changed",
+        )
+        self.assertFalse(out["ok"])
+        self.assertIn("Git HEAD or branch changed", out["error"])
+
+    def test_candidate_mutation_during_review_verifier_blocks(self):
+        self.init_git()
+        self.start()
+        self.close_until("review")
+        out = self.pass_step("review", "printf changed > source.py")
+        self.assertFalse(out["ok"])
+
+    def test_transient_intake_failure_can_retry_without_creating_record(self):
+        with patch.object(
+            devproto,
+            "git_identity",
+            side_effect=ValueError("Git identity lookup failed"),
+        ):
+            with self.assertRaisesRegex(ValueError, "lookup failed"):
+                self.start()
+        self.assertFalse(devproto.store_path(self.project, "w1").exists())
+
+    def test_flag_restart_preserves_intake_gap(self):
+        self.git("init")
+        self.start(TRIVIAL)
+        out = self.start(TRIVIAL, force=["research"])
+        self.assertTrue(
+            any("baseline unavailable" in note for note in out["rule_notes"])
+        )
 
     def test_commit_proof_reopens_on_head_change_only_from_commit_onward(self):
         self.init_git()
@@ -90,8 +1395,16 @@ class DevprotoTest(unittest.TestCase):
         self.pass_step("commit")
         self.pass_step("ship")
         self.assertTrue(devproto.status(self.project, "w1", "ship")["ready"])
-        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-                 "commit", "--allow-empty", "-m", "second")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "second",
+        )
         out = devproto.status(self.project, "w1", "commit")
         self.assertFalse(out["ready"])
         rows = self.rows(out)
@@ -107,12 +1420,25 @@ class DevprotoTest(unittest.TestCase):
         self.git("checkout", "-b", "other")
         self.assertFalse(devproto.status(self.project, "w1", "commit")["ready"])
 
-    def test_first_commit_keeps_precommit_progress(self):
+    def test_final_commit_requires_review_renewal_but_keeps_build_proof(self):
         self.init_git()
         self.start()
         self.close_until("commit")
-        self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
-                 "commit", "--allow-empty", "-m", "work")
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "work",
+        )
+        out = devproto.status(self.project, "w1", "commit")
+        self.assertEqual(self.rows(out)["build"]["status"], "passed")
+        self.assertEqual(self.rows(out)["review"]["status"], "pending")
+        self.pass_step("review")
+        self.pass_step("simplify")
         self.assertTrue(self.pass_step("commit")["ok"])
         self.assertTrue(devproto.status(self.project, "w1", "commit")["ready"])
 
@@ -147,9 +1473,12 @@ class DevprotoTest(unittest.TestCase):
         self.init_git()
         self.start()
         self.close_until("commit")
-        out = self.pass_step("commit", "git -c user.name=Fixture "
-                             "-c user.email=fixture@example.test "
-                             "commit --allow-empty -m changed")
+        out = self.pass_step(
+            "commit",
+            "git -c user.name=Fixture "
+            "-c user.email=fixture@example.test "
+            "commit --allow-empty -m changed",
+        )
         self.assertFalse(out["ok"])
         self.assertIn("Git HEAD or branch changed", out["error"])
         self.assertEqual(self.rows(out)["build"]["status"], "passed")
@@ -157,29 +1486,33 @@ class DevprotoTest(unittest.TestCase):
     def test_missing_git_cannot_accept_legacy_release_receipt(self):
         self.init_git()
         self.start()
-        self.close_until('commit')
-        self.pass_step('commit')
-        path = devproto.store_path(self.project, 'w1')
+        self.close_until("commit")
+        self.pass_step("commit")
+        path = devproto.store_path(self.project, "w1")
         record = devproto.load(path)
-        self.rows(record)['commit'].pop('git_identity')
+        self.rows(record)["commit"].pop("git_identity")
         devproto.save(path, record)
-        with patch.object(devproto.shutil, 'which', return_value=None):
-            with self.assertRaisesRegex(ValueError, 'Git identity unavailable'):
-                devproto.status(self.project, 'w1')
+        with patch.object(devproto.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(ValueError, "Git identity unavailable"):
+                devproto.status(self.project, "w1")
 
     def test_older_success_cannot_overwrite_identical_newer_failure(self):
         self.start()
-        self.pass_step('pathway', 'false')
+        self.pass_step("pathway", "false")
+
         def older_verifier(*args):
-            with patch.object(devproto, 'run_verifier', return_value=(1, 'new failure')):
-                self.pass_step('pathway', 'false')
-            return 0, 'older success'
-        with patch.object(devproto, 'run_verifier', side_effect=older_verifier):
-            with self.assertRaisesRegex(ValueError, 'changed by someone else'):
-                self.pass_step('pathway', 'false')
-        row = self.rows(devproto.status(self.project, 'w1'))['pathway']
-        self.assertEqual(row['status'], 'blocked')
-        self.assertEqual(row['output_tail'], 'new failure')
+            with patch.object(
+                devproto, "run_verifier", return_value=(1, "new failure")
+            ):
+                self.pass_step("pathway", "false")
+            return 0, "older success"
+
+        with patch.object(devproto, "run_verifier", side_effect=older_verifier):
+            with self.assertRaisesRegex(ValueError, "changed by someone else"):
+                self.pass_step("pathway", "false")
+        row = self.rows(devproto.status(self.project, "w1"))["pathway"]
+        self.assertEqual(row["status"], "blocked")
+        self.assertEqual(row["output_tail"], "new failure")
 
     # ---- row rules -------------------------------------------------------
 
@@ -269,7 +1602,9 @@ class DevprotoTest(unittest.TestCase):
             self.project, "Research which auth library to pick for the checkout", "f1"
         )
         hint = "/research-stack --focus ui-ux,security,devtools"
-        self.assertIn(f"research focus suggested from the goal: {hint}", out["rule_notes"])
+        self.assertIn(
+            f"research focus suggested from the goal: {hint}", out["rule_notes"]
+        )
         self.assertEqual(out["research_focus"], hint)
         self.close_until_for("f1", "research")
         buf = io.StringIO()
@@ -297,7 +1632,9 @@ class DevprotoTest(unittest.TestCase):
             if s["step_id"] == target:
                 return
             if s["required"]:
-                devproto.step(self.project, work_id, s["step_id"], "pass", "ev.md", "true")
+                devproto.step(
+                    self.project, work_id, s["step_id"], "pass", "ev.md", "true"
+                )
             else:
                 devproto.step(
                     self.project, work_id, s["step_id"], "na", reason="not needed"
@@ -330,7 +1667,10 @@ class DevprotoTest(unittest.TestCase):
             self.rows(devproto.status(self.project, "w1"))["audit-setup"]["required"]
         )
         out = devproto.set_optional(
-            self.project, "w1", "audit-setup", "pure Python repo, no package.json"
+            self.project,
+            "w1",
+            "audit-setup",
+            "explicitly approved optional row, applicability verified",
         )
         self.assertFalse(self.rows(out)["audit-setup"]["required"])
         # Now na works where it was refused before.
@@ -398,12 +1738,14 @@ class DevprotoTest(unittest.TestCase):
             "passed",
         )
 
-    def test_full_run_reaches_ready(self):
+    def test_full_run_completes_with_verified_history_not_current_readiness(self):
         self.start()
         self.close_until("closeout")
         self.pass_step("closeout")
         st = devproto.status(self.project, "w1")
-        self.assertTrue(st["ready"])
+        self.assertFalse(st["ready"])
+        self.assertTrue(st["historical_receipts_valid"])
+        self.assertFalse(devproto.status(self.project, "w1", through="commit")["ready"])
         self.assertIsNone(st["next_step"])
 
     def test_through_limits_the_gate(self):
@@ -525,14 +1867,15 @@ class DevprotoTest(unittest.TestCase):
         r = {k: v["status"] for k, v in self.rows(out).items()}
         self.assertEqual((r["pathway"], r["brainstorm"]), ("passed", "pending"))
 
-    def test_identical_repass_keeps_later_passes(self):
+    def test_identical_repass_requires_fresh_later_proof(self):
+        # Starting a recheck retires downstream proof before its result is known.
         self.start()
         self.pass_step("pathway")
         self.pass_step("brainstorm")
         self.pass_step("pathway")
         self.assertEqual(
             self.rows(devproto.status(self.project, "w1"))["brainstorm"]["status"],
-            "passed",
+            "pending",
         )
 
     def test_verifier_that_rewrites_evidence_gets_a_clear_reason(self):
@@ -661,7 +2004,7 @@ class DevprotoTest(unittest.TestCase):
                 "--step",
                 "audit-setup",
                 "--reason",
-                "pure Python repo",
+                "explicit optional-row policy",
             ],
             capture_output=True,
             text=True,
@@ -763,6 +2106,63 @@ class DevprotoTest(unittest.TestCase):
         with redirect_stdout(buf):
             devproto.print_human(out)
         self.assertIn("READY through pathway.", buf.getvalue())
+
+
+class IntakeBaselineTest(unittest.TestCase):
+    def test_planning_commits_do_not_move_intake_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            subprocess.run(["git", "init", "-q", directory], check=True)
+
+            def commit(message):
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        directory,
+                        "-c",
+                        "user.name=Fixture",
+                        "-c",
+                        "user.email=fixture@example.test",
+                        "commit",
+                        "--allow-empty",
+                        "-qm",
+                        message,
+                    ],
+                    check=True,
+                )
+                return subprocess.check_output(
+                    ["git", "-C", directory, "rev-parse", "HEAD"], text=True
+                ).strip()
+
+            base = commit("intake")
+            devproto.start(project, TRIVIAL, "work")
+            baseline = project / ".devproto/evidence/work-build-base.txt"
+            self.assertTrue(baseline.is_file())
+            original = baseline.read_bytes()
+            commit("planning changed project")
+            devproto.start(project, TRIVIAL, "work")
+            self.assertEqual(baseline.read_bytes(), original)
+            self.assertIn(base, original.decode())
+            baseline.unlink()
+            devproto.start(project, TRIVIAL, "work")
+            self.assertFalse(
+                baseline.exists(), "resume must not invent missing intake evidence"
+            )
+
+    def test_unborn_repository_can_start_with_explicit_proof_gap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            subprocess.run(["git", "init", "-q", directory], check=True)
+            result = devproto.start(project, TRIVIAL, "new")
+            self.assertTrue(result["ok"])
+            self.assertFalse(
+                (project / ".devproto/evidence/new-build-base.txt").exists()
+            )
+            record = json.loads((project / ".devproto/new.json").read_text())
+            self.assertTrue(
+                any("baseline unavailable" in note for note in record["rule_notes"])
+            )
 
 
 if __name__ == "__main__":

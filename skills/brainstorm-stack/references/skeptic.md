@@ -4,8 +4,8 @@ The built-in devil's advocate. It challenges assumptions, questions necessity, f
 checks claims, and filters complexity bias. It is the light, automatic cousin of the full
 `/devilsadvocate` skill.
 
-- **Model:** a fast, cheap model is enough. If it returns zero findings, retry once with a stronger
-  model. The skeptic must always return at least one.
+- **Model:** use capability appropriate to the task. Escalate for a documented evidence
+  or capability gap; zero supported findings alone never requires retry.
 - **Always fires.** No depth setting turns it off.
 
 ## Brief
@@ -67,8 +67,8 @@ For each recommendation:
 | Brainstorm | Topic, decision areas, existing context, depth            | Problem framing and scope                |
 | Research   | Findings, source count, draft synthesis if there is one   | Source credibility and over-complication |
 
-Return 1 to 5 findings. Always at least 1: if nothing is wrong, flag the strongest "this could be
-simpler" candidate at info level. Keep the output under about 2,000 tokens.
+Return up to 5 evidence-backed findings. A scoped "No findings." with coverage limits is
+valid. Missing evidence is a gap, never a clean result. Keep output under about 2,000 tokens.
 
 ## Output formats
 
@@ -104,9 +104,8 @@ Use the one that matches the context. The spawning prompt says which.
 
 ## Quality threshold
 
-The skeptic always returns at least one finding. There is no "clean" result. Its job is to find the
-weakest point, even in good work. If the work is genuinely excellent, the finding is info level: it
-acknowledges the quality and names the most likely point of future friction.
+A finding needs concrete evidence and a useful correction. Evidence-backed zero findings
+is valid. Report checked scope and coverage limits; never manufacture friction to meet a quota.
 
 ## Skeptic versus /devilsadvocate
 
@@ -116,4 +115,4 @@ acknowledges the quality and names the most likely point of future friction.
 | Input        | Diff, files, or brainstorm payload | Research output and gathered context                |
 | Focus        | Necessity, sloppiness, framing     | Research claims, hallucinations, assumptions        |
 | Claim triage | Light (the patterns above)         | Full: Verified, Plausible, Unverified, Contradicted |
-| Output       | 1 to 5 findings                    | A full objective alignment brief                    |
+| Output       | 0 to 5 supported findings                    | A full objective alignment brief                    |

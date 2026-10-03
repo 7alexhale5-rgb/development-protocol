@@ -10,12 +10,14 @@ Create a clean, well-messaged git commit. Commit locally only. Pushing is `/ship
 ## Checklist row
 
 This skill satisfies the `commit` row of the development-protocol checklist. After the commit
-lands (step 8), save the commit as evidence and record the row with a verifier that only reads:
+lands (step 8), renew verification, independent review and read-only simplification on
+that exact committed candidate first. Only then save the commit as evidence and record
+the row with a verifier that only reads:
 
 ```text
 git log -1 --format='%H %s' > .devproto/evidence/commit.txt
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step commit --result pass --evidence .devproto/evidence/commit.txt \
+  --id=<work-id> --step commit --result pass --evidence .devproto/evidence/commit.txt \
   --verify 'test "$(git rev-parse HEAD)" = "$(cut -d" " -f1 .devproto/evidence/commit.txt)"'
 ```
 
@@ -35,7 +37,9 @@ before recording the final implementation receipt.
    git status
    ```
 
-   If there are no changes to commit (ignoring `.devproto/`), tell the user and stop.
+   If there are no changes to commit (ignoring `.devproto/`) and an existing protocol
+   commit needs receipt renewal, proceed directly to Step 8 with that existing SHA.
+   Otherwise tell the user there are no changes and stop.
 
 2. **Review the diff**, both staged and unstaged:
 
@@ -88,7 +92,12 @@ before recording the final implementation receipt.
    git log --oneline -1
    git status
    ```
-   Then record the checklist row (above).
+   Before recording any commit row, run verification and required independent review
+   of this exact committed candidate. Re-record review, then re-pass simplify with
+   `/simplify --check` on the same complete BASE..HEAD scope. Record the commit row
+   above only after these prerequisites pass, using the existing SHA. Do not create
+   another commit to record receipts. If read-only simplification finds a defect,
+   fix, test, commit and repeat verification and review before recording commit.
 
 ## Important
 
@@ -102,3 +111,9 @@ before recording the final implementation receipt.
 
 In the development protocol, `/ship` comes next: sync with the base branch, run the tests, push,
 open the pull request, and wait for checks on the exact commit.
+
+After the final commit, run focused/full verification and required independent review
+against this exact committed candidate. Re-record review, perform `/simplify --check`,
+and re-pass commit with proof of this existing SHA, without making another commit.
+Shipping checks through commit and revalidates the candidate. Any later mutation or
+merge requires renewing those receipts; never edit an old review's commit or hash.

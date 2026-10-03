@@ -13,6 +13,10 @@ This skill is the conductor. Each row hands off to a bundled skill that owns the
 have to remember the slash commands or their order; this skill runs them in sequence, records proof
 after each one, and reports back.
 
+The optional Superpowers methods in `reference.md` fit inside these same 17 rows. They add no
+ledger or authority. Check installed methods and helpers before invoking them; record missing
+capabilities honestly.
+
 Read these once per session:
 
 - `reference.md` in this folder: the interval table, review rules, evaluation standard, UI proof.
@@ -46,13 +50,13 @@ It lives next to this file at `scripts/devproto.py`. Python 3.9+, standard libra
 `--project` and `--json` go before the subcommand.
 
 ```text
-DEVPROTO --project <repo> start --goal "<goal>" [--id <id>] [--require <row>] [--optional <row>]
-DEVPROTO --project <repo> status --id <id>
-DEVPROTO --project <repo> step --id <id> --step <row> --result pass \
+DEVPROTO --project <repo> start --goal "<goal>" [--id=<id>] [--require <row>] [--optional <row>]
+DEVPROTO --project <repo> status --id=<id>
+DEVPROTO --project <repo> step --id=<id> --step <row> --result pass \
     --evidence <file> --verify "<command that only reads it>" [--instrument <test file>]
-DEVPROTO --project <repo> step --id <id> --step <row> --result na --reason "<why>"
-DEVPROTO --project <repo> step --id <id> --step <row> --result blocked --reason "<what>"
-DEVPROTO --project <repo> check --id <id> [--through <row>]
+DEVPROTO --project <repo> step --id=<id> --step <row> --result na --reason "<why>"
+DEVPROTO --project <repo> step --id=<id> --step <row> --result blocked --reason "<what>"
+DEVPROTO --project <repo> check --id=<id> [--through <row>]
 DEVPROTO steps           # the 17 rows and the skill for each
 DEVPROTO --project <repo> list
 DEVPROTO --project <repo> doctor
@@ -73,8 +77,10 @@ How it behaves:
   files as reviewable before sharing or committing them, not as pre-cleared.
 - The evidence file and each `--instrument` file are fingerprinted. If one changes later, that row
   and every later passed row reopen. Pass the test file or grader as an instrument so a weakened
-  test cannot keep an old pass. Re-recording an earlier row with new evidence also reopens later
-  passed rows.
+  test cannot keep an old pass. Before every verifier starts, the tool records a pending attempt
+  under the store lock and reopens later passed rows, even for identical evidence. Outstanding,
+  crashed, timed-out, or failed rechecks cannot certify shipping or closeout. Renew downstream
+  proofs after the recheck passes; historical completion requires explicit reopen first.
 - Write the evidence first, then verify it with a command that only reads it. A verifier that
   rewrites its own evidence is recorded as blocked.
 - Required rows cannot be marked n/a. The goal's words set which rows are required, and `start`
@@ -131,14 +137,18 @@ proves the real thing happened" means. Push a branch and open a pull request to 
    strongest model available for these rows.
 3. Build in three to five phases, never more. Each phase ships one runnable thing against its gate
    number. Do not stop to show partial work between phases unless blocked.
-4. If the work splits into independent components, write one handoff prompt per component and run
-   them as separate sessions or subagents that report back here. Each worker commits only its own
-   files on its own branch.
+4. Choose execution from dependencies and risk. Use native execution for small or coupled work.
+   For independent tasks, use at most two children with disjoint ownership and no nested
+   delegation. Each brief states goal, inputs, ownership, done condition, output format and
+   return budget. Verify available tools and actual model settings before dispatch. The root
+   reads real diffs and runs aggregate checks; worker reports are claims. Interrupt finished
+   children. Preserve resume evidence in the existing checklist.
+
 5. Rows 11 and 12 need a reviewer that did not write the code: a different model family, a fresh
    session with only the diff and spec, or a person. Record which one reviewed.
-6. Before merge, gate with `check --through commit`. Rows `ship`, `compound` and `closeout` can only
+6. Before merge, execute the exact candidate review verifier and `check --through commit`. Rows `ship`, `compound` and `closeout` can only
    be proven after the merge.
-7. At the end, `check` must exit 0. Answer "is it done?" from `check`, never from memory.
+7. At the end, execute current verification and the candidate review verifier, then require active-work `check --through compound` to exit 0 before final closeout. After completion, require `check --historical` with valid retained receipts, never use it as a release preflight. Git review rows retain a candidate snapshot; changed or unreadable candidates reopen review and later rows. The checklist reports evidence, not an independently executed semantic review. Never answer completion from memory.
 
 ## Loop mode
 
@@ -146,6 +156,10 @@ proves the real thing happened" means. Push a branch and open a pull request to 
 target up to n times (5 to 10 is typical). Each pass: review what exists, list gaps, errors and
 simplifications, research the gaps, fix them through the rows, and record a new work item with the
 id `<base>-loop<k>`. Stop early when a pass finds nothing worth fixing, and say so.
+
+This code-improvement loop does not prove skill or model gains. Bounded measurement uses
+`/compound --improve` and the contract in `reference.md`. Do not rename work or repeat a cycle
+to evade revision or spending limits.
 
 ## If context runs low
 
@@ -157,7 +171,7 @@ person. A fresh session runs `/development-protocol <repo> resume` and continues
 
 - **Unknown is not pass.** A check you could not run is `blocked` or open, with the reason. Tell the
   person "not verified". Do not round it up.
-- **Exceptions lower confidence; they do not create a pass.** Skipped tests, `--no-verify`, missing
+- **Missing required checks block completion and shipping. Exceptions never create a pass.** Skipped tests, `--no-verify`, missing
   CI or an unavailable third-party service each get a written reason, scope, owner and next proof in
   the handoff.
 - **Tie proof to the artifact.** Name the commit SHA, file, URL or environment.
@@ -184,3 +198,36 @@ DEVPROTO --project <repo> doctor
 Every `PASS` line should pass. `WARN skill_installed:<name>` means a stack skill is not installed
 beside this one; install the full repo. `WARN project_is_git_repo` means the folder is not a git
 repository; the checklist still works, but ship and closeout need other verifiers.
+
+At intake, `DEVPROTO start` captures the current Git commit in
+`.devproto/evidence/<work-id>-build-base.txt` before any task phase changes project files.
+Planning, setup and build consume that same baseline. Resume never recreates a missing
+baseline; legacy work without sufficient provenance remains a required scope gap.
+Ordinary non-Git work may start, but cannot claim a Git review or release proof.
+
+Git proof uses the repository root even for a monorepo package. An unborn repository
+or missing Git may start intake with an explicit baseline-unavailable note. That does
+not create Git proof; later build/review/ship remain blocked until genuine intake
+provenance can be recovered. Resume never invents a missing baseline at a newer HEAD.
+
+## Completed work and a later candidate
+
+A successful closeout records durable completion provenance. `list` and `status`
+report completed work as historical; they do not reopen it merely because a later
+candidate changes HEAD or source bytes. Historical readiness cannot certify a new
+release. Use ordinary `check --through commit` only on the active work item.
+After closeout, `check --historical` verifies retained completion evidence and
+instruments; require valid historical receipts before claiming that past work is
+proved. It does not claim the current candidate is ready or rerun its old tests.
+Missing historical evidence remains unverified. Unknown legacy records are not
+silently treated as completed. For new work, create a new item with its own intake
+BASE. To deliberately continue completed work, use `reopen --id=<id> --reason <reason>`;
+retain its completion history and original BASE, then execute renewed proof rows.
+
+An active checklist from an older version may lack execution generation or
+itinerary enrollment. Explicit `reopen --id=<id> --reason <reason>` preserves
+the complete prior record as migration history and the original BASE, establishes
+a new generation and enrollment, and resets every row to pending. A missing Git
+BASE must be recovered first; reset never writes a replacement. If a shared
+itinerary exists, explicitly reopen it too, then execute all proof rows again.
+Current active work and invalid known metadata cannot use this legacy reset.

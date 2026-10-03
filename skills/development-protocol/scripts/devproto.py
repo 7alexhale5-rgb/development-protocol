@@ -13,17 +13,27 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
+import importlib.util
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import command_digest, digest, now, redact, run_verifier  # noqa: E402
+from _shared import (
+    candidate_snapshot,
+    command_digest,
+    digest,
+    now,
+    redact,
+    run_verifier,
+)  # noqa: E402
 from _shared import locked as _store_locked  # noqa: E402
 
 # (row id, skill that satisfies it, what the row proves)
@@ -97,10 +107,15 @@ STEPS = [
 STEP_IDS = [s[0] for s in STEPS]
 TERMINAL = {"passed", "not-applicable"}
 RECORD_KEYS = (
-    "status", "evidence_sha256", "instruments", "verify_command",
-    "verify_command_sha256", "git_identity",
+    "status",
+    "evidence_sha256",
+    "instruments",
+    "verify_command",
+    "verify_command_sha256",
+    "git_identity",
+    "candidate_sha256",
 )
-RELEASE_STEPS = set(STEP_IDS[STEP_IDS.index("commit"):])
+RELEASE_STEPS = set(STEP_IDS[STEP_IDS.index("commit") :])
 CONDITIONAL = {"brainstorm", "research", "visual-spec", "design"}
 OPTIONAL_WHEN_TRIVIAL = {
     "spec",
@@ -126,18 +141,54 @@ RESEARCH_RE = re.compile(
 # skills/research-stack/references/focus/tags.json). These are its `triggers`, copied in tags.json
 # order; tests/test_devproto.py fails if they drift. Order breaks ties between equal matches.
 FOCUS_HINTS = [
-    ("seo", r"\b(seo|serp|keywords?|rankings?|backlinks?|search console|schema markup|structured data|rich results?|geo|aeo|ai overviews?|llm visibility|organic traffic)\b"),
-    ("content", r"\b(content|copywriting|blog|newsletter|ad creatives?|ads|creative|hooks?|social posts?|short-form|video|campaign|landing copy)\b"),
-    ("market", r"\b(market|competitors?|competitive|pricing|tam|vendors?|landscape|funding|positioning|alternatives)\b"),
-    ("ui-ux", r"\b(ui|ux|onboarding|user flows?|screens?|layout|design patterns?|figma|components?|dashboard|checkout|usability)\b"),
-    ("a11y", r"\b(a11y|accessibility|accessible|wcag|screen readers?|aria|colou?r contrast|keyboard navigation)\b"),
-    ("perf", r"\b(performance|perf|latency|core web vitals|cwv|lcp|inp|cls|bundle size|page ?speed|lighthouse|throughput)\b"),
-    ("security", r"\b(security|vulnerabilit(y|ies)|cves?|owasp|authn?|secrets?|xss|csrf|ssrf|injection|supply chain|sbom|pentest|threat model)\b"),
-    ("devtools", r"\b(librar(y|ies)|frameworks?|sdks?|apis?|integrations?|webhooks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b"),
-    ("ai-agents", r"\b(llms?|agents?|agentic|prompts?|rag|evals?|mcp|models?|fine-?tun\w*|embeddings?|claude|gpt|gemini)\b"),
-    ("data-infra", r"\b(databases?|postgres|schema|warehouse|etl|pipelines?|queues?|kafka|cach(e|ing)|redis|infra|kubernetes|serverless|cdn)\b"),
-    ("comms", r"\b(dialers?|dialing|telephony|voip|phone systems?|softphones?|webrtc|sms|text messag\w*|ivr|call (center|centre|recording|tracking|routing|logging|queues?)|contact cent(er|re)|cold call\w*|click-to-call|voicemail|ringcentral|twilio|aircall|dialpad|telnyx|10dlc|caller id|cpaas|ucaas)\b"),
-    ("legal", r"\b(legal|gdpr|ccpa|hipaa|compliance|regulations?|licen[cs]es?|terms of service|privacy policy|contracts?|ai act)\b"),
+    (
+        "seo",
+        r"\b(seo|serp|keywords?|rankings?|backlinks?|search console|schema markup|structured data|rich results?|geo|aeo|ai overviews?|llm visibility|organic traffic)\b",
+    ),
+    (
+        "content",
+        r"\b(content|copywriting|blog|newsletter|ad creatives?|ads|creative|hooks?|social posts?|short-form|video|campaign|landing copy)\b",
+    ),
+    (
+        "market",
+        r"\b(market|competitors?|competitive|pricing|tam|vendors?|landscape|funding|positioning|alternatives)\b",
+    ),
+    (
+        "ui-ux",
+        r"\b(ui|ux|onboarding|user flows?|screens?|layout|design patterns?|figma|components?|dashboard|checkout|usability)\b",
+    ),
+    (
+        "a11y",
+        r"\b(a11y|accessibility|accessible|wcag|screen readers?|aria|colou?r contrast|keyboard navigation)\b",
+    ),
+    (
+        "perf",
+        r"\b(performance|perf|latency|core web vitals|cwv|lcp|inp|cls|bundle size|page ?speed|lighthouse|throughput)\b",
+    ),
+    (
+        "security",
+        r"\b(security|vulnerabilit(y|ies)|cves?|owasp|authn?|secrets?|xss|csrf|ssrf|injection|supply chain|sbom|pentest|threat model)\b",
+    ),
+    (
+        "devtools",
+        r"\b(librar(y|ies)|frameworks?|sdks?|apis?|integrations?|webhooks?|packages?|npm|pypi|dependenc(y|ies)|migrate to|cli tools?|which (lib|tool|framework))\b",
+    ),
+    (
+        "ai-agents",
+        r"\b(llms?|agents?|agentic|prompts?|rag|evals?|mcp|models?|fine-?tun\w*|embeddings?|claude|gpt|gemini)\b",
+    ),
+    (
+        "data-infra",
+        r"\b(databases?|postgres|schema|warehouse|etl|pipelines?|queues?|kafka|cach(e|ing)|redis|infra|kubernetes|serverless|cdn)\b",
+    ),
+    (
+        "comms",
+        r"\b(dialers?|dialing|telephony|voip|phone systems?|softphones?|webrtc|sms|text messag\w*|ivr|call (center|centre|recording|tracking|routing|logging|queues?)|contact cent(er|re)|cold call\w*|click-to-call|voicemail|ringcentral|twilio|aircall|dialpad|telnyx|10dlc|caller id|cpaas|ucaas)\b",
+    ),
+    (
+        "legal",
+        r"\b(legal|gdpr|ccpa|hipaa|compliance|regulations?|licen[cs]es?|terms of service|privacy policy|contracts?|ai act)\b",
+    ),
 ]
 FOCUS_RES = [(tag, re.compile(rx, re.I)) for tag, rx in FOCUS_HINTS]
 MAX_FOCUS = 4
@@ -294,13 +345,19 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
     work_id = work_id or f"{datetime.now():%Y%m%d}-{slug(goal)}"
     path = store_path(project, work_id)
     required, notes = required_steps(goal, force, optional)
-    with locked(path):
+    with locked(path), pathway_router()._store_lock(project):
+        router = pathway_router()
+        if router.item_path(project, work_id).exists():
+            if router.load(project, work_id).get("goal") != goal:
+                raise ValueError(
+                    "Checklist and itinerary goals must match before enrollment."
+                )
         if path.exists():
             record = load(path)
-            if refresh(project, record):
-                save(path, record)
             if record["goal"] != goal:
                 raise ValueError("that work id already exists with a different goal")
+            if refresh(project, record):
+                save(path, record)
             stored = {s["step_id"] for s in record["steps"] if s["required"]}
             if (force or optional) and stored != required:
                 if any(s["status"] != "pending" for s in record["steps"]):
@@ -310,12 +367,44 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
                     )
                 for s in record["steps"]:
                     s["required"] = s["step_id"] in required
-                record["rule_notes"] = notes
+                record["rule_notes"] = notes + [
+                    n
+                    for n in record.get("rule_notes", [])
+                    if n.startswith("Git intake baseline")
+                ]
                 save(path, record)
             return summary(project, record)
+        try:
+            identity = git_identity(project)
+        except ValueError as exc:
+            if str(exc) == "Git identity lookup failed":
+                raise
+            identity = None
+            notes.append(
+                f"Git intake baseline unavailable: {exc}; required Git proof remains blocked"
+            )
+        if identity is not None:
+            baseline = project / STORE_DIR / "evidence" / f"{work_id}-build-base.txt"
+            baseline.parent.mkdir(parents=True, exist_ok=True)
+            expected = f"base {identity['head']}\nwork-id {work_id}\n"
+            try:
+                with baseline.open("x") as out:
+                    out.write(expected)
+            except FileExistsError:
+                if baseline.read_text() != expected:
+                    raise ValueError(
+                        "existing intake baseline conflicts; preserve it and recover provenance"
+                    )
         record = {
             "work_id": work_id,
             "goal": goal,
+            "execution_generation": 1,
+            "itinerary_enrollment": {
+                "version": 1,
+                "mode": "required"
+                if (project / STORE_DIR / "pathway" / (work_id + ".json")).exists()
+                else "standalone",
+            },
             "rule_notes": notes,
             "created_at": now(),
             "steps": [
@@ -324,6 +413,10 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
             ],
         }
         save(path, record)
+        router = pathway_router()
+        if router.item_path(project, work_id).exists():
+            router._enroll_checklist_locked(project, work_id)
+            record = load(path)
         return summary(project, record)
 
 
@@ -362,10 +455,12 @@ def _stable(path: Path, sha: str, stat) -> tuple[bool, list | None]:
     return digest(path) == sha, cur
 
 
-
 def git_identity(project: Path) -> dict | None:
     """None means a confirmed ordinary folder, never a failed Git lookup."""
-    has_git = any((parent / ".git").exists() for parent in (project.resolve(), *project.resolve().parents))
+    has_git = any(
+        (parent / ".git").exists()
+        for parent in (project.resolve(), *project.resolve().parents)
+    )
     if shutil.which("git") is None:
         if has_git:
             raise ValueError("Git identity unavailable: git is missing")
@@ -373,10 +468,15 @@ def git_identity(project: Path) -> dict | None:
 
     def read(*args):
         try:
-            return subprocess.run(["git", "-C", str(project), *args],
-                                  capture_output=True, text=True, timeout=10)
+            return subprocess.run(
+                ["git", "-C", str(project), *args],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise ValueError("Git identity lookup failed") from exc
+
     inside = read("rev-parse", "--is-inside-work-tree")
     if inside.returncode != 0:
         if not has_git and "not a git repository" in inside.stderr.lower():
@@ -391,13 +491,410 @@ def git_identity(project: Path) -> dict | None:
     return {"head": head.stdout.strip(), "branch": branch.stdout.strip() or None}
 
 
+def completion_digest(record: dict) -> str:
+    """Bind immutable proof fields, excluding cheap file-stat caches."""
+    rows = []
+    for row in record["steps"]:
+        fields = {
+            k: row.get(k)
+            for k in (
+                "step_id",
+                "required",
+                "status",
+                "reason",
+                "evidence_path",
+                "evidence_sha256",
+                "verify_command_sha256",
+                "verifier_exit",
+                "verified_at",
+                "git_identity",
+                "candidate_sha256",
+            )
+        }
+        fields["instruments"] = {
+            name: meta.get("sha256") if isinstance(meta, dict) else meta
+            for name, meta in row.get("instruments", {}).items()
+        }
+        rows.append(fields)
+    payload = [record["work_id"], record["goal"], rows]
+    if "completion_provenance" in record:
+        payload.append(record["completion_provenance"])
+    if "itinerary_enrollment" in record:
+        payload.append(record["itinerary_enrollment"])
+    if "execution_generation" in record:
+        payload.append(record["execution_generation"])
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def archive_directory(project: Path, record: dict) -> Path:
+    store_path(
+        project, record["work_id"]
+    )  # validate the work ID before path construction
+    return (
+        project.resolve()
+        / STORE_DIR
+        / "evidence"
+        / "completed"
+        / record["work_id"]
+        / completion_digest(record)
+    )
+
+
+def historical_artifact(project: Path, record: dict, source: str, sha: str) -> Path:
+    completion = record.get("completion", {})
+    if not completion.get("archive_dir"):
+        return resolve(project, source)
+    archive = archive_directory(project, record)
+    if completion["archive_dir"] != portable(project, archive) or not re.fullmatch(
+        r"[0-9a-f]{64}", sha
+    ):
+        raise ValueError("historical archive provenance is invalid")
+    path = archive / sha
+    if any(parent.is_symlink() for parent in (path, *path.parents)):
+        raise ValueError("historical archive cannot be redirected through symlinks")
+    return path
+
+
+def ancestry_valid(project: Path, record: dict, base: str, head: str) -> bool:
+    completion = record.get("completion", {})
+    if completion.get("ancestry_sha256"):
+        path = historical_artifact(project, record, "", completion["ancestry_sha256"])
+        if not path.is_file() or digest(path) != completion["ancestry_sha256"]:
+            return False
+        receipt = json.loads(path.read_text())
+        return (
+            receipt.get("kind") == "git-ancestry-receipt-v1"
+            and receipt.get("base") == base
+            and receipt.get("head") == head
+            and receipt.get("receipt_sha256") == completion_digest(record)
+            and receipt.get("argv")
+            == ["git", "merge-base", "--is-ancestor", base, head]
+            and receipt.get("exit_code") == 0
+            and bool(receipt.get("verified_at"))
+        )
+    result = subprocess.run(
+        ["git", "-C", str(project), "merge-base", "--is-ancestor", base, head],
+        capture_output=True,
+        timeout=10,
+    )
+    return result.returncode == 0
+
+
+def retained_completion(project: Path, record: dict) -> bool:
+    """Historical completion needs retained executed proofs, not terminal labels."""
+    try:
+        rows = record["steps"]
+        if [r["step_id"] for r in rows] != STEP_IDS or rows[-1]["status"] != "passed":
+            return False
+        for row in rows:
+            if row["status"] == "not-applicable":
+                if row["required"] or not row.get("reason", "").strip():
+                    return False
+                continue
+            if (
+                row["status"] != "passed"
+                or row.get("verifier_exit") != 0
+                or not row.get("verified_at")
+                or not row.get("verify_command_sha256")
+                or not row.get("evidence_sha256")
+            ):
+                return False
+            ev = historical_artifact(
+                project, record, row["evidence_path"], row["evidence_sha256"]
+            )
+            if (
+                ev.is_symlink()
+                or not ev.is_file()
+                or digest(ev) != row["evidence_sha256"]
+            ):
+                return False
+            for name, meta in row.get("instruments", {}).items():
+                sha = meta.get("sha256") if isinstance(meta, dict) else meta
+                path = historical_artifact(project, record, name, sha)
+                if path.is_symlink() or not path.is_file() or digest(path) != sha:
+                    return False
+        provenance = record.get("completion_provenance", {})
+        generation = record.get("execution_generation")
+        if type(generation) is not int or generation < 1:
+            return False
+        enrollment = record.get("itinerary_enrollment", {})
+        if (
+            not isinstance(enrollment, dict)
+            or enrollment.get("version") != 1
+            or enrollment.get("mode")
+            not in {
+                "standalone",
+                "required",
+            }
+        ):
+            return False
+        if not isinstance(provenance, dict) or provenance.get(
+            "itinerary_required"
+        ) is not (enrollment["mode"] == "required"):
+            return False
+        if provenance.get("version") != 2 or not isinstance(
+            provenance.get("itinerary_required"), bool
+        ):
+            return False
+        itinerary = project / STORE_DIR / "pathway" / (record["work_id"] + ".json")
+        if provenance["itinerary_required"]:
+            source = provenance.get("itinerary_source")
+            sha = provenance.get("itinerary_sha256", "")
+            if source != portable(project, itinerary) or not re.fullmatch(
+                r"[0-9a-f]{64}", sha
+            ):
+                return False
+            bindings = rows[-1].get("instruments", {})
+
+            def copied_artifact(path, expected_sha):
+                name = portable(project, path)
+                binding = bindings.get(name)
+                bound_sha = (
+                    binding.get("sha256") if isinstance(binding, dict) else binding
+                )
+                if bound_sha != expected_sha:
+                    raise ValueError(
+                        "required itinerary artifact was not bound at closeout"
+                    )
+                return historical_artifact(project, record, name, expected_sha)
+
+            retained = copied_artifact(itinerary, sha)
+            if (
+                retained.is_symlink()
+                or not retained.is_file()
+                or digest(retained) != sha
+            ):
+                return False
+            router = pathway_router()
+            item = json.loads(retained.read_text())
+            if item.get("goal") != record.get("goal"):
+                return False
+            if item.get("checklist_generation") != generation:
+                return False
+            if item.get("candidate_binding") != provenance.get(
+                "itinerary_candidate_binding"
+            ):
+                return False
+            if item.get("work_id") != record["work_id"] or not item.get("closed"):
+                return False
+            if not record.get("completion") and not router.retained_completion(
+                project, item
+            ):
+                return False
+            if not router.retained_completion(
+                project,
+                item,
+                artifact_provider=copied_artifact,
+            ):
+                return False
+        elif (
+            provenance.get("itinerary_source") != ""
+            or provenance.get("itinerary_sha256") != ""
+        ):
+            return False
+        review = next(r for r in rows if r["step_id"] == "review")
+        baseline = (
+            project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
+        )
+        # Old Git records bound release rows but not review rows. A missing review
+        # identity is a provenance gap, never evidence that this was non-Git work.
+        git_obligations = (
+            review.get("git_identity") is not None
+            or any(r.get("git_identity") for r in rows if r["step_id"] in RELEASE_STEPS)
+            or bool(record.get("completion", {}).get("baseline_sha256"))
+            or baseline.exists()
+            or any(
+                portable(project, baseline) in r.get("instruments", {})
+                or str(baseline) in r.get("instruments", {})
+                for r in rows
+            )
+        )
+        if git_obligations:
+            if not review.get("git_identity"):
+                return False
+            if not review.get("candidate_sha256"):
+                return False
+            if record.get("completion", {}).get("archive_dir"):
+                baseline = historical_artifact(
+                    project,
+                    record,
+                    portable(project, baseline),
+                    record["completion"]["baseline_sha256"],
+                )
+            if baseline.is_symlink() or not baseline.is_file():
+                return False
+            lines = baseline.read_text().splitlines()
+            if (
+                len(lines) != 2
+                or lines[1] != "work-id " + record["work_id"]
+                or not re.fullmatch(r"base [0-9a-f]{40}(?:[0-9a-f]{24})?", lines[0])
+            ):
+                return False
+            base = lines[0].split(" ", 1)[1]
+            if not ancestry_valid(
+                project, record, base, review["git_identity"]["head"]
+            ):
+                return False
+            if record.get("completion", {}).get(
+                "baseline_sha256", digest(baseline)
+            ) != digest(baseline):
+                return False
+            if any(
+                not r.get("git_identity")
+                for r in rows
+                if r["step_id"] in RELEASE_STEPS and r["status"] == "passed"
+            ):
+                return False
+        completion = record.get("completion")
+        return not completion or (
+            completion.get("state") == "completed"
+            and completion.get("receipt_sha256") == completion_digest(record)
+        )
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.TimeoutExpired,
+    ):
+        return False
+
+
+def publish_archive(destination: Path, sha: str, source=None, payload=None) -> None:
+    """Publish verified bytes atomically; unsealed partial files may recover."""
+    if destination.is_symlink() or (destination.exists() and not destination.is_file()):
+        raise ValueError(
+            "completion archive cannot replace a redirected or non-file artifact"
+        )
+    if destination.is_file() and digest(destination) == sha:
+        return
+    if source is not None:
+        if source.is_symlink() or not source.is_file() or digest(source) != sha:
+            raise ValueError("completion source bytes changed before publication")
+    elif payload is None or hashlib.sha256(payload).hexdigest() != sha:
+        raise ValueError("completion payload does not match its content hash")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".copy-", dir=destination.parent, delete=False
+        ) as outgoing:
+            temporary = Path(outgoing.name)
+            if source is not None:
+                with source.open("rb") as incoming:
+                    shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
+            else:
+                outgoing.write(payload)
+            outgoing.flush()
+            os.fsync(outgoing.fileno())
+        if digest(temporary) != sha or (source is not None and digest(source) != sha):
+            raise ValueError("completion bytes changed during publication")
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
+def seal_completion(project: Path, record: dict) -> None:
+    if record.get("completion_provenance", {}).get("version") != 2:
+        raise ValueError("unknown completion provenance cannot be sealed")
+    completion = {
+        "state": "completed",
+        "completed_at": record["steps"][-1]["verified_at"],
+        "receipt_sha256": completion_digest(record),
+    }
+    baseline = (
+        project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
+    )
+    if record.get("completion", {}).get("archive_dir") and record["completion"].get(
+        "baseline_sha256"
+    ):
+        baseline = historical_artifact(
+            project,
+            record,
+            portable(project, baseline),
+            record["completion"]["baseline_sha256"],
+        )
+    if baseline.is_file():
+        completion["baseline_sha256"] = digest(baseline)
+    archive = archive_directory(project, record)
+    if any(parent.is_symlink() for parent in (archive, *archive.parents)):
+        raise ValueError("historical archive cannot be redirected through symlinks")
+    archive.mkdir(parents=True, exist_ok=True)
+    sources = {}
+    for row in record["steps"]:
+        if row["status"] != "passed":
+            continue
+        sources[row["evidence_sha256"]] = historical_artifact(
+            project, record, row["evidence_path"], row["evidence_sha256"]
+        )
+        for name, meta in row.get("instruments", {}).items():
+            sha = meta.get("sha256") if isinstance(meta, dict) else meta
+            sources[sha] = historical_artifact(project, record, name, sha)
+    if baseline.is_file():
+        sources[completion["baseline_sha256"]] = baseline
+    for sha, source in sources.items():
+        if (
+            not re.fullmatch(r"[0-9a-f]{64}", sha)
+            or source.is_symlink()
+            or not source.is_file()
+        ):
+            raise ValueError("completion proof cannot be archived")
+        publish_archive(archive / sha, sha, source=source)
+    review = next(row for row in record["steps"] if row["step_id"] == "review")
+    if review.get("git_identity") is not None:
+        base = baseline.read_text().splitlines()[0].split(" ", 1)[1]
+        head = review["git_identity"]["head"]
+        if not ancestry_valid(project, record, base, head):
+            raise ValueError("completion Git ancestry cannot be verified")
+        payload = json.dumps(
+            {
+                "kind": "git-ancestry-receipt-v1",
+                "base": base,
+                "head": head,
+                "receipt_sha256": completion_digest(record),
+                "argv": ["git", "merge-base", "--is-ancestor", base, head],
+                "exit_code": 0,
+                "verified_at": now(),
+            },
+            sort_keys=True,
+        ).encode()
+        sha = hashlib.sha256(payload).hexdigest()
+        publish_archive(archive / sha, sha, payload=payload)
+        completion["ancestry_sha256"] = sha
+    completion["archive_dir"] = portable(project, archive)
+    record["completion"] = completion
+
+
 def refresh(project: Path, record: dict) -> bool:
     """Reopen a passed step, and every later passed step, when its inputs changed."""
     changed_any, reopen = False, False
-    identity = git_identity(project) if any(
-        s["status"] == "passed" and s["step_id"] in RELEASE_STEPS
-        for s in record["steps"]
-    ) else None
+    # Legacy records migrate only with complete, retained verifier provenance.
+    if not record.get("completion") and retained_completion(project, record):
+        seal_completion(project, record)
+        changed_any = True
+    if record.get("completion"):
+        review = next(row for row in record["steps"] if row["step_id"] == "review")
+        needs_provenance = not record["completion"].get("archive_dir") or (
+            review.get("git_identity") is not None
+            and not record["completion"].get("ancestry_sha256")
+        )
+        if needs_provenance and retained_completion(project, record):
+            seal_completion(project, record)
+            return True
+        # Sealed rows are immutable; validity is reported separately from live work.
+        return changed_any
+    historical = bool(record.get("completion"))
+    identity = (
+        git_identity(project)
+        if any(
+            s["status"] == "passed"
+            and (s["step_id"] in RELEASE_STEPS or s["step_id"] == "review")
+            for s in record["steps"]
+        )
+        and not historical
+        else None
+    )
     for step in record["steps"]:
         # Scrub old receipts on read, too; status must not expose old credentials.
         command = step.get("verify_command", "")
@@ -418,10 +915,23 @@ def refresh(project: Path, record: dict) -> bool:
         )
         step["evidence_stat"] = ev_stat
         identity_changed = (
-            step["step_id"] in RELEASE_STEPS
+            not historical
+            and (step["step_id"] in RELEASE_STEPS or step["step_id"] == "review")
             and step.get("git_identity") != identity
         )
-        changed = not ev_ok or identity_changed
+        candidate_changed = False
+        if (
+            not historical
+            and step["step_id"] == "review"
+            and git_identity(project) is not None
+        ):
+            try:
+                candidate_changed = step.get("candidate_sha256") != candidate_snapshot(
+                    project
+                )
+            except (OSError, ValueError):
+                candidate_changed = True
+        changed = not ev_ok or identity_changed or candidate_changed
         for name, meta in step["instruments"].items():
             sha = meta["sha256"] if isinstance(meta, dict) else meta
             stat = meta.get("stat") if isinstance(meta, dict) else None
@@ -432,26 +942,42 @@ def refresh(project: Path, record: dict) -> bool:
             step["revision"] = step.get("revision", 0) + 1
             step["status"] = "pending"
             step["reason"] = (
-                "Git HEAD or branch changed after it passed. Repeat this step."
-                if identity_changed else
-                "Evidence or instrument changed after it passed. Repeat this step."
+                "Reviewed candidate changed or cannot be inspected. Repeat review and later steps."
+                if candidate_changed
+                else "Git HEAD or branch changed after it passed. Repeat this step."
+                if identity_changed
+                else "Evidence or instrument changed after it passed. Repeat this step."
             )
             reopen = changed_any = True
     return changed_any
 
 
 def summary(project: Path, record: dict) -> dict:
+    # Rendering never relies on a mutating refresh to scrub legacy secrets.
+    record = json.loads(json.dumps(record))
+    for row in record["steps"]:
+        for key in ("verify_command", "output_tail"):
+            row[key] = redact(row.get(key, ""))
     open_steps = [s["step_id"] for s in record["steps"] if s["status"] not in TERMINAL]
+    current_ready = not open_steps and not bool(record.get("completion"))
+    if current_ready:
+        current_ready = retained_completion(project, record)
     out = {
         "ok": True,
         "work_id": record["work_id"],
         "goal": record["goal"],
         "file": portable(project, store_path(project, record["work_id"])),
-        "ready": not open_steps,
+        "ready": current_ready,
         "next_step": open_steps[0] if open_steps else None,
         "open": open_steps,
         "rule_notes": record.get("rule_notes", []),
         "steps": record["steps"],
+        "completed": bool(record.get("completion")),
+        "completion": record.get("completion"),
+        "historical_receipts_valid": retained_completion(project, record)
+        if record.get("completion")
+        else False,
+        "current_candidate_ready": current_ready,
     }
     research = next(s for s in record["steps"] if s["step_id"] == "research")
     hint = research_hint(record["goal"])
@@ -474,7 +1000,7 @@ def status(project: Path, work_id: str, through: str = "") -> dict:
         open_rows = [s for s in out["open"] if STEP_IDS.index(s) <= last]
         out.update(
             through=through,
-            ready=not open_rows,
+            ready=not open_rows and not out["completed"],
             open=open_rows,
             next_step=open_rows[0] if open_rows else None,
         )
@@ -515,8 +1041,7 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
 
     Fixes the dead end where a goal's words (or the default) made a row
     required, and only partway through the checklist does it become clear
-    the row does not apply (e.g. audit-setup's Node-only checks on a pure
-    Python repo) -- with no way to flip it without abandoning the work id
+    the row does not apply (e.g. a design row for a verified nonvisual command-line change) -- with no way to flip it without abandoning the work id
     and re-proving every earlier row under a new one.
 
     Least-surprise rule: only a row that is (a) not one of the ALWAYS_REQUIRED
@@ -537,6 +1062,10 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
         record = load(path)
         if refresh(project, record):
             save(path, record)
+        if record.get("completion"):
+            raise ValueError(
+                "completed work is historical; use reopen or start new work"
+            )
         target = _target(record, step_id)
         if target["status"] != "pending":
             raise ValueError(
@@ -553,6 +1082,75 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
         record["updated_at"] = now()
         save(path, record)
         return summary(project, record)
+
+
+def pathway_router():
+    script = Path(__file__).resolve().parents[2] / "pathway/scripts/pathway.py"
+    spec = importlib.util.spec_from_file_location("_completion_pathway", script)
+    router = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(router)
+    return router
+
+
+@contextlib.contextmanager
+def itinerary_completion(
+    project: Path, work_id: str, enrollment: dict, generation, goal
+):
+    """Hold the pathway lock while checking and retaining its closed proof."""
+    path = project / STORE_DIR / "pathway" / (work_id + ".json")
+    router = pathway_router()
+    with router._store_lock(project):
+        if type(generation) is not int or generation < 1:
+            raise ValueError(
+                "Checklist execution generation is unknown; closeout remains blocked."
+            )
+        if (
+            not isinstance(enrollment, dict)
+            or enrollment.get("version") != 1
+            or enrollment.get("mode")
+            not in {
+                "standalone",
+                "required",
+            }
+        ):
+            raise ValueError(
+                "Itinerary enrollment is unknown; closeout remains blocked."
+            )
+        if not path.exists() and not path.is_symlink():
+            if enrollment["mode"] == "required":
+                raise ValueError(
+                    "Required shared itinerary is missing; closeout remains blocked."
+                )
+            yield {}
+            return
+        if enrollment["mode"] != "required":
+            raise ValueError(
+                "Shared itinerary is not bound to this intake; enroll before closeout."
+            )
+        if path.is_symlink():
+            raise ValueError("Shared itinerary cannot follow a symlink.")
+        item = router.load(project, work_id)
+        if item.get("goal") != goal:
+            raise ValueError("Shared itinerary goal does not match this checklist.")
+        if item.get("checklist_generation") != generation:
+            raise ValueError(
+                "Shared itinerary belongs to another execution generation; explicitly reopen and re-prove it."
+            )
+        if not item.get("closed") or not router.retained_completion(project, item):
+            raise ValueError(
+                "Shared itinerary completion proof is open, missing, or invalid."
+            )
+        if item.get("candidate_binding") != router.candidate_binding(project):
+            raise ValueError(
+                "Shared itinerary proves another candidate; explicitly reset and re-prove it."
+            )
+        paths = {portable(project, path): digest(path)}
+        archive = router.archive_directory(project, item)
+        for row in item["pathways"].values():
+            if row["status"] == "proved":
+                artifact = archive / row["sha256"]
+                paths[portable(project, artifact)] = row["sha256"]
+        yield paths
 
 
 def step(
@@ -577,9 +1175,12 @@ def step(
         record = load(path)
         if refresh(project, record):
             save(path, record)
+        if record.get("completion"):
+            raise ValueError(
+                "completed work is historical; use reopen or start new work"
+            )
         target = _target(record, step_id)
         before = {k: target.get(k) for k in RECORD_KEYS}
-        before_revision = target.get("revision", 0)
         if result in {"na", "blocked"}:
             if result == "na" and target["required"]:
                 raise ValueError("n/a needs a conditional step; this row is required")
@@ -621,7 +1222,34 @@ def step(
                 )
             deps[portable(project, q)] = digest(q)
         sha = digest(ev)
-        identity = git_identity(project) if step_id in RELEASE_STEPS else None
+        identity = (
+            git_identity(project)
+            if step_id in RELEASE_STEPS or step_id == "review"
+            else None
+        )
+        candidate = (
+            candidate_snapshot(project)
+            if step_id == "review" and git_identity(project) is not None
+            else None
+        )
+        # Publish the attempt before releasing the lock. An old pass cannot
+        # certify closeout while a required recheck is outstanding. A crash
+        # leaves pending proof, and even identical success needs later renewal.
+        target.update(
+            status="pending",
+            reason="Verification in progress. Repeat this check if interrupted.",
+            verifier_exit=None,
+            output_tail="",
+            verified_at="",
+        )
+        _commit(project, path, record, target, before)
+        before = {k: target.get(k) for k in RECORD_KEYS}
+        before_revision = target.get("revision", 0)
+        before_generation = record.get("execution_generation")
+        prerequisite_revisions = [
+            (row["step_id"], row.get("revision", 0))
+            for row in record["steps"][: target["sequence"] - 1]
+        ]
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     code, output = run_verifier(verify_cmd, project, timeout)
@@ -629,26 +1257,80 @@ def step(
     # Phase 3, under the lock: re-check nothing moved while the verifier ran.
     with locked(path):
         record = load(path)
-        refresh(project, record)
+        if record.get("completion"):
+            raise ValueError(
+                "work became completed while this verifier ran; historical rows are immutable"
+            )
         target = _target(record, step_id)
-        if target.get("revision", 0) != before_revision or {k: target.get(k) for k in RECORD_KEYS} != before:
+        if (
+            target.get("revision", 0) != before_revision
+            or record.get("execution_generation") != before_generation
+            or {k: target.get(k) for k in RECORD_KEYS} != before
+            or prerequisite_revisions != [
+                (row["step_id"], row.get("revision", 0))
+                for row in record["steps"][: target["sequence"] - 1]
+            ]
+        ):
             raise ValueError(
                 "this step was changed by someone else while the verifier ran; retry"
             )
+        inspection_error = ""
+        try:
+            refresh(project, record)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            inspection_error = redact(str(exc))
+        if record.get("completion"):
+            save(path, record)
+            raise ValueError(
+                "work became completed while this verifier ran; historical rows are immutable"
+            )
         earlier = _open_before(record, target)
-        stable = sha == digest(ev) and all(
-            digest(resolve(project, q)) == h for q, h in deps.items()
+        evidence_stat, instrument_stats = None, {}
+        try:
+            stable = sha == digest(ev) and all(
+                digest(resolve(project, q)) == h for q, h in deps.items()
+            )
+            if stable:
+                evidence_stat = _fp(ev)
+                instrument_stats = {q: _fp(resolve(project, q)) for q in deps}
+                stable = evidence_stat is not None and all(
+                    stat is not None for stat in instrument_stats.values()
+                )
+        except (OSError, ValueError) as exc:
+            stable = False
+            inspection_error = redact(str(exc))
+        try:
+            identity_stable = (
+                step_id not in RELEASE_STEPS and step_id != "review"
+            ) or identity == git_identity(project)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            identity_stable = False
+            inspection_error = redact(str(exc))
+        try:
+            candidate_stable = candidate is None or candidate == candidate_snapshot(
+                project
+            )
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            candidate_stable = False
+            inspection_error = redact(str(exc))
+        passed = (
+            code == 0
+            and stable
+            and identity_stable
+            and candidate_stable
+            and not earlier
+            and not inspection_error
         )
-        identity_stable = (
-            step_id not in RELEASE_STEPS or identity == git_identity(project)
-        )
-        passed = code == 0 and stable and identity_stable and not earlier
-        if earlier:
+        if inspection_error:
+            why = f"Verifier exited {code}; proof or candidate inspection failed: {inspection_error}"
+        elif not identity_stable:
+            why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
+        elif earlier:
             why = "An earlier step reopened while the verifier ran: " + ", ".join(
                 earlier
             )
-        elif not identity_stable:
-            why = "Git HEAD or branch changed while the verifier ran. Retry on the current commit."
+        elif not candidate_stable:
+            why = "Reviewed candidate changed while the verifier ran. Repeat review."
         elif not stable:
             why = (
                 "The verifier changed the evidence or an instrument file. "
@@ -662,27 +1344,197 @@ def step(
             status="passed" if passed else "blocked",
             evidence_path=portable(project, ev),
             evidence_sha256=sha,
-            evidence_stat=_fp(ev) if passed else target.get("evidence_stat"),
+            evidence_stat=evidence_stat if passed else target.get("evidence_stat"),
             instruments={
                 name: {
                     "sha256": h,
-                    "stat": _fp(resolve(project, name)) if passed else None,
+                    "stat": instrument_stats.get(name) if passed else None,
                 }
                 for name, h in deps.items()
             },
             verify_command=redact(verify_cmd),
             verify_command_sha256=command_digest(verify_cmd),
             git_identity=identity,
+            candidate_sha256=candidate,
             verifier_exit=code,
             output_tail=redact(output)[-2000:],
             verified_at=now(),
             reason="" if passed else why,
         )
-        _commit(project, path, record, target, before)
+        with contextlib.ExitStack() as closing:
+            if passed and step_id == "closeout":
+                try:
+                    itinerary_paths = closing.enter_context(
+                        itinerary_completion(
+                            project,
+                            work_id,
+                            record.get("itinerary_enrollment", {}),
+                            record.get("execution_generation"),
+                            record.get("goal"),
+                        )
+                    )
+                    itinerary_source = portable(
+                        project, project / STORE_DIR / "pathway" / (work_id + ".json")
+                    )
+                    record["completion_provenance"] = {
+                        "version": 2,
+                        "itinerary_required": bool(itinerary_paths),
+                        "itinerary_source": itinerary_source if itinerary_paths else "",
+                        "itinerary_sha256": itinerary_paths.get(itinerary_source, ""),
+                        "itinerary_candidate_binding": (
+                            json.loads(
+                                resolve(project, itinerary_source).read_text()
+                            ).get("candidate_binding")
+                            if itinerary_paths
+                            else None
+                        ),
+                    }
+                    for name, receipt_sha in itinerary_paths.items():
+                        target["instruments"][name] = {
+                            "sha256": receipt_sha,
+                            "stat": _fp(resolve(project, name)),
+                        }
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    passed = False
+                    why = str(exc)
+                if passed and not retained_completion(project, record):
+                    passed = False
+                    why = "Completion provenance is missing or invalid; closeout remains blocked."
+                if not passed:
+                    target.update(status="blocked", reason=why)
+            _commit(project, path, record, target, before)
+            if passed and step_id == "closeout":
+                seal_completion(project, record)
+                save(path, record)
         out = summary(project, record)
         if not passed:
             out.update(ok=False, error=why)
         return out
+
+
+def reopen(project: Path, work_id: str, reason: str) -> dict:
+    """Explicitly restart proof work, retaining history and the original baseline."""
+    if not reason.strip():
+        raise ValueError("reopen needs a written reason")
+    path = store_path(project, work_id)
+    with locked(path), pathway_router()._store_lock(project):
+        record = load(path)
+        legacy_active = not record.get("completion") and (
+            "execution_generation" not in record or "itinerary_enrollment" not in record
+        )
+        if legacy_active:
+            generation = record.get("execution_generation", 0)
+            if (
+                type(generation) is not int
+                or generation < 0
+                or ("execution_generation" in record and generation < 1)
+            ):
+                raise ValueError(
+                    "invalid execution generation; retain the provenance gap"
+                )
+            enrollment = record.get("itinerary_enrollment")
+            if "itinerary_enrollment" in record and (
+                not isinstance(enrollment, dict)
+                or enrollment.get("version") != 1
+                or enrollment.get("mode") not in {"standalone", "required"}
+            ):
+                raise ValueError(
+                    "invalid itinerary enrollment; retain the provenance gap"
+                )
+            router = pathway_router()
+            itinerary = router.item_path(project, work_id)
+            if itinerary.is_symlink():
+                raise ValueError("shared itinerary cannot follow a symlink")
+            if (
+                itinerary.exists()
+                and router.load(project, work_id).get("goal") != record["goal"]
+            ):
+                raise ValueError(
+                    "Checklist and itinerary goals must match before enrollment."
+                )
+            baseline = project / STORE_DIR / "evidence" / (work_id + "-build-base.txt")
+            identity = git_identity(project)
+            if baseline.is_symlink() or (baseline.exists() and not baseline.is_file()):
+                raise ValueError(
+                    "original baseline is not a regular file; retain the scope gap"
+                )
+            if identity is not None and not baseline.is_file():
+                raise ValueError(
+                    "original baseline is missing; recover it before legacy reset"
+                )
+            prior = json.loads(json.dumps(record))
+            record.setdefault("migration_history", []).append(
+                {
+                    "legacy_record": prior,
+                    "baseline_sha256": digest(baseline) if baseline.is_file() else None,
+                    "reset_at": now(),
+                    "reason": reason.strip(),
+                }
+            )
+            for row in record["steps"]:
+                row.update(
+                    status="pending",
+                    reason="Explicit legacy reset: " + reason.strip(),
+                    revision=row.get("revision", 0) + 1,
+                )
+            record.pop("completion_provenance", None)
+            record["execution_generation"] = generation + 1
+            record["itinerary_enrollment"] = {
+                "version": 1,
+                "mode": "required"
+                if itinerary.exists() or (enrollment or {}).get("mode") == "required"
+                else "standalone",
+            }
+            save(path, record)
+            if itinerary.exists():
+                router._enroll_checklist_locked(project, work_id)
+            return summary(project, record)
+        if not record.get("completion"):
+            raise ValueError("work is not completed")
+        generation = record.get("execution_generation")
+        if type(generation) is not int or generation < 1:
+            raise ValueError(
+                "Original execution generation is unknown; preserve the provenance gap."
+            )
+        if (
+            record["completion"].get("baseline_sha256")
+            or git_identity(project) is not None
+        ):
+            baseline = project / STORE_DIR / "evidence" / (work_id + "-build-base.txt")
+            if baseline.is_symlink() or not baseline.is_file():
+                raise ValueError("original baseline is missing; retain the scope gap")
+            if (
+                record["completion"].get("baseline_sha256")
+                and digest(baseline) != record["completion"]["baseline_sha256"]
+            ):
+                raise ValueError("original baseline changed; retain the scope gap")
+        record.setdefault("completion_history", []).append(
+            {
+                "completion": record.pop("completion"),
+                "steps": json.loads(json.dumps(record["steps"])),
+                "completion_provenance": json.loads(
+                    json.dumps(record.get("completion_provenance"))
+                ),
+                "itinerary_enrollment": json.loads(
+                    json.dumps(record.get("itinerary_enrollment"))
+                ),
+                "execution_generation": generation,
+                "goal": record["goal"],
+                "reopened_at": now(),
+                "reason": reason.strip(),
+            }
+        )
+        for row in record["steps"]:
+            row.update(
+                status="pending",
+                reason="Explicitly reopened: " + reason.strip(),
+                revision=row.get("revision", 0) + 1,
+            )
+        record["execution_generation"] = generation + 1
+        save(path, record)
+        if record.get("itinerary_enrollment", {}).get("mode") == "required":
+            pathway_router()._enroll_checklist_locked(project, work_id)
+    return summary(project, record)
 
 
 def list_items(project: Path) -> dict:
@@ -690,7 +1542,20 @@ def list_items(project: Path) -> dict:
     for f in sorted((project / STORE_DIR).glob("*.json")):
         try:
             s = status(project, f.stem)
-            items.append({k: s[k] for k in ("work_id", "goal", "ready", "next_step")})
+            items.append(
+                {
+                    k: s[k]
+                    for k in (
+                        "work_id",
+                        "goal",
+                        "ready",
+                        "next_step",
+                        "completed",
+                        "historical_receipts_valid",
+                        "current_candidate_ready",
+                    )
+                }
+            )
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
             items.append({"work_id": f.stem, "error": str(exc)})
     return {"ok": True, "items": items}
@@ -738,12 +1603,30 @@ def print_human(result: dict) -> None:
         return
     if "items" in result:
         for item in result["items"]:
-            state = item.get("error") or (
-                "ready" if item["ready"] else f"next: {item['next_step']}"
-            )
+            if item.get("completed"):
+                state = (
+                    "historical proof verified"
+                    if item.get("historical_receipts_valid")
+                    else "historical proof gap"
+                )
+            else:
+                state = (
+                    "ready" if item.get("ready") else f"next: {item.get('next_step')}"
+                )
+            state = item.get("error") or state
             print(f"{item['work_id']}  {state}")
         return
     print(f"{result['work_id']}  {result['goal']}")
+    if result.get("completed"):
+        print(
+            "  historical completion: "
+            + (
+                "retained proof valid"
+                if result.get("historical_receipts_valid")
+                else "proof gap"
+            )
+            + "; not a current release gate"
+        )
     for note in result.get("rule_notes", []):
         print(f"  note: {note}")
     for s in result["steps"]:
@@ -762,7 +1645,13 @@ def print_human(result: dict) -> None:
     if result.get("error"):
         print(f"ERROR: {result['error']}")
     scope = f" through {result['through']}" if result.get("through") else ""
-    if result["ready"]:
+    if result.get("completed"):
+        print(
+            "HISTORICAL PROOF VERIFIED."
+            if result.get("historical_receipts_valid")
+            else "HISTORICAL PROOF GAP."
+        )
+    elif result["ready"]:
         print(f"READY{scope}.")
     elif result["next_step"] == "research" and result.get("research_focus"):
         print(f"Next step: research  (run {result['research_focus']})")
@@ -823,6 +1712,12 @@ def main(argv=None) -> int:
             else "exit 0 only when every row is passed or n/a",
         )
         p.add_argument("--id", required=True)
+        if name == "check":
+            p.add_argument(
+                "--historical",
+                action="store_true",
+                help="verify retained completed-work receipts; never a current release gate",
+            )
         p.add_argument(
             "--through",
             choices=STEP_IDS,
@@ -860,6 +1755,13 @@ def main(argv=None) -> int:
         "steps", parents=[common], help="print the 17 rows and the skill for each"
     )
     sub.add_parser("list", parents=[common], help="list work items in this project")
+    p = sub.add_parser(
+        "reopen",
+        parents=[common],
+        help="restart completed or legacy active work without changing its original baseline",
+    )
+    p.add_argument("--id", required=True)
+    p.add_argument("--reason", required=True)
     sub.add_parser(
         "doctor", parents=[common], help="check the install and the project folder"
     )
@@ -867,11 +1769,19 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     as_json = getattr(args, "json", False)
     project = Path(getattr(args, "project", ".")).expanduser().resolve()
+    if getattr(args, "historical", False) and args.through:
+        ap.error("--historical cannot be combined with --through")
     try:
         if args.cmd == "start":
             result = start(project, args.goal, args.id, args.require, args.optional)
         elif args.cmd in ("status", "check"):
-            result = status(project, args.id, args.through)
+            if getattr(args, "historical", False):
+                path = store_path(project, args.id)
+                # Completed rows are immutable and saves atomically publish JSON.
+                # Historical inspection must also work on a read-only archive.
+                result = summary(project, load(path))
+            else:
+                result = status(project, args.id, args.through)
         elif args.cmd == "step":
             result = step(
                 project,
@@ -893,6 +1803,8 @@ def main(argv=None) -> int:
             }
         elif args.cmd == "list":
             result = list_items(project)
+        elif args.cmd == "reopen":
+            result = reopen(project, args.id, args.reason)
         else:
             result = doctor(project)
     except KeyboardInterrupt:
@@ -913,7 +1825,13 @@ def main(argv=None) -> int:
     else:
         print_human(result)
     if args.cmd == "check":
-        return 0 if result["ready"] else 1
+        if args.historical:
+            return (
+                0
+                if result.get("completed") and result.get("historical_receipts_valid")
+                else 1
+            )
+        return 0 if result["ready"] and not result.get("completed") else 1
     return 0 if result.get("ok", True) else 1
 
 

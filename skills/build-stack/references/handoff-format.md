@@ -56,7 +56,7 @@ status: partial
 
 ```text
 ---
-Implementation Complete
+{Implementation Complete | Build Blocked: unverified}
 ├─ Classification: {BUGFIX|SMALL|MEDIUM|LARGE}
 ├─ Tasks: {completed}/{total}
 ├─ Files changed: {count}
@@ -77,6 +77,11 @@ Implementation Complete
 ## Next steps (Step 7c)
 
 Pick the message that matches the state.
+
+- `--no-verify` or missing required proof:
+
+  > "Build blocked and unverified. Remaining checks: {checks}. Owner: {owner}.
+  > Next proof: {command or observation}. The build row stays blocked; do not ship."
 
 - Verification passed cleanly (no audit):
 

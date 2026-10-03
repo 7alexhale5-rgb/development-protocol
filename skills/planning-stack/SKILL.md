@@ -25,7 +25,7 @@ Record the step only after the user approves the plan (see Step 6, "Record the a
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step planning --result pass \
+  --id=<work-id> --step planning --result pass \
   --evidence .devproto/evidence/plan-approval.md \
   --instrument <plan file> \
   --verify "python3 <this skill folder>/scripts/plan_approval_check.py .devproto/evidence/plan-approval.md"
@@ -168,15 +168,18 @@ Each gap becomes an item in the plan.
 
 ## Step 3.5: Spawn the analysis perspectives
 
-Challenge the emerging plan from several angles before it is written. If your agent supports
-background subagents, spawn them all in one turn and keep working. If it does not, run each
-perspective yourself as a separate pass, writing its findings down before starting the next, so
-one angle does not blur into another.
+Challenge the emerging plan from several angles before it is written.
+
+Follow the supplied governing development contract and task authorization. A root may
+batch independent work with at most two active children and explicit ownership. Children
+run assigned methods and lenses locally without spawning agents. Select an actually
+available model appropriate to the task. Self-review is supporting evidence; missing
+required independent review remains a gap. Do not retry solely for zero supported findings.
 
 - **Shared perspectives**: skeptic, architecture, security, performance, first-principles.
 - **Inline perspectives**: risk-assessor, pattern-matcher.
 
-The **skeptic always fires and always returns at least one finding.**
+The skeptic always runs; evidence-backed zero findings is valid.
 
 Build the CONTEXT_PAYLOAD first (goal, mode, codebase summary, constraints, interview answers,
 prior decisions, existing patterns). Definitions, prompts and the payload template are in
@@ -218,11 +221,9 @@ Splice only the `## Lens: <name>` blocks for the fired lenses from
 
 Before finalizing the plan, collect every perspective and the specialist board.
 
-**Escalation.** An empty or failed result is logged and skipped. "No findings" from the skeptic,
-or on a non-trivial goal (several files, architecture), is retried once with a stronger model and
-the line "The first review found nothing. Look harder." Two clean passes are accepted as clean
-and noted as such. Tag every finding with its source, `[perspective:<name>]`. Full rules:
-`references/perspectives.md`, "Escalation".
+Record failed or incomplete coverage as gaps. Accept scoped, evidence-backed clean results.
+Retry only when a documented capability or evidence change can close a gap, never solely
+for zero findings. Tag findings with their source. See `references/perspectives.md`.
 
 Merge each finding into the plan section named in the merge table
 (`references/perspectives.md`, "Merge into the plan").
@@ -422,3 +423,6 @@ Every run is deep:
 | Specialist lenses | 5 always on plus up to 5 keyword-gated, capped at 8                                                        |
 
 If your agent has a reasoning-effort setting, use its high setting for this skill.
+
+Without subagents, run each selected perspective locally as a separate labeled pass.
+This supplies supporting evidence and cannot replace required independent review.

@@ -15,17 +15,24 @@ This skill satisfies the `compound` row of the development-protocol checklist. T
 reusable learning before closeout. Pass it with the learning report as evidence and a verifier
 that only reads that report (see Step 7).
 
-## Two modes
+Before dispatch, reject --improve combined with --metrics in either order. Neither
+mode gathers or spends until flag validation succeeds.
+
+## Modes
 
 | You type                         | What runs                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `/compound` (plus scope flags)   | The learning flow below, Steps 0 to 7                                                                   |
 | `/compound --metrics [argument]` | The git metrics retro. Read `references/retro-metrics.md` and follow it end to end. Stop when it stops. |
+| `/compound --improve` | Bounded candidate assessment under `../development-protocol/reference.md`; measurement and adoption require a proved adapter. |
 
 `--metrics` takes `24h`, `14d`, `30d`, `compare [Nd]`, `global [Nd]`, or a project name. Use it
 for "weekly retro", "what did we ship", "engineering retrospective" and "retro numbers".
 
 ---
+
+`--improve` accepts the Step 0 scope flags and cannot be combined with `--metrics`.
+Reject that combination before gathering or spending.
 
 ## Step 0: Determine scope
 
@@ -208,6 +215,11 @@ search.
 
 ### 5b: Write decisions (only the significant ones)
 
+For a work-id compound after ship, write decision drafts under `.devproto/learnings/decisions/`.
+Do not modify reviewed files, instruction files or HEAD. Later promotion to shipped docs
+is a separate work item with fresh verification and review. The ordinary standalone
+locations below apply only outside a tracked release checklist.
+
 For each decision worth keeping:
 
 ```text
@@ -234,7 +246,9 @@ If a pattern suggests a convention should be written down, ask:
 > "I noticed <pattern> across <N> commits. Want me to add this as a convention to
 > <project>/CLAUDE.md?"
 
-Only suggest. Never write to an agent instruction file without the user's yes. That file is
+During work-id compound, retain the proposed rule under `.devproto/learnings/` and
+promote it in a separate reviewed work item, even when its content was approved.
+Only a standalone run may write with the user's yes. That file is
 read every session, so a wrong line there costs every future session.
 
 ---
@@ -267,7 +281,9 @@ A retrospective is a natural weekly moment to catch docs that drifted from the c
 
    A doc older than its code on an active project is stale.
 
-3. **Refresh** only the stale docs for code that is still active. Leave archived areas alone.
+3. For a work-id compound, record proposed fixes under `.devproto/learnings/` without
+   editing shipped docs. For standalone work, refresh only active stale docs, then
+   verify and review those changes through their own work item.
 
 4. **Report.** Append to the compound report:
 
@@ -359,7 +375,7 @@ The report from Step 5a is the evidence. The verifier only reads it:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step compound --result pass \
+  --id=<work-id> --step compound --result pass \
   --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md \
   --verify "grep -q '^### Learnings' .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md"
 ```
@@ -367,6 +383,28 @@ python3 <development-protocol skill folder>/scripts/devproto.py --project <repo>
 A report with zero learnings is valid if it says so under `### Learnings` ("None this cycle:
 the work repeated known patterns"). An empty heading is not. Padding the list to look
 substantial is worse than an honest zero.
+
+For `--improve`, use this Step 7 structural verifier instead of the Learnings grep:
+
+```text
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step --id=<work-id> --step compound --result pass \
+  --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md \
+  --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/learnings/<YYYY-MM-DD>-compound-<scope-slug>.md --section 'Learnings' --section 'Improvement status: unproved'"
+```
+
+Use the `proved` heading only with the required measurement proof; when adoption is
+required and unproved, record `--result blocked --reason` instead of this pass command.
+
+For `--improve`, also require a nonempty `### Improvement status: unproved` or
+`### Improvement status: proved` section with candidate, evidence and remaining proof.
+A read-only heading check may verify report structure only; it cannot prove measured gains.
+If the goal, brief or owner request names adoption or promotion, use `--result blocked`
+until the reviewed measurement adapter proves the frozen contract. A `proved` word alone
+is insufficient. Otherwise the row may pass as a truthful retrospective with an unproved idea.
+
+If refresh reopens earlier proof, leave compound pending and record the blocker on the
+earliest eligible open prerequisite. Renew earlier rows before attempting compound;
+downstream blocked rows cannot skip prerequisites.
 
 If git was unreachable, or the window had no commits, record the row as `blocked` with the
 reason, not `pass`. Unknown is not pass.
@@ -378,3 +416,30 @@ reason, not `pass`. Unknown is not pass.
 - Velocity numbers are context, never a grade of a person.
 - Never write to an agent instruction file without confirmation.
 - Never auto-fix what the health checks find. Report it.
+
+## Mode: --improve
+
+Follow the bounded-improvement contract in `../development-protocol/reference.md`. Ordinary
+compound runs remain report-only. Select one candidate from a confirmed defect, repeated failure,
+rejected review, drift or measured cost. Preserve its hypothesis, baseline, frozen instruments,
+rejected attempts and unresolved proof needs in the existing learning report.
+
+The standalone package has no executable measurement validator. Do not invoke absent commands or
+treat the Step 7 heading check as proof of measured gains. The compound row may record a truthful
+retrospective saying the improvement remains unproved. If measured adoption is required by the
+goal, brief or explicit owner request naming adoption or promotion, keep the row blocked
+until a supported adapter proves that contract. Report `### Improvement status: unproved`
+until that proof exists; retain the candidate, evidence and next proof beneath it.
+
+Use the existing devproto.py step command with `--result blocked --reason` for missing required
+measurement capability. Do not create another ledger. A future adapter must preserve immutable
+experiments, executed provenance, independent exact-candidate reviews, accumulated settled costs
+and tested rollback. Synthetic fixtures prove checker behavior only, never real agent gains.
+
+Resume retained work rather than repeating rejected trials or resetting limits. Preserve existing
+approval of unchanged scope. Proved adoption still requires applicable authorization and installed
+acceptance checks. Keep unauthorized boundary changes and external reports as local drafts.
+
+The structural command above proves a retained unproved report only. This package supplies
+no pass command for a proved heading; measured adoption needs the reviewed adapter's own
+verifier and the full comparison evidence.

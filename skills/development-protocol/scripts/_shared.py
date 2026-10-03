@@ -3,7 +3,7 @@
 Canonical home for the pieces devproto.py, pathway.py and sweep.py would
 otherwise each hand-roll: the verifier runner (temp-file output, no stdin,
 whole-process-group kill), the per-store file lock, a file digest, a
-timestamp, a bash-with-pipefail runner, and an output redactor.
+timestamp, a complete candidate snapshot, a bash-with-pipefail runner, and an output redactor.
 
 Python 3.9+, standard library only. Importers outside this folder locate this
 file by relative path (see each caller's own docstring) and should raise a
@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 from datetime import datetime
@@ -33,8 +34,16 @@ def now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def _file_sha256(path: Path) -> bytes:
+    checksum = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            checksum.update(chunk)
+    return checksum.digest()
+
+
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
+    return _file_sha256(path).hex() if path.is_file() else ""
 
 
 @contextlib.contextmanager
@@ -244,6 +253,118 @@ def selftest() -> int:
     for name in fails:
         print(f"FAIL {name}")
     return 1 if fails else 0
+
+
+def candidate_snapshot(project):
+    """Hash a candidate, rejecting detected changes during this bounded two-pass scan.
+
+    This detects mutations between observations; it is not an atomic filesystem snapshot.
+    """
+    project = project.resolve()
+
+    def git(*args):
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(project), *args], capture_output=True, timeout=10
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("candidate Git state cannot be read") from exc
+        if result.returncode:
+            raise ValueError("candidate Git state cannot be read")
+        if args[0] == "ls-files" and result.stderr:
+            raise ValueError("candidate Git source enumeration is incomplete")
+        return result.stdout
+
+    if (
+        Path(os.fsdecode(git("rev-parse", "--show-toplevel")).strip()).resolve()
+        != project
+    ):
+        raise ValueError("--project must name the repository root")
+
+    def git_state():
+        return (
+            git("rev-parse", "--verify", "HEAD"),
+            git("rev-parse", "--symbolic-full-name", "HEAD"),
+            git("ls-tree", "-rz", "HEAD"),
+            git("ls-files", "-z", "-co", "--exclude-standard"),
+            git("ls-files", "-sz"),
+        )
+
+    def fingerprint(path):
+        try:
+            metadata = path.lstat()
+        except (FileNotFoundError, NotADirectoryError):
+            return ("absent",)
+        target = (
+            os.fsencode(os.readlink(path)) if stat.S_ISLNK(metadata.st_mode) else None
+        )
+        return (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mode,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+            target,
+        )
+
+    before_git = git_state()
+    head_entries = {}
+    for entry in before_git[2].split(b"\0"):
+        if entry:
+            metadata, name = entry.split(b"\t", 1)
+            head_entries[name] = metadata.split(b" ")[0]
+    names = set(head_entries)
+    names.update(before_git[3].split(b"\0"))
+    scanned_names = sorted(
+        name
+        for name in names - {b""}
+        if name != b".devproto" and not name.startswith(b".devproto/")
+    )
+    before_files = {
+        name: fingerprint(project / os.fsdecode(name)) for name in scanned_names
+    }
+    digest = hashlib.sha256()
+    index_modes = {}
+    for entry in before_git[4].split(b"\0"):
+        if not entry:
+            continue
+        metadata, name = entry.split(b"\t", 1)
+        if name == b".devproto" or name.startswith(b".devproto/"):
+            continue
+        index_modes[name] = metadata.split(b" ")[0]
+        digest.update(b"index\0" + entry + b"\0")
+    for name in scanned_names:
+        path = project / os.fsdecode(name)
+        if index_modes.get(name) == b"160000":
+            raise ValueError("candidate includes an unsupported indexed submodule")
+        digest.update(name + b"\0")
+        if path.is_symlink():
+            kind, content = b"symlink", os.fsencode(os.readlink(path))
+        elif not path.exists():
+            kind, content = b"deleted", b""
+        elif path.is_file():
+            kind = b"executable" if path.stat().st_mode & 0o111 else b"file"
+            digest.update(kind + b"\0" + _file_sha256(path))
+            continue
+        elif (
+            path.is_dir()
+            and head_entries.get(name) != b"160000"
+            and index_modes.get(name) != b"160000"
+        ):
+            if (path / ".git").exists():
+                raise ValueError("candidate includes an unsupported nested repository")
+            kind, content = b"deleted", b""
+        else:
+            raise ValueError("candidate includes an unsupported directory or submodule")
+        digest.update(kind + b"\0" + hashlib.sha256(content).digest())
+    after_git = git_state()
+    after_files = {
+        name: fingerprint(project / os.fsdecode(name)) for name in scanned_names
+    }
+    if before_git != after_git or before_files != after_files:
+        raise ValueError("Git state or files changed during candidate scan")
+    return digest.hexdigest()
 
 
 if __name__ == "__main__":

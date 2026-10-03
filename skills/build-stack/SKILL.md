@@ -17,6 +17,10 @@ work, write the code directly.
 `--no-verify` as an exception with a reason. A build is done when its result is readable,
 repeatable and tied to the files or commit it claims to prove. A command that ran is not proof.
 
+The method and bounded-improvement contract in `../development-protocol/reference.md` governs
+this skill and its perspective templates. Choose execution from dependencies and risk, not
+file count alone. Preserve approval of unchanged work and existing authorization.
+
 For UI work, read the "Design and UI proof" section of the `/development-protocol` skill's
 `reference.md`. It sets the fidelity floor and how to measure the result. Scale the measurement to
 the task.
@@ -26,7 +30,7 @@ the task.
 This skill satisfies the `build` row of the development-protocol checklist. `DEVPROTO` means
 `python3 <development-protocol skill folder>/scripts/devproto.py`.
 
-Before you start, run `DEVPROTO --project <repo> status --id <work-id>`. The `build` row can only
+Before you start, run `DEVPROTO --project <repo> status --id=<work-id>`. The `build` row can only
 pass after every earlier row (`planning`, `premortem`, `audit-setup` and the rest) is closed. If an
 earlier row is open, close it first or mark it `na` with a reason where the tool allows.
 
@@ -34,8 +38,12 @@ When the build is done and Full Verify passes, save the diff and record the row:
 
 Capture a complete snapshot before recording the row:
 
-1. Resolve the approved baseline to a commit SHA (merge-base with the remote default
-   branch, or HEAD for local work). Save that SHA in the evidence.
+1. Consume the intake baseline created by `DEVPROTO start` before any phase edits, in
+   `.devproto/evidence/<work-id>-build-base.txt`, using exactly `base <sha>` and
+   `work-id <work-id>` lines. This is supporting evidence, not another ledger.
+   On resume read this file and verify its work ID and commit; never overwrite its
+   baseline, recalculate it at closeout or substitute a branch merge-base. Missing
+   legacy baseline remains a scope gap until genuine evidence is recovered.
 2. Use a temporary Git index (`GIT_INDEX_FILE`), seeded with `git read-tree HEAD`.
    Enumerate the union of `git ls-tree -rz --name-only HEAD` and tracked plus
    nonignored untracked files from `git ls-files -z -co --exclude-standard`.
@@ -50,8 +58,9 @@ Capture a complete snapshot before recording the row:
    indexes created by this procedure. A changed implementation must invalidate proof.
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step build --result pass \
+DEVPROTO --project <repo> step --id=<work-id> --step build --result pass \
   --evidence .devproto/evidence/build.diff --verify "<compare the current snapshot with build.diff, then run focused tests>" \
+  --instrument .devproto/evidence/<work-id>-build-base.txt \
   --instrument <the main test file you relied on>
 ```
 
@@ -66,8 +75,8 @@ From the user's input, extract:
 
 - **GOAL**: the implementation objective (everything except flags).
 - **FLAGS**:
-  - `--no-verify`: skip all checkpoints (trust the code). This is an exception. Write the reason,
-    scope, owner and next proof in the handoff.
+  - `--no-verify`: record skipped checks with reason, scope, owner and next proof. The work
+    remains unverified and cannot be marked complete or shipped.
   - `--large`: force the helper-agent path, whatever the file count.
   - `--no-handoff`: skip handoff doc generation when context runs low.
   - `--review`: run a full review with `/review-stack` after the build. Auto-on for LARGE.
@@ -75,7 +84,8 @@ From the user's input, extract:
     `/review-stack --audit --auto`). Includes runtime checks, accessibility, bundle analysis and a
     remediation report. Implies `--review`.
   - `--tdd`: enforce test-driven development. Write tests first (red), implement to pass (green),
-    then refactor. Sets `IS_TDD` to true. Needs a test framework, found in Step 3.
+    then refactor. Sets `IS_TDD` to true. Detect tooling in Step 3; use an isolated executable
+    regression check or retain a required-proof gap when a framework is absent.
 - **PLAN SOURCE**: where the plan lives (found in Step 1).
 
 Keep GOAL and FLAGS for the whole run.
@@ -113,37 +123,45 @@ If you find more than one, read them and pick the most recent by file date or co
 ### 1c: Check the approval before building
 
 A plan is only in force once the person who owns the work has approved its exact text. Record
-that approval as a file, for example `.devproto/evidence/plan-approval.md`, with one line such as
-`Approved by <name> on <YYYY-MM-DD>: "<their exact words>"`. Then pass the `planning` row with the plan file as an instrument, so
-the checklist fingerprints the plan:
+that approval in `.devproto/evidence/plan-approval.md` using the existing planning-stack
+record format. Resolve a project-relative plan path from the repository root, and compute its SHA256
+at approval. Preserve that path and hash when an unchanged checkout moves:
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step planning --result pass \
+plan: <project-relative plan path, or absolute path for a plan outside the project>
+sha256: <SHA256 of the exact approved bytes>
+approved_by: <owner>
+approved_at: <timestamp>
+words: <their exact approval words>
+```
+
+Pass the planning row with the plan as an instrument and the existing read-only checker:
+
+```text
+DEVPROTO --project <repo> step --id=<work-id> --step planning --result pass \
   --evidence .devproto/evidence/plan-approval.md \
-  --verify "grep -q 'Approved' .devproto/evidence/plan-approval.md" \
+  --verify "python3 <planning-stack skill folder>/scripts/plan_approval_check.py .devproto/evidence/plan-approval.md" \
   --instrument <plan path>
 ```
 
 Before building, run `status`:
 
 - The `planning` row is passed and unchanged: proceed.
-- The `planning` row reopened: the plan changed after it was approved. STOP. Show the owner what
-  changed (`git diff` on the plan file), get re-approval in chat, update the approval file, and
-  pass the row again.
+- The `planning` row reopened: compare the current plan hash with its approved hash.
+  A changed plan or amendment needs the owner's approval of the new exact text before
+  re-passing. Never rewrite the approved plan hash under an old quote. Only identical
+  plan bytes with changed non-plan evidence may recover proof without another approval.
 - No approval on record: if the owner approved this plan in the current conversation, write the
   approval file now (quote their message) and pass the row. Otherwise STOP until they approve,
   whatever the plan's age.
 
-Two dated lessons sit behind this rule:
-
-- 2026-09-18: the rule used to be "warn and continue" when no approval was on record. A review
-  found builds running on plans nobody had approved. It now stops.
-- 2026-09-21: a carve-out let any plan written before a cutoff date continue without approval. It
-  was removed. A plan's age is not an approval. The carve-out was a standing free pass with no
-  expiry. An older plan costs one "yes", recorded once against its exact text.
+A plan's age is not approval. Preserve approval evidence for its exact text.
 
 If the plan folder has an `AMENDMENTS.md`, treat it the same way. An amendment is only in force
-once the owner's approval of its exact text is recorded. Stop if it changed or has no approval.
+once the owner's approval of its exact text is recorded in the same format, with its own
+path, hash and approval record checked by plan_approval_check.py. Stop if it changed or has no approval. Re-record the planning row with both the plan
+and AMENDMENTS.md as instruments, and a verifier executing both approval-record checks.
+A later amendment edit must reopen the row.
 
 Never edit the approved plan file during the build. Progress goes to a `STATE.md` next to the
 plan. Amendments go to `AMENDMENTS.md` and need the owner's approval.
@@ -181,7 +199,10 @@ that the implementation exists.
 
 ## Step 2: Classify the work
 
-If the plan gives a classification, use it. Otherwise detect it:
+Use risk, coupling and acceptance proof to classify work. File counts below are signals,
+not limits. Escalate cross-system, data-loss, permission or money risks to a larger method
+when their proof needs exceed the proposed class. Honor an approved classification only
+while its assumptions still hold.
 
 | Classification | Criteria                                                                |
 | -------------- | ----------------------------------------------------------------------- |
@@ -196,7 +217,7 @@ Report the classification in one line:
 
 Or for simpler work:
 
-> "Classified as **BUGFIX** (1 file). Implementing directly with a light check."
+> "Classified as **BUGFIX**. Reproducing the defect, adding a failing behavior check, then Full Verify."
 
 ---
 
@@ -209,25 +230,27 @@ Before writing code, find out which checks this project can actually run. Probe 
 | `CAN_BUILD`     | `package.json` has a `build` script (or the language's build tool is configured, for example `cargo`, `go build`, `mvn`)                                                    |
 | `CAN_TYPECHECK` | `tsconfig.json` exists at the root (or `mypy`/`pyright` is configured for Python)                                                                                           |
 | `CAN_LINT`      | An `eslint.config.*`, `.eslintrc*`, `biome.json`, `ruff.toml` or `.ruff.toml` exists at the root, or `package.json` has a `lint` script                                     |
-| `CAN_TEST`      | JS/TS: test files (`*.test.*`, `*.spec.*`) exist AND the root `package.json` has a `test` script. Python: a root `pytest.ini`, or a root `pyproject.toml` that names pytest |
+| `CAN_TEST` | The intended package documents an executable test command, including standard-library tests, with applicable test cases. |
 
-Search for test files at most 4 folders deep, and skip `node_modules`, `.git`, `dist`, `build`,
+Use that documented command and search its intended package for applicable test files,
+at most 4 folders deep. Derive `CAN_TEST` from both results, and skip `node_modules`, `.git`, `dist`, `build`,
 `.next`, `.venv`, `venv`, `__pycache__`, `coverage` and archive folders.
 
-A test runner must exist **at the project root**. Test-shaped files somewhere below the root are
-not enough. A nested plugin or a vendored package with its own tests must not make the root look
-test-capable. Nested test folders caused exactly this false positive in real use.
+Use the repository's documented commands and intended package scope. Unrelated vendored tests
+do not prove the project works. Retain evidence for each capability flag.
 
-Keep the evidence for each flag (the script names you saw, a sample of test files, the lint
-config paths) so you can pick exact commands later.
-
-Set `IS_TDD` to true when the `--tdd` flag was passed (if `CAN_TEST` is false, warn and fall back
-as the TDD section says), or when `CAN_TEST` is true AND the plan mentions tests.
-
-Only run checks that exist. Skip checks that are not configured. Do not install tooling in the
-middle of a build.
+Set `IS_TDD` for features, behavior changes and bug fixes, or explicit `--tdd`. Missing required
+tooling is an unmeasured gap; use an isolated executable regression check where suitable.
+Retain the isolated regression script as a build `--instrument`, including when stored under
+`.devproto/`, and execute it in the build verifier. An isolated executable regression check
+is a retained standalone script invoking the
+changed code: it exits nonzero for the reproduced defect and zero after the fix. Save
+it in the existing evidence folder and run it before and after the correction.
+Conditional checks may be not applicable with a reason. Required missing checks block completion.
 
 ---
+
+Re-recording planning for a mid-build amendment reopens later passed rows. Renew visual-spec, design, premortem and audit-setup proof, or valid conditional n/a records, before passing build. Mandatory rows cannot be n/a.
 
 ## Step 4: Scaffold
 
@@ -255,19 +278,54 @@ Report the scaffold:
 
 ---
 
+Checklist currency checks hash the complete non-ignored candidate, including tracked binary assets. File hashing streams bounded chunks, but each check still reads the full candidate; account for that I/O cost on asset-heavy repositories.
+
+## Step 4.5: Audit preflight (always on)
+
+**Skip if `--no-verify` is set.**
+
+Determine setup applicability from the affected runtime and package roots, not just root package.json. Inspect changed files, workspace configuration and nested web/, app/ or other application packages. For an affected web application, run `/audit-setup` in its applicable package directory and retain that package's required browser/audit proof in the repository-root checklist. Only after establishing that no affected web runtime needs those checks, satisfy audit-setup with executed applicable test/build/CI setup checks and evidence explaining why frontend tools do not apply. Do not invoke the Node initializer in a directory without package.json, or mark a mandatory setup row n/a. Run applicable setup before final Full Verify and independent reviews. If it runs later
+or changes files, invalidate those receipts and rerun Full Verify and reviews on the
+complete new candidate before completion. It prepares the audit
+tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
+accessibility library for Playwright, Playwright's browser dependencies, performance budgets, and
+CI gate scaffolding. Preserving an existing Lighthouse baseline without --force returns nonzero and is
+not fresh capture proof. Retain that gap, or use authorized --force with backups before
+Full Verify and review when fresh capture is required.
+
+Run it even when no audit flag is set. It costs seconds when nothing changed and a few minutes on
+first install. Inspect the actual result; missing required tooling or fresh capture
+remains a gap for any later review.
+
+Note on checklist order: the `audit-setup` row comes before `build` in the checklist. Close it
+once before the build starts. When a later code change requires fresh capture, rerun this preparation before final verification. A changed output needs renewed setup proof; a nonzero preserved-baseline result is
+not a pass. Run mutating preparation before final Full Verify and reviews.
+
+**Failure handling:**
+
+- If `/audit-setup` hits an install error that blocks the build (for example `npm install`
+  fails), treat it as a Full Verify failure and surface it to the user.
+- If it reports non-fatal warnings (a stale baseline it cannot re-capture right now, a missing
+  local env file for the preview URL), retain the gap. Missing required audit proof blocks its row and release; only
+  explicitly optional checks may remain unavailable.
+
+---
+
+
 ## Step 5: Execute
 
 Pick the path that matches the classification.
 
+If `--no-verify` is set, finish only the authorized implementation scope, then go to
+Steps 7a and 7b. Record the earliest open prerequisite as blocked (only after its earlier rows are terminal); leave build and later rows pending if their prerequisites remain open. Preserve implementation evidence, with reason "built with --no-verify",
+remaining checks, scope, owner and next proof. Do not run skipped review stages or claim completion.
+
 ### BUGFIX path
 
-1. Make the fix directly.
-2. Run the **Light Checkpoint** (types and lint only).
-3. If it passes, continue through the mandatory skeptic, Steps 6.4 and 6.5
-   as applicable, and Full Verify before Step 7. Honor explicit `--review` and `--audit`.
-4. If it fails, auto-fix deterministic issues (type errors, lint violations, under 5 lines).
-5. Re-run the Light Checkpoint (at most 2 retries).
-6. If it still fails, show the user the error details and stop.
+1. Reproduce the defect and trace its cause with systematic debugging.
+2. Add a focused regression check and observe the intended failure.
+3. Implement the minimum correction; pass that check and Full Verify.
+4. Continue through independent review and retain gaps. Types and lint alone do not prove a fix.
 
 ### SMALL path
 
@@ -276,7 +334,8 @@ Pick the path that matches the classification.
 3. After the last task, run **Full Verify**.
 4. If Full Verify fails:
    - Auto-fix type errors and lint issues (under 5 lines, deterministic).
-   - Surface test failures and build errors to the user. They need judgment.
+   - Investigate test failures and build errors; fix confirmed defects within scope. Retain the
+     original failure. Ask the owner only for missing access or decisions.
 5. Continue through applicable perspectives, audit and review stages before Step 7.
 
 ### MEDIUM path
@@ -287,7 +346,8 @@ For each batch:
 2. **Mark** the tasks complete.
 3. Run the **Light Checkpoint** (types and lint).
    - If it fails and the fix is under 5 lines and deterministic, auto-fix and re-check.
-   - If it fails and the fix is complex, surface it to the user and pause the batch.
+   - Investigate complex failures and repair confirmed defects within scope. Ask only for
+     missing access or decisions.
 4. Run the **Context Gate** (Step 6).
 5. Move to the next batch.
 
@@ -295,9 +355,11 @@ After all batches, run **Full Verify** and handle failures by the SMALL path rul
 
 ### LARGE path
 
-1. If your agent supports helper agents (subagents), split the task list across them. Run
-   independent tasks in parallel and dependent tasks in order. If it does not, fall back to the
-   MEDIUM path (sequential batches).
+1. Use at most two children for independent isolated tasks with disjoint ownership; no nested
+   delegation. Run dependent tasks sequentially. If helpers are unavailable, use native sequential
+   execution. Every child receives the shared testing and review contract. Light-check templates
+   cannot waive behavior tests. Interrupt completed children.
+
 2. Give each helper its tasks plus the verification instruction in
    `references/perspective-prompts.md` (section "LARGE path: helper verification instruction").
 3. Collect results from every helper.
@@ -316,8 +378,8 @@ Use it when:
 - The plan is a standalone build with an exit condition a machine can check (every checkbox is
   checked, the main-journey test is green).
 - The plan is about 40 to 80 discrete tasks that fit a checkbox roadmap.
-- You accept 30 to 60 minutes or more of unattended running, with the agent approving its own
-  tool calls.
+- The user explicitly requested unattended work within existing permissions. All phase proof
+  and spending limits still apply; do not enable permission bypass.
 - The build is new enough that mid-loop changes of direction are unlikely.
 
 Do not use it when:
@@ -332,32 +394,24 @@ Workflow: write `PRD.md` and a checkbox `ROADMAP.md` (40 to 80 items). Set the c
 context. Review the diff before merging. Do not run both the goal loop and the helper fan-out for
 the same plan.
 
-### TDD override (`--tdd`)
+### TDD cycle
 
-When `--tdd` is set, wrap the chosen path (SMALL, MEDIUM or LARGE) in a red-green-refactor cycle.
-This changes how tasks run, not which path is used.
+Apply this cycle when `IS_TDD` is true, including features, behavior changes and bug fixes
+without a flag. A missing framework is a gap, not permission to skip proof.
 
-**Prerequisite:** `CAN_TEST` must be true. If no test framework is found, warn and run normally.
+1. RED: run a meaningful behavior check and observe its intended failure.
+2. GREEN: implement the minimum correction and pass the check.
+3. REFACTOR: simplify while keeping checks green.
+4. Verify acceptance cases, error paths and the original regression. Coverage guides investigation;
+   there is no blanket percentage requirement.
 
-**Cycle per task:**
+For behavior-preserving refactors, run characterization checks before editing and verify
+invariants afterward. Copy edits, generated output, nonbehavioral configuration and throwaway
+probes use the smallest meaningful validator; record why behavior tests do not apply.
 
-1. **RED.** Write the test first. Run the tests. Expect failures. A failing run confirms the test
-   means something.
-2. **GREEN.** Write the least code that makes the tests pass. Run the tests. Expect all green.
-3. **REFACTOR.** Clean up without changing behavior. Run the tests. Confirm still green.
-4. **Coverage check.** Run coverage (for example `npm run test -- --coverage` or
-   `pytest --cov`). Target at least 80% on new code.
-
-**Iteration rules:**
-
-- One atomic change per iteration. Otherwise you cannot tell which change helped.
-- Tests pass and coverage is 80% or more: keep it and move to the next task.
-- Tests fail after GREEN: fix the implementation (at most 3 attempts), then surface to the user.
-- Coverage under 80%: add edge-case tests and re-run (at most 2 attempts).
-- Commit after each GREEN phase. That gives a clean rollback point.
-
-**For MEDIUM and LARGE with TDD:** apply the cycle inside each batch. The batch structure stays
-the same. TDD only wraps how each task inside the batch is built.
+Keep one atomic change per iteration. After three unsuccessful fixes, reassess the cause and
+approach. Continue authorized investigation. Preserve existing work and failed evidence; never
+delete work to reconstruct a test-first history.
 
 ---
 
@@ -369,10 +423,9 @@ the same. TDD only wraps how each task inside the batch is built.
 After Full Verify (end of Step 5), get independent reviews of the implementation from different
 angles before you call it complete. These catch problems static checks miss.
 
-If your agent supports helper agents, run each perspective as a separate helper with only the
-context payload, in parallel, in one message. If it does not, run each perspective yourself as a
-separate pass, one at a time, reading only the payload and the perspective's rules. The point is
-that each pass looks at the work through one lens only.
+Run perspectives in bounded batches with at most two children and no nested delegation. Reuse
+final independent reviews rather than duplicate seats. Without helpers, self-review can support
+the work but cannot replace required independent review.
 
 ### 5.5a: Pick perspectives by classification
 
@@ -384,7 +437,7 @@ that each pass looks at the work through one lens only.
 | LARGE          | skeptic, code-quality, test-coverage, security | plan-conformance (if a plan exists) |
 
 The **skeptic** always runs. It asks whether the code is sloppy and whether it matches the stated
-intent. It always returns at least one finding. Its rules are in
+intent. Evidence-backed no-findings is valid. Its rules are in
 `references/perspective-prompts.md`.
 
 ### 5.5b: Prepare the context payload
@@ -395,9 +448,8 @@ status, plan summary and the diff.
 
 ### 5.5c: Run the perspectives
 
-Run every selected perspective at once. The prompt templates, including each perspective's focus
-list and output format, are in `references/perspective-prompts.md`. Use a fast, cheap model for
-the first pass if your agent lets you choose.
+Run selected perspectives in batches of at most two. The focus lists and output formats are in
+`references/perspective-prompts.md`. Verify model availability and preserve evidence.
 
 ---
 
@@ -406,22 +458,11 @@ the first pass if your agent lets you choose.
 Collect each perspective's output. If one is still running, wait. They should finish in 30 to 60
 seconds.
 
-### Escalation check
+### Review disposition
 
-```text
-FOR each perspective result:
-  IF result is empty or an error:
-    Log: "{name}: failed, skipping"
-  ELIF result is "No findings." AND the perspective always runs (skeptic):
-    Retry with a stronger model.
-  ELIF result is "No findings." AND the diff is 50 lines or more:
-    Retry with a stronger model, adding: "The first review found nothing. Look harder."
-  ELIF the retry also returns "No findings.":
-    Accept as clean. Note: "{name}: clean (checked 2x)"
-  ELSE:
-    Parse the findings and show them to the user.
-    Tag each finding with its source: [perspective:{name}]
-```
+An empty or failed review is an unmeasured gap. Verify substantive findings against source and
+behavior. Accept evidence-backed no-findings without retrying merely to obtain criticism. Fix
+material defects; retain reasons for dismissals and optional deferrals.
 
 ### Present findings
 
@@ -430,7 +471,7 @@ If any perspective returned findings:
 > **Perspective analysis** ({N} findings from {N} perspectives):
 > {findings, grouped by severity}
 >
-> These are advisory. Fix them now or before committing.
+> Fix confirmed material defects before completion. Retain optional findings with their disposition.
 
 If every perspective is clean:
 
@@ -494,7 +535,7 @@ A fast loop that catches type errors and lint violations early.
 | Lint  | `npm run lint`, `npx eslint .` or `ruff check .`      | If `CAN_LINT`      |
 
 **Speed:** about 5 to 15 seconds.
-**When:** after each batch (MEDIUM), or after the fix (BUGFIX).
+**When:** after each MEDIUM batch. BUGFIX uses its regression check and Full Verify.
 
 ### Full Verify
 
@@ -510,8 +551,8 @@ A complete check that everything works together.
 
 **The UI journey check degrades loudly, never silently.** If you cannot run it (no browser tool,
 no running app), write "UI journey: not run, because <reason>" in the Full Verify output and in
-the handoff. It is a "cannot verify", which never blocks the build, but it must never vanish. In
-the LARGE path, run it in the main loop after collecting helper results, never inside a helper.
+the handoff. Implementation may continue, but missing required runtime proof blocks completion
+and shipping. Run the aggregate journey in the root after collecting helper results.
 
 Save the test output to a file (for example `.devproto/evidence/full-verify.log`) so the verify
 and review rows have something real to point at.
@@ -531,54 +572,31 @@ and review rows have something real to point at.
 | `console.log` or `print` in production code | Yes       | Remove if `CAN_LINT` and the file is not a debug or dev file. Otherwise surface it |
 | `any` or `unknown` type usage               | No        | Surface to the user. Proper typing needs judgment                                  |
 | Dead code (unreachable, unused exports)     | No        | Surface to the user. It may be intended public API                                 |
-| Test failure                                | No        | Always surface to the user                                                         |
+| Test failure | Investigate | Fix confirmed defects within scope; ask only for missing access or decisions. |
 | Build error                                 | Maybe     | Auto-fix if it is clearly a type or import issue. Otherwise surface                |
 
-**If `--no-verify` is set:** skip all checkpoints and verification. Implement everything, mark it
-complete, and go to Step 7. Record the build row as `blocked` with the reason "built with
---no-verify", or leave it open. Do not record a pass.
+**If `--no-verify` is set:** skipped required checks leave work unverified. Do not mark it
+complete, ship it or pass its proof row. Record the missing proof and next check.
 
 ---
 
-## Step 6.4: Audit preflight (always on)
+
+## Step 6.5: Independent review for every classification
 
 **Skip if `--no-verify` is set.**
 
-After Full Verify passes and before the review gate, run `/audit-setup`. It prepares the audit
-tools `/review-stack` uses: a Lighthouse baseline (median of 3 runs to reduce noise), the axe
-accessibility library for Playwright, Playwright's browser dependencies, performance budgets, and
-CI gate scaffolding. It is idempotent: a re-run detects a fresh baseline and skips the work when
-the build has not drifted.
-
-Run it even when no audit flag is set. It costs seconds when nothing changed and a few minutes on
-first install. It guarantees that any later `/review-stack` or `/review-stack --audit`, in this
-session or the next, has tooling and a baseline ready.
-
-Note on checklist order: the `audit-setup` row comes before `build` in the checklist. Close it
-once before the build starts. This step re-runs the tool to refresh the baseline against the new
-code. It does not need a new checklist entry unless the tool's output file changed.
-
-**Failure handling:**
-
-- If `/audit-setup` hits an install error that blocks the build (for example `npm install`
-  fails), treat it as a Full Verify failure and surface it to the user.
-- If it reports non-fatal warnings (a stale baseline it cannot re-capture right now, a missing
-  local env file for the preview URL), note them and go on to Step 6.5. They will not block
-  `/review-stack --branch`, but they may block `--audit`.
-
----
-
-## Step 6.5: Review gate (`--review`, `--audit`, or LARGE)
-
-**Skip if `--no-verify` is set.**
-
-After Full Verify passes, run `/review-stack` for a full independent review. The agent that wrote
-the code must not be the only one to review it.
+After Full Verify, reuse independently executed Step 5.5 reviews only when the retained
+complete candidate snapshot still matches all committed, staged, unstaged and new files,
+and the package covers recorded BASE..HEAD and acceptance evidence. BUGFIX needs an independent skeptic pass; SMALL
+needs skeptic and code-quality lenses. MEDIUM needs its selected lenses. Run them in a child
+or fresh session; self-review supplies supporting evidence only. Record missing independent
+review as a required gap. A full `/review-stack` runs with `--review`, `--audit`, or LARGE.
+The agent that wrote the code must not be the only reviewer. Do not duplicate review seats.
 
 ### Standard review (`--review` or LARGE)
 
 ```text
-/review-stack --branch --plan <plan path from Step 1>
+/review-stack --work-id=<work-id> --branch --plan <plan path from Step 1>
 ```
 
 To keep the build conversation's context small, run it in a fresh helper agent or a fresh
@@ -590,7 +608,7 @@ invocation").
 If `--audit` is set, run the full audit pipeline instead:
 
 ```text
-/review-stack --audit --auto --branch --plan <plan path from Step 1>
+/review-stack --work-id=<work-id> --audit --auto --branch --plan <plan path from Step 1>
 ```
 
 This runs all review layers (static, pattern, context, runtime) with all 8 perspectives,
@@ -602,17 +620,18 @@ an auto-fix manifest and a going-public readiness checklist.
 The review returns a verdict: SHIP IT, FIX THEN SHIP, NEEDS WORK or BLOCKED. For an audit it can
 also return READY TO SHIP or SHIP WITH CAVEATS.
 
-- **SHIP IT / READY TO SHIP:** go to Step 7.
-- **FIX THEN SHIP / SHIP WITH CAVEATS:** go to Step 7 and list the remediation items.
-- **NEEDS WORK:** show the findings to the user. Offer to fix the auto-fixable ones, then
-  re-verify.
-- **BLOCKED:** stop. Show the blocking findings. The user must resolve them before you continue.
+- **SHIP IT / READY TO SHIP:** proceed only when required checks pass.
+- **FIX THEN SHIP:** fix confirmed defects, rerun checks and obtain updated independent review.
+- **SHIP WITH CAVEATS:** only optional gaps may remain.
+- **NEEDS WORK / BLOCKED:** investigate and repair within authority; ask only for missing access
+  or decisions.
 
 ---
 
 ## Step 7: Complete
 
-After all tasks are done and verification passes (or was skipped with a recorded reason):
+After implementation, when required verification passes or its gaps are explicitly recorded
+as blocked, produce the summary and checklist record. Only the passing path is complete:
 
 ### 7a: Summary report
 
@@ -621,8 +640,7 @@ Show the tree-format summary. The template is in `references/handoff-format.md` 
 
 ### 7b: Record the checklist row
 
-Record the `build` row as shown in "Checklist row" above. If verification had open failures,
-record `blocked` with the reason. Then run `status` and tell the user the next open row.
+Record the `build` row only after earlier rows are terminal. If verification has failures, record the earliest open eligible row as blocked with the reason and leave later rows pending. Then run `status` and tell the user the next open row.
 
 ### 7c: Suggest next steps
 
@@ -647,15 +665,15 @@ it on the summary. If it fails, the tree summary stands. Skip this for BUGFIX an
 | ---------------------- | ------------------------------------- | ------------------------------------------------------- |
 | Context meter          | Agent does not report context left    | Treat as Moderate and continue                          |
 | Task-list tool         | Not available                         | Track progress in `STATE.md` next to the plan           |
-| `package.json` scripts | No build, test or lint scripts        | Skip the matching checks. Say which were skipped        |
+| `package.json` scripts | No build, test or lint scripts | Use documented project commands; record required missing checks as gaps. |
 | TypeScript             | No `tsconfig.json`                    | Skip type checking                                      |
-| Test framework         | No test runner at the root            | Skip test verification. Say so in the summary           |
-| Helper agents          | Not supported, for LARGE              | Fall back to the MEDIUM path (sequential batches)       |
+| Test framework | No applicable test runner | Use meaningful isolated regression proof or keep required verification blocked. |
+| Helper agents          | Not supported, any classification              | Implement sequentially; independent review remains required       |
 | Checklist tool         | `/development-protocol` not installed | Keep the evidence files anyway and report in chat       |
-| `/audit-setup`         | Not installed                         | Skip Step 6.4. Note that `--audit` reviews will degrade |
+| `/audit-setup`         | Not installed                         | Retain the required setup gap in Step 4.5. Note that `--audit` reviews will degrade |
 
-**Minimum viable run:** read the plan, check its approval, implement the code, report completion
-honestly. Everything else is enhancement.
+**Minimum viable run:** a bounded change, executed meaningful checks, readable evidence and
+an honest remaining-scope report. Missing required proof blocks completion.
 
 ---
 
@@ -663,10 +681,14 @@ honestly. Everything else is enhancement.
 
 | Classification | Checkpoints     | Full Verify     | Context gate     | Perspectives                                   | Audit preflight             | Helper agents | Est. time    |
 | -------------- | --------------- | --------------- | ---------------- | ---------------------------------------------- | --------------------------- | ------------- | ------------ |
-| BUGFIX         | 1 light         | No (light only) | No               | skeptic only                                   | `/audit-setup` (idempotent) | No            | 1 to 5 min   |
-| SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (idempotent) | No            | 5 to 15 min  |
-| MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (idempotent) | No            | 15 to 45 min |
-| LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (idempotent) | Yes           | 30 to 90 min |
+| BUGFIX         | Regression plus full | Yes | No               | skeptic only                                   | `/audit-setup` (fresh proof or gap) | Independent reviewer | Scope-dependent |
+| SMALL          | 0               | 1 full          | No               | skeptic, code-quality                          | `/audit-setup` (fresh proof or gap) | Independent reviewer | Scope-dependent |
+| MEDIUM         | Light per batch | 1 full          | Per batch        | skeptic, code-quality, test-coverage           | `/audit-setup` (fresh proof or gap) | Independent reviewer | 15 to 45 min |
+| LARGE          | Delegated       | 1 full          | After collecting | skeptic, code-quality, test-coverage, security | `/audit-setup` (fresh proof or gap) | Yes           | 30 to 90 min |
 
-The audit preflight (Step 6.4) runs for every classification, so `/review-stack` always has a
-fresh Lighthouse baseline, the axe library and budgets ready. Skip it only with `--no-verify`.
+Audit preflight runs for every applicable classification. Inspect fresh capture and
+tool availability; missing required proof blocks completion. A skipped preflight remains
+unverified. Run mutating setup before final Full Verify and independent review.
+
+Review snapshot and release checks require the Git repository root. For a monorepo
+subproject, pass the root as --project and identify package scope in the work brief.

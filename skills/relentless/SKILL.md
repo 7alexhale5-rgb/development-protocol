@@ -48,7 +48,9 @@ sweep; otherwise name it with `--slug`.
 
 Each ledger folder holds `ledger.json` (the whole state), `RESUME.md` (rewritten on every
 change) and a `.lock` file. Commit the ledgers if the team should share a paused sweep;
-ignore `.sweeps/**/.lock` and `.sweeps/**/*.tmp` either way. Closed and abandoned sweeps
+ignore `.sweeps/**/.lock`, `.sweeps/**/*.tmp`, and `.sweeps/stop-hook.log` either way.
+The hook diagnostic log is excluded because a later hook failure can append to it
+after final review; it is not release proof. Closed and abandoned sweeps
 move to `.sweeps/_closed/`.
 
 **Session ownership.** A ledger belongs to the session that last changed it. The id comes
@@ -274,15 +276,20 @@ only if its evidence looks wrong, since `close` will audit the reads anyway.
 This skill has no row of its own in the development protocol checklist. It makes another
 row's evidence honest when that row's work is a sweep: `review` over every changed file,
 `research` to saturation, `audit-setup` across every hook, or a migration inside `build`.
-Close the sweep, then pass the archived ledger (the path `close` prints) as that row's
-evidence, with `sweep verify` as the read-only verifier:
+Close the sweep before sealing the candidate. Sweep writes remain candidate changes;
+never mutate `.sweeps/` after final review. For the review row, retain the archived ledger
+as an instrument alongside the canonical review evidence and verifier:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step review --result pass \
-  --evidence .sweeps/_closed/<slug>-<stamp>/ledger.json \
-  --verify "python3 <relentless skill folder>/scripts/sweep.py verify .sweeps/_closed/<slug>-<stamp>/ledger.json"
+  --id=<work-id> --step review --result pass \
+  --evidence .devproto/evidence/review.json \
+  --instrument .sweeps/_closed/<slug>-<stamp>/ledger.json \
+  --verify "python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --project <repo> --work-id=<work-id> --commit <current-HEAD> && python3 <relentless skill folder>/scripts/sweep.py verify .sweeps/_closed/<slug>-<stamp>/ledger.json"
 ```
+
+For other applicable rows, sweep evidence supplements that row's required proof; it
+cannot replace behavior checks, scope binding or independent review.
 
 `verify` exits 0 only for a sweep closed with every check passed. A forced close, an open
 sweep or an unreadable file exits non-zero, and it never writes the ledger.

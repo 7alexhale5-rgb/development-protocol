@@ -110,7 +110,7 @@ git stash list | wc -l                                   # stashes hold one copy
 ls .devproto 2>/dev/null && python3 "$devproto_dir/scripts/devproto.py" --project . list
 ```
 
-If a work item is open, also run `devproto.py --project . status --id <work-id>` and note its
+If a work item is open, also run `devproto.py --project . status --id=<work-id>` and note its
 `next_step`.
 
 Add the fields only the agent can see:
@@ -161,15 +161,22 @@ Never delete anything until the second copy is proven. The rest is preference.
 
 Look back through the conversation for a `/review-stack` verdict (or any independent review):
 
-| Last verdict                       | Action                                                                                                                              |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| SHIP IT / READY TO SHIP            | Proceed normally.                                                                                                                   |
-| FIX THEN SHIP / SHIP WITH CAVEATS  | Proceed. Put the remediation items under Blockers in the resume prompt.                                                             |
-| NEEDS WORK or BLOCKED (unresolved) | **Warn**: "The review returned NEEDS WORK / BLOCKED. Continuing closeout anyway, but the resume prompt will carry it as a blocker." |
-| No review found, MODE=ship         | **Soft warn**: "No review detected before ship. Consider /review-stack first. Continue? (y/n)"                                      |
-| No review found, MODE=eod or pivot | Proceed silently.                                                                                                                   |
+| Last verdict                       | Action                                                                                        |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| SHIP IT / READY TO SHIP            | Proceed normally.                                                                             |
+| FIX THEN SHIP / SHIP WITH CAVEATS  | Proceed. Put the remediation items under Blockers in the resume prompt.                       |
+| NEEDS WORK or BLOCKED (unresolved) | Block Step 4 shipping; retain the blocker and continue saving evidence, handoff and learning. |
+| No review found, MODE=ship         | Block Step 4 shipping until required independent review is verified.                          |
+| No review found, MODE=eod or pivot | Continue persistence; any later choice to ship must first apply the MODE=ship review rule.    |
 
-Do not block the pipeline on this check. Surface the signal and let the resume prompt carry it.
+Set STATE_PAYLOAD.release_blocked initially true until fresh through-commit and current
+candidate-review checks pass. Set it true again on any failed shipping prerequisite,
+stale proof, missing check, or /ship failure. Recheck both prerequisites immediately
+before every outward merge, push or deployment, including production drift repair
+and artifact publication. A conversation verdict never substitutes for these checks.
+Set STATE_PAYLOAD.review_blocked for missing or failed required review. It blocks `/ship`, push and release. Continue the
+persistence steps so evidence and the resume prompt are saved; never mark this closeout
+shipped. Passing headlines with unresolved required findings also remain blocked.
 
 ---
 
@@ -197,10 +204,23 @@ audit, a client approval record), run it before Step 4 and carry any failing con
 resume prompt under Blockers. If the gate cannot be run by a command, mark it `gate: manual` in
 the report. Never mark a manual gate as passed on a person's behalf.
 
+## Step 3.6: Renew the committed candidate locally
+
+After Step 3 creates or preserves the final commit, run Full Verify, required independent
+review, read-only simplify and proof of that existing commit, in checklist order. Renew
+all affected receipts with fresh current-SHA evidence. Inspect their actual result; no
+idempotent receipt proves a new execution. Recompute review_blocked and release_blocked
+from these current checks. Clear them only when required findings and gaps are resolved
+and through-commit/current-candidate checks pass. Failed or unavailable preparation
+keeps outward actions blocked while session persistence continues. This local sequence
+runs even when the preliminary Step 2 flags are true; it never pushes, merges or deploys.
+
 ## Step 4: Ship (gated)
 
 ```text
-IF --no-ship OR MODE=pivot:
+IF STATE_PAYLOAD.review_blocked OR STATE_PAYLOAD.release_blocked:
+    SKIP ship; retain the required-review failure and continue persistence
+ELIF --no-ship OR MODE=pivot:
     SKIP (log: "Skipped ship: mode=pivot or --no-ship")
 ELIF --ship OR MODE=ship:
     RUN /ship
@@ -212,12 +232,16 @@ ELSE:  # MODE=eod and no explicit flag
 
 **Non-abort rule.** If `/ship` fails (tests fail, push rejected, pull request creation error), do
 **not** stop the closeout. Continue to Step 5. The session still needs saving and handing off.
-Add the failure to **STATE_PAYLOAD.failures**. Step 10 will put
+Set **STATE_PAYLOAD.release_blocked=true** and add the failure to **STATE_PAYLOAD.failures**. Step 10 will put
 `STATUS: partial, /ship failed: <reason>` at the top of the resume prompt.
 
 On success, capture **STATE_PAYLOAD.pr_url**.
 
 ### 4.5: Production matches main
+
+When review_blocked or release_blocked, this step is read-only: report drift, keep local evidence and
+backups, and never merge, push or deploy. Any later outward action requires renewed
+candidate verification and required independent review first.
 
 Run this on **every** ship-mode closeout, not only when a claim spans repositories. Widened on
 2026-09-04 after a production site ran a branch 454 files ahead of `main` for five days, and an
@@ -255,7 +279,8 @@ production is running. Use whichever the project has:
   `vercel inspect <prod-url>` prints the source commit)
 
 If the production commit is not `origin/<default_branch>` (or does not contain the touched path's
-latest commit), either merge to the default branch and let the normal deploy run, or add to
+latest commit), repair only through the authorized release flow after fresh prerequisite checks;
+otherwise add to
 `STATE_PAYLOAD.failures`: `prod drift: <repo> production runs <sha>, <default_branch> tip is
 <sha>`. If no way to read the production commit exists, write `prod==<default_branch>: not
 verified (no version source)`. Unknown is not pass.
@@ -353,7 +378,9 @@ If an entry exists, add a new dated line under it. Never create a duplicate entr
 
 If a correction is a standing project rule (not a one-off preference), propose adding it to the
 project's agent instruction file (`CLAUDE.md`, `AGENTS.md` or similar). Only propose. Write it
-only after the user says yes. Keep edits surgical: one rule at a time.
+only after the user says yes in a standalone run. During a work-id closeout, save the
+proposed rule under `.devproto/learnings/` and promote it in a separate reviewed work
+item, even when its content was approved. Keep edits surgical: one rule at a time.
 
 Skip Step 7 entirely with `--no-memory`, or when this session had no corrections or
 confirmations.
@@ -398,6 +425,9 @@ Set `STATE_PAYLOAD.retro_findings = {count: N, in_handoff: true}` when findings 
 
 ## Step 8: Docs refresh (conditional)
 
+For work-id closeout, inspect documentation read-only and save proposed changes under
+`.devproto/learnings/`. Do not refresh shipped docs after the candidate was reviewed.
+
 For each **topic** touched this session (the project, or a major feature area):
 
 ```text
@@ -407,7 +437,8 @@ doc_is_stale        = doc_path does not exist
                       OR its last commit is older than the newest session file that mentions <topic>
 
 IF topic_session_count >= 3 AND doc_is_stale:
-    refresh or create the doc from the session files and the code
+    IF work-id closeout: save a proposed update under .devproto/learnings/ only
+    ELSE: refresh or create the doc in a separate verified work item
 ELSE:
     skip silently
 ```
@@ -430,16 +461,37 @@ Mode-gated:
 Skip with `--no-compound`.
 
 **Idempotency.** If `.devproto/learnings/<YYYY-MM-DD>-compound-*.md` exists for today and this
-project, skip silently. Compound already ran this cycle.
+project, avoid duplicate report generation. Its existence does not prove the current
+checklist row; renewed upstream evidence may have reopened that row.
+
+### Renew retained compound proof
+
+After the shipping prerequisites pass, inspect the compound row for this work id.
+If it is pending, check that the retained report covers this exact work and its
+current findings. Update the local report when coverage is incomplete, then execute
+its verifier and record a fresh compound receipt before Step 9.5. Require the
+verifier to check the report's work identity and required learning content; inspect
+its actual result. Reusing the report never means reusing an invalidated receipt.
+If the row is already passed, preserve its valid receipt. If prerequisites remain
+open, the report is missing, or its verifier fails or is unavailable, leave the row
+pending or blocked at the earliest eligible prerequisite and name the closeout gap.
+`--no-compound` and pivot skips cannot waive a required checklist row.
 
 Non-critical: log a failure, never stop the pipeline.
 
 ## Step 9.4: Persist final artifacts and refresh safety
 
+When review_blocked or release_blocked, retain approved artifacts locally with verified backups. Do not
+push, merge or deploy them. Renew final candidate proof and required independent review
+before any later outward action; local persistence does not clear the review blocker.
+
 After all session logs, handoffs, lessons and documentation writes, inspect status again.
 Classify every generated artifact as committed and pushed, intentionally local with a
-verified backup, or still unpersisted. Commit and push approved non-receipt artifacts
-through the normal scoped workflow; never sweep unrelated files into that commit.
+verified backup, or still unpersisted. For a work-id closeout, retain all new reports,
+decision drafts and proposed doc changes under `.devproto/`; do not mutate reviewed
+source or create another commit in this checklist. Any later promotion into shipped
+docs is a separate work item with its own review and release checks. For standalone
+persistence, commit and push only after fresh release checks; preserve unrelated work.
 Keep mutable `.devproto/` receipts outside Git to avoid invalidating their own HEAD binding.
 If metadata changes HEAD, refresh affected release evidence before recording closeout.
 
@@ -450,28 +502,53 @@ A failed persistence step keeps safety false while Step 10 still emits the resum
 
 ## Step 9.5: Record the closeout row (end of a work item only)
 
+If a pathway itinerary shares this work id, finish every owed pathway, including
+documentation, and close that fully proved itinerary first. Release profiles do
+not seal the checklist. Final checklist sealing rejects an open itinerary.
+
 Only when the work item is shipped and merged -- which by this point already required a remote
-(shipping is a pull request). Pull fresh default branch first, so the proof is about the code that
-actually landed; detect its name rather than assume `main`:
+(shipping is a pull request). Verify fresh default branch in a separate checkout outside the reviewed repository tree
+(or under its excluded `.devproto/` directory), leaving the reviewed work checkout
+and its identity unchanged. Record its actual merged SHA and re-run the suite there.
+Detect the branch name rather than assume `main`:
 
 ```bash
 default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
 default_branch="${default_branch:-main}"
-git fetch origin && git switch "$default_branch" && git pull --ff-only
+git fetch origin "$default_branch"
+# Create a fresh verification checkout outside this repository (a sibling or mktemp directory).
+# Never place a nested clone/worktree elsewhere inside the reviewed repository.
+# Run the full suite there and bind the handoff to that exact merged SHA.
 ```
 
 Then record the row. The handoff is the evidence. The verifier reads it and re-runs the suite on
-fresh main:
+the separate fresh-main checkout. Require its HEAD to equal the recorded merged SHA,
+its branch identity to equal the recorded full symbolic ref (or `HEAD` when detached),
+and clean index/worktree status including all untracked files before and after tests.
+Tests must execute committed implementation and test inputs, never local replacements;
+inspect ignored inputs too and do not hide source or tests behind ignore rules. Keep test
+output outside this checkout when it would create untracked files. Testing the original
+feature checkout cannot certify the merged result. Preserve the original work checkout
+and checklist identity unchanged:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step closeout --result pass \
+  --id=<work-id> --step closeout --result pass \
   --evidence .devproto/handoffs/<YYYY-MM-DD>-<slug>.md \
-  --verify "grep -q '^## Unknowns' .devproto/handoffs/<YYYY-MM-DD>-<slug>.md && <test command>"
+  --verify 'grep -q "^## Unknowns" .devproto/handoffs/<YYYY-MM-DD>-<slug>.md &&
+    merged="<absolute-checkout-outside-reviewed-repository>" && sha="<recorded-merged-SHA>" && branch="<recorded-full-branch-ref-or-HEAD>" &&
+    test "$(git -C "$merged" rev-parse HEAD)" = "$sha" &&
+    test "$(git -C "$merged" rev-parse --symbolic-full-name HEAD)" = "$branch" &&
+    clean_status="$(git -C "$merged" status --porcelain --untracked-files=all)" && test -z "$clean_status" &&
+    (cd "$merged" && <test command>) &&
+    test "$(git -C "$merged" rev-parse HEAD)" = "$sha" &&
+    test "$(git -C "$merged" rev-parse --symbolic-full-name HEAD)" = "$branch" &&
+    clean_status="$(git -C "$merged" status --porcelain --untracked-files=all)" && test -z "$clean_status"'
 ```
 
-If earlier rows are still open, the checklist refuses the pass. Record `closeout` as `blocked`
-with the open rows as the reason, and put them under Blockers in the resume prompt. This is a
+If earlier rows are still open, leave closeout pending. Record `blocked` on the earliest
+eligible open prerequisite, retaining the closeout gap in the handoff.
+Do not attempt to record a downstream blocked row while earlier rows are open. This is a
 label, like 1b. It does not stop Step 10.
 
 ---
@@ -614,3 +691,8 @@ does it answer a follow-up without re-nagging with the menu.
 ```
 
 Pass whatever flags the user gave straight through.
+
+After the closeout row passes, the work becomes completed history. Verify its
+retained proof with `devproto.py --project <repo> check --id=<work-id> --historical`;
+ordinary current-candidate checks cannot use a completed work item for a new release.
+A historical pass proves retained closeout receipts, not a fresh test execution.

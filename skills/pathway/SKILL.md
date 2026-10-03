@@ -25,15 +25,15 @@ owes. The checklist says which steps of the proof loop are done. Every call belo
 
 ## Checklist row
 
-This skill satisfies the `pathway` row. `next --id <work-id>` needs an outcome that already
+This skill satisfies the `pathway` row. `next --id=<work-id>` needs an outcome that already
 exists; on a brand-new work id (row 1, nothing started yet) run START first, then ASK, then record
 the answer:
 
 ```text
-PATHWAY --project <repo> start --goal "<goal>" --id <work-id>   # only if <work-id> has no outcome yet
+PATHWAY --project <repo> start --goal "<goal>" --id=<work-id>   # only if <work-id> has no outcome yet
 mkdir -p .devproto/evidence
-PATHWAY --project <repo> scope --id <work-id> > .devproto/evidence/pathway-scope.json
-DEVPROTO --project <repo> step --id <work-id> --step pathway --result pass \
+PATHWAY --project <repo> scope --id=<work-id> > .devproto/evidence/pathway-scope.json
+DEVPROTO --project <repo> step --id=<work-id> --step pathway --result pass \
   --evidence .devproto/evidence/pathway-scope.json --verify "python3 -m json.tool .devproto/evidence/pathway-scope.json >/dev/null"
 ```
 
@@ -257,7 +257,7 @@ Do not present a menu.
    either. If the user gave no artifact or verifier, ask for it.
 3. Write the evidence first, then run:
    ```text
-   PATHWAY --project <repo> log --id <work-id> --pathway <pathway> \
+   PATHWAY --project <repo> log --id=<work-id> --pathway <pathway> \
      --evidence <file> --verify "<command that re-checks the file and only reads it>"
    ```
    The router fingerprints the evidence file. A verifier that exits non-zero, or one that rewrites
@@ -267,14 +267,33 @@ Do not present a menu.
 ## CLOSE: "done with this outcome"
 
 1. Get the work id (as in LOG).
-2. Run `PATHWAY --project <repo> close --id <work-id>`.
-3. If it closed, confirm in one line, then run `DEVPROTO check --id <work-id>` and report its
-   answer too. The itinerary and the checklist are two different gates; both must be clear.
+2. Run `PATHWAY --project <repo> close --id=<work-id>`. Closed itineraries keep
+   content-addressed evidence copies under `.devproto/pathway/completed/`; later tasks
+   may reuse live report paths without reopening history. Missing or changed archived
+   proof remains explicitly unverified, and restoration recovers it. A read never
+   reseals history using a new task's live report. To change an old outcome, explicitly
+   run `PATHWAY --project <repo> reopen --id=<work-id> --reason "<approved new scope>"`
+   and reopen its matching checklist when applicable; original history remains saved.
+   Each executed pathway records the observed source candidate. Closing cannot relabel
+   old proof after code changes, and checklist closeout requires the same candidate.
+   A progressed open itinerary created before checklist intake can use the same explicit
+   `reopen --reason` command to reset and enroll fresh proof. Its prior rows remain saved
+   as incomplete history, without inventing a completion receipt. Association and generation
+   checks run before this reset changes either record. Keep proof files under `.devproto`
+   so writing new evidence does not change the source candidate being verified.
+   Prefer a new work ID for an independent outcome.
+3. If it closed, inspect `DEVPROTO --project <repo> status --id=<work-id> --json`.
+   For a completed checklist, run `DEVPROTO --project <repo> check --id=<work-id>
+--historical`; this checks retained past proof and cannot certify a new candidate.
+   For an active checklist, run ordinary `DEVPROTO --project <repo> check --id=<work-id>`.
+   Report both answers. Missing, invalid, or unknown historical proof remains a gap;
+   itinerary closure alone does not clear the checklist. Do not reopen completed work
+   merely to make the ordinary current-candidate command pass.
 4. If it did not close, tell the user in plain English exactly what blocks it and the one thing to
    fix. **The coverage gate is usually the blocker.** `coverage.open` lists pathways still owed
    proof. For each, either run it (`/pathway <project> go`) or, if it genuinely does not apply,
    mark it:
-   `PATHWAY cover --id <work-id> --pathway <name> --na --reason "<why it does not apply>"`.
+   `PATHWAY cover --id=<work-id> --pathway <name> --na --reason "<why it does not apply>"`.
    Nothing closes until every itinerary pathway is proved with an artifact or n/a with a reason.
    That is the guarantee that no necessary pathway was skipped.
 
@@ -380,3 +399,19 @@ pass.
 - For trials across several projects, run PILOT first. It assigns lead, critic, proof gate and
   review gate per project, snapshots the baseline proof rate, and writes the report without
   touching code.
+
+### Release and final checklist closure
+
+The canonical catalog keeps its recorded order. Execution defers release until
+all other owed pathways, including documentation, are proved or legitimately not
+applicable. The release profile commits and ships; it does not run closeout.
+After recording release proof, close the fully proved itinerary with the shared
+work id, then run `/compound` and `/closeout-stack` for that checklist. Before closing,
+renew all stale proof against the final candidate after documentation and the final commit.
+The router marks changed-candidate rows stale, excludes them from earned autonomy, and
+recommends `renew-proof` through read-only acceptance checks. Validate those checks before
+executing them; use a fresh explicit command if a retained command was redacted. Keep proof
+artifacts under `.devproto`. Do not repeat implementation, migration, commit, or shipment
+profiles merely to renew proof. Record each executed check again and close only when the
+router reports no stale or open pathways. Never seal
+the checklist before later documentation or another candidate-changing pathway.

@@ -278,7 +278,7 @@ screenshot paths in it, then verify with a command that only reads:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step design --result pass --evidence .devproto/evidence/design.md \
+  --id=<work-id> --step design --result pass --evidence .devproto/evidence/design.md \
   --verify "python3 <design-stack skill folder>/scripts/verify_design.py --project . report .devproto/evidence/design.md"
 ```
 

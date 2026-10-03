@@ -1,9 +1,12 @@
 # Perspectives (Steps 3.5, 3.7 and 3.75)
 
-Seven perspectives challenge the plan before it is written, and one specialist board applies the
-lenses in `specialist-lenses.md`. If your agent supports background subagents, run each as a
-subagent on a small, fast model and escalate to a stronger model per the rules below. If it does
-not, run each yourself as a separate pass and write its findings down before starting the next.
+Seven perspectives and a specialist board challenge the plan.
+
+Follow the supplied governing development contract and task authorization. A root may
+batch independent perspective work with at most two active children and explicit ownership.
+A child runs its assigned lenses locally and never spawns agents. Select an actually
+available model appropriate to the task. Self-review is supporting evidence; missing
+required independent review stays a gap. Zero supported findings alone never requires retry.
 
 ## Contents
 
@@ -38,6 +41,11 @@ Use this for each of the five shared perspectives. Paste that perspective's defi
 where marked.
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
+
 You are a <name> analyst reviewing a plan BEFORE it is written.
 
 ## Your definition
@@ -57,17 +65,16 @@ Use your planning output format. Focus on PLANNING concerns, not code-level ones
 
 ## Rules
 - Max 5 findings, highest severity first.
-- If nothing is noteworthy, return "No findings." (The skeptic may not.)
+- If nothing is noteworthy, return "No findings."
 - Return only the structured findings as markdown.
-- No preamble, no analysis paragraphs, no summary. Start with the first finding.
+- Return supported findings or a scoped clean statement; include coverage limits.
 ```
 
 ---
 
 ## Perspective: skeptic
 
-**Always fires. Always returns at least one finding.** If the work is genuinely good, the
-finding is info-level: it names the quality and the most likely point of future friction.
+**Always runs.** Evidence-backed zero findings is valid; report checked scope and gaps.
 
 You are the skeptic. You push back on what everyone else would accept. You are the built-in
 devil's advocate.
@@ -107,7 +114,8 @@ Focus only on:
 
 **Not your job**: security, performance, test gaps, formatting.
 
-**Escalate** when the plan adds a lot of new code (roughly 50+ lines) and this pass finds nothing.
+**Escalate** for a documented capability gap or missing required architectural evidence,
+never solely for zero supported findings.
 
 **Planning output format:**
 
@@ -138,7 +146,8 @@ Focus only on:
 
 **Not your job**: style, performance, tests, or theoretical risks with no concrete attack path.
 
-**Escalate** when the plan touches user input, API endpoints or auth and this pass finds nothing.
+**Escalate** for a documented capability gap or missing required security evidence,
+never solely for zero supported findings.
 
 **Planning output format:**
 
@@ -168,8 +177,8 @@ Focus only on:
 **Not your job**: micro-optimizations that do not matter, test or build script speed, theoretical
 issues with no concrete hot path.
 
-**Escalate** when the plan touches database queries, API handlers or rendering and this pass
-finds nothing. Issues there are common and easy to miss.
+**Escalate** for a documented capability gap or missing required performance evidence,
+never solely for zero supported findings.
 
 **Planning output format:**
 
@@ -229,6 +238,11 @@ Max 5 findings. If the plan is genuinely grounded in verified truths, return "No
 ## Inline perspective: risk-assessor
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
+
 You are assessing risks in a planned implementation.
 
 ## Goal
@@ -241,7 +255,7 @@ You are assessing risks in a planned implementation.
 <patterns from Step 3>
 
 ## Task
-Identify the top 3 to 5 risks that could derail this plan:
+Identify up to 5 supported risks that could derail this plan:
 - breaking changes to existing functionality
 - missing dependencies or prerequisites
 - underestimated complexity in specific areas
@@ -253,6 +267,11 @@ Return structured markdown. No preamble.
 ## Inline perspective: pattern-matcher
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
+
 You are checking whether a planned approach follows existing codebase patterns.
 
 ## Goal
@@ -276,6 +295,11 @@ Splice in only the `## Lens: <name>` blocks for the lenses `scripts/lens_classif
 keeps the prompt to roughly 280 lines of lens definitions even when 8 fire.
 
 ```text
+Apply the supplied governing development contract and task authorization.
+Run assigned methods and lenses locally; spawn no children.
+Accept evidence-backed zero findings and report checked scope and coverage limits.
+
+
 You are a specialist board for plan review. Apply each lens defined below. Keep each lens's
 reasoning separate in your output, then connect findings across lenses at the end.
 
@@ -308,21 +332,17 @@ Apply to every perspective result and to each lens section of the board:
 ```text
 FOR each result:
   IF empty or error:
-    log "<name>: failed, skipped"
-  ELIF "No findings." AND the perspective always fires (skeptic, and every always-on lens):
-    this should not happen; retry once with a stronger model
-  ELIF "No findings." AND the goal is non-trivial (several files, architecture), or the
-       perspective's own escalation trigger is met:
-    retry once with a stronger model, adding "The first review found nothing. Look harder."
-  ELIF the retry also returns "No findings.":
-    accept as clean; note "<name>: clean (checked twice)"
+    record the failed check and missing coverage; do not count it as clean
+  ELIF required evidence or coverage is missing:
+    record the specific gap; retry only for a documented capability or evidence change
+  ELIF result is "No findings.":
+    accept the scoped clean result and retain coverage limits
   ELSE:
-    parse the findings into the plan's risk assessment
-    tag each finding with its source: [perspective:<name>]
+    retain supported findings and tag their source
 ```
 
-Without subagents, "retry with a stronger model" means: do a second, slower pass yourself with
-the explicit instruction to look harder, and say in the report that no second model was used.
+Without subagents, run lenses locally as supporting evidence and retain any required
+independent-review gap.
 
 ---
 

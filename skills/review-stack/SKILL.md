@@ -30,9 +30,10 @@ Write the report to `.devproto/evidence/review.md` and its canonical structured 
 the structured result; pass the human report as an instrument:
 
 ```text
-DEVPROTO --project <repo> step --id <work-id> --step review --result pass \
+DEVPROTO --project <repo> step --id=<work-id> --step review --result pass \
   --evidence .devproto/evidence/review.json --instrument .devproto/evidence/review.md \
-  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)"'
+  --instrument .devproto/evidence/<work-id>-build-base.txt \
+  --verify 'python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>'
 ```
 
 At least one acceptance criterion with passing evidence is required, even for an ad-hoc
@@ -50,7 +51,7 @@ From the user's input, extract:
 - **SCOPE**, what to review:
   - `--all`: every uncommitted change (default).
   - `--staged`: only staged files.
-  - `--branch`: the full branch diff against the base (`main` or `master`).
+  - `--branch`: the full branch diff against the recorded BASE (Step 1a).
   - `--files path1 path2`: only these files.
   - `--plan`: check against a plan's acceptance criteria.
 - **DEPTH**:
@@ -60,6 +61,7 @@ From the user's input, extract:
   - `--audit`: full audit. L1 to L4 plus the remediation report. Includes everything in
     `--deep` plus runtime checks.
 - **FLAGS**:
+  - `--work-id=<id>`: binds a work review to the retained intake baseline.
   - `--plan path/to/plan.md`: the plan to check against.
   - `--gate hard`: treat all L1 failures as blocking (default: advisory).
   - `--no-criteria`: skip comparison against a plan; still record a request-derived criterion with evidence.
@@ -99,11 +101,27 @@ When `--auto` is NOT set (default):
 git status                          # what changed
 git diff --stat                     # unstaged changes
 git diff --cached --stat            # staged changes
-git log --oneline main..HEAD        # branch commits (for --branch)
-git rev-parse HEAD                  # the commit you are reviewing; goes in the report
+git rev-parse HEAD                  # Candidate commit; resolve BASE below
 ```
 
-Collect the list of changed and created files. This is the **review surface**.
+For a work-id review, resolve BASE exclusively from
+`.devproto/evidence/<work-id>-build-base.txt`, regardless of --all, --staged, --branch or
+--files. Its work-id must match and its base must resolve to a commit. Missing or malformed
+baseline remains a required scope gap; never use a merge-base fallback or overwrite it.
+Review the complete BASE..HEAD diff plus staged, unstaged and new files. File filters may
+focus a lens but cannot reduce the final work review scope. Record `base`, `work_id` and `candidate_sha256` in review.json. Obtain the candidate
+hash before dispatch with `python3 <review-stack skill folder>/scripts/verify_review.py
+--snapshot --project <repo>`, and freeze the complete package for reviewers. Retain the
+baseline as an evidence instrument. Verification compares the current complete candidate
+with the reviewed hash, including committed, staged, unstaged and new files, excluding
+only `.devproto/` supporting evidence. Unsupported submodules and nested repositories remain explicit proof gaps; this verifier does not certify their child state. Required review stays blocked until a reviewed adapter covers that state.
+Keep generated build, coverage and log output ignored or in `.devproto/` before sealing; do not ignore implementation files to shrink scope. Status/check refresh reopens Git review and later rows when the retained candidate snapshot changes or cannot be inspected. Run this read-only verifier before any completion claim and again before ship; a changed file invalidates prior review.
+After sealing, review must not write outside `.devproto/` or an ignored/external evidence folder. Work reviews reject `--write-baseline`; prepare baselines and any mutating audit status setup before sealing through build Step4.5. Inspect audit tools read-only after sealing. Never refresh the report hash without a new review of those bytes.
+
+Only an ad-hoc review without a work-id or any open/unknown recorded work baseline may use the configured default branch merge-base
+for --branch, or HEAD for uncommitted-only scope. If no configured branch is verifiable,
+retain the scope gap. Label this narrower scope explicitly; it cannot satisfy a work review.
+Record the source, BASE and candidate HEAD in both reports.
 
 ### 1b: Detect project tooling
 
@@ -149,16 +167,17 @@ requested behavior. State the assumption and cite its executed proof in the stru
 
 ---
 
-## Step 2: Spawn analysis perspectives
+## Step 2: Run analysis perspectives
 
 **For `--quick`, run only the skeptic.**
 
-While L1 static checks run (Step 2.5), start the review perspectives in parallel. Each looks at the
-code from one angle. Collect their results after L1 finishes.
-
-If your agent supports helper agents, run each perspective as a background helper, all in one
-message. If it does not, run each perspective yourself as a separate pass after L1, reading only
-the payload and that perspective's rules.
+Read the installed `development-protocol/reference.md` (under the skill root; the repo copy
+is `skills/development-protocol/reference.md`) for the governing development contract.
+Review the complete recorded BASE..HEAD diff and acceptance evidence, not HEAD~1.
+Perspectives are lenses, not a required agent count. A root may run independent lenses in
+batches of at most two children, with explicit ownership and no nested delegation. Interrupt
+finished children. A child reviewer runs every selected lens locally and never spawns agents.
+Missing independent review remains a gap; self-review cannot satisfy it.
 
 ### 2a: Pick perspectives by depth
 
@@ -170,7 +189,7 @@ the payload and that perspective's rules.
 | `--audit` | skeptic, security, architecture, code-quality, test-coverage, performance, accessibility, lighthouse | plan-conformance, cross-file-impact                    |
 
 The **skeptic** always runs, at every depth. It is the quality conscience that keeps the review
-honest about value and sloppiness. It always returns at least one finding.
+honest about value and sloppiness. Zero evidence-backed findings is a valid result.
 
 The **code-quality** perspective enforces DRY (no duplication), KISS (no unjustified complexity),
 YAGNI (no speculative generality), SOLID (no tangled responsibilities), no unnecessary elements,
@@ -185,6 +204,12 @@ Build a summary for the perspectives. This is what they get instead of the whole
 
 ```text
 CONTEXT_PAYLOAD:
+  - governing_contract: "{supplied contract text or path}"
+  - recorded_base: "{verified BASE SHA and source}"
+  - candidate_head: "{verified HEAD SHA}"
+  - acceptance_evidence: "{criteria, receipts and coverage gaps}"
+  - frozen_package_paths_and_hashes: "{complete diff plus files and evidence, each with path and SHA256}"
+  - budget: "{output and runtime limits}"
   - project_summary: "{language/framework}, {N} files changed, {additions}+ {deletions}-"
   - diff: "{full git diff from Step 1a}"
   - changed_files: "{changed file paths with full content}"
@@ -192,12 +217,13 @@ CONTEXT_PAYLOAD:
   - adjacent_files: "{2 or 3 files next to the changes}"       (architecture only)
 ```
 
-### 2c: Start them together
+### 2c: Apply the bounded review contract
 
-Start every selected perspective at once, using the templates in `references/perspectives.md`.
-Registry perspectives use the shared template. Security adds the OWASP block. Plan-conformance and
-cross-file-impact use their own inline templates. Use a fast, cheap model for the first pass if
-your agent lets you choose.
+Use the templates in `references/perspectives.md`. Root reviewers may batch disjoint
+perspectives two at a time; child reviewers perform them locally. Supply the governing
+contract, recorded baseline, complete candidate diff, acceptance checks and return budget
+in every fresh-session prompt. Model and provider availability must be verified rather
+than inferred from an account label. Retain each outside review required by the goal or improvement contract separately.
 
 ### 2d: Go straight on to L1
 
@@ -239,17 +265,12 @@ should finish in 30 to 60 seconds.
 
 ```text
 FOR each perspective result:
-  IF result is empty or an error:
-    Log: "{name}: failed, skipping"
-  ELIF result is "No findings." AND the perspective always runs (skeptic):
-    This should not happen. Retry with a stronger model.
-  ELIF result is "No findings." AND the diff is 50 lines or more AND the perspective's area is touched:
-    Retry with a stronger model, adding: "The first review found nothing. Look harder."
-  ELIF the retry also returns "No findings.":
-    Accept as clean. Note: "{name}: clean (checked 2x)"
+  IF result is empty, an error, or lacks required coverage:
+    Record the missing review and its reason. Retry only for that concrete capability gap.
+  ELIF result is "No findings." with the checked scope and coverage limits:
+    Accept it. Never retry solely because findings are zero or the diff is large.
   ELSE:
-    Parse the findings into the shared finding pool.
-    Tag each with its source: [perspective:{name}]
+    Parse supported findings and tag their perspective; verify claims before remediation.
 ```
 
 ### Merge into the finding pool
@@ -389,10 +410,13 @@ one real control set, the automated layers answered 11 of 35 controls. The other
 named person and a date.
 
 If the project keeps such a list (for example `docs/release-controls.md` or an `AUDIT-<release>.md`
-file), refresh it for this release:
+file), inspect it without editing the sealed candidate. Save current control results under
+`.devproto/evidence/release-controls.md` and reference the existing control document.
+Any required update to shipped controls must occur before sealing, then be included in
+the complete reviewed candidate:
 
-- For each control the review layers answered, fill in the result and point to the evidence.
-- For each control that needs a person, fill in the owner and a date, or leave it in review.
+- In the local evidence report, record each checked control result and evidence.
+- In that report, record the verified owner and date for human controls, or leave unknowns in review.
 - Count and paste into the findings: pass, in review, not applicable, and launch-critical
   blockers.
 
@@ -408,7 +432,7 @@ the gate "manual".
 
 Sub-checks, in order. The full procedure for each is in `references/runtime-checks.md`.
 
-1. **4.5a.0 Audit-setup preflight.** Run the `/audit-setup` status check. If any tool is missing,
+1. **4.5a.0 Audit-setup preflight.** Inspect the retained `/audit-setup` status read-only; do not rerun a script that writes project status. If any tool is missing,
    emit ONE info finding that lists them and says how to install them.
 2. **4.5a Detect the runtime.** Set `CAN_DEV_SERVER`, `HAS_PLAYWRIGHT`, `HAS_LIGHTHOUSE`,
    `HAS_AXE_PLAYWRIGHT`, `HAS_BROWSER_PROBE` and `DIFF_TOUCHES_UI`.
@@ -566,8 +590,9 @@ gate and verdict, clearing stale issues.
 
 This skill runs apart from the building context. Three ways:
 
-- As a helper agent: give it the instruction "Run /review-stack --branch --plan <path> and return
-  the full verification report." Use a stronger model, or a different model family, than the one
+- As a helper agent: give it the instruction "Load the development contract, review the recorded BASE..HEAD
+  and complete package against the plan, run selected lenses locally without children, accept
+  evidence-backed clean results, and return the full report with gaps." Use a stronger model, or a different model family, than the one
   that wrote the code.
 - As a fresh session: start a new session in the repository and run
   `/review-stack --branch --plan .planning/<phase>/PLAN.md`.
@@ -592,15 +617,17 @@ Invocation examples: `references/output-templates.md` (section "Agent isolation"
 | Playwright             | Not installed                            | Use any browser tool for a page-load smoke check. Skip structured end-to-end tests                                                                        |
 | `@axe-core/playwright` | Not installed                            | The Lighthouse accessibility score (4.5f) and the accessibility perspective cover the gap. Emit info: "run `/audit-setup` to add axe"                     |
 | Lighthouse CLI         | `npx --no-install lighthouse` fails      | Skip 4.5f. Emit info: "run `/audit-setup` to add Lighthouse". Still run axe, bundle and npm audit                                                         |
-| Lighthouse baseline    | No reports in `ops/lighthouse/baseline/` | Absolute floors only, no regression compare. Emit info: "run `/audit-setup` to capture a baseline". Write a baseline ONLY with `--audit --write-baseline` |
+| Lighthouse baseline    | No reports in `ops/lighthouse/baseline/` | Absolute floors only, no regression compare. Emit info: "run `/audit-setup` to capture a baseline". Work reviews cannot use `--write-baseline`; capture through build Step4.5 before sealing. Ad-hoc baseline capture must occur before sealing too |
 | Preview URL            | None for this branch                     | Fall back to a local production build. If that fails too, skip 4.5f                                                                                       |
 | Bundle analyzer        | Not configured                           | Read chunk sizes from the build output only                                                                                                               |
 | npm audit              | npm not available                        | Skip. Note it in the report                                                                                                                               |
 | Foundation lock        | No `.planning/*/foundation.yaml`         | Skip 4.5k. Exception: if the build looks new or multi-tenant, emit the `ff-no-lock` finding                                                               |
-| Helper agents          | Not supported                            | Run each perspective yourself as a separate pass, one lens at a time                                                                                      |
+| Helper agents          | Not supported                            | Run selected lenses locally as supporting evidence; record missing required independent review as a gap.                                                                                      |
 | Checklist tool         | `/development-protocol` not installed    | Still write `.devproto/evidence/review.md` and report in chat                                                                                             |
 
-**Minimum viable run:** read the changed files and analyze them. Everything else is enhancement.
+**Minimum useful review:** inspect the complete supplied scope and report findings and limits.
+This does not waive required evidence or independent reviews. Required gaps prevent a passing
+release verdict.
 
 ---
 
@@ -616,3 +643,7 @@ Invocation examples: `references/output-templates.md` (section "Agent isolation"
 
 For `--deep` and `--audit`, use the highest reasoning effort your agent offers. For the other
 tiers, the default high effort is enough.
+
+The snapshot uses the repository root. For a monorepo package, pass its Git root as
+--project and name the package in the scope. Local-only or abandoned open work retains
+its required scope gap; use its work-id rather than silently issuing an ad-hoc pass.

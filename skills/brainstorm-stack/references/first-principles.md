@@ -4,9 +4,8 @@ Assumption decomposition, clean-room reconstruction, and root-cause identificati
 proposal to ground truths and rebuilds from scratch. It is the antidote to "we do it this way
 because we've always done it this way."
 
-- **Model:** a fast, cheap model is enough for most passes. Escalate to a stronger model when the
-  topic is an architecture decision or the first pass returns "No findings" on a topic that clearly
-  carries inherited assumptions.
+- **Model:** use capability appropriate to the decision. Escalate when necessary
+  assumptions or evidence cannot be checked, never solely for zero findings.
 - **`--deep` only.** Does not fire at quick or default depth.
 
 ## Brief
@@ -63,7 +62,8 @@ Adapt focus to the input shape: for brainstorm, challenge problem framing and in
 about scope. For planning, challenge whether the proposed architecture follows from actual
 constraints or from convention.
 
-Return 1 to 5 structured findings. Keep the output under about 2,000 tokens.
+Return zero to five supported findings. A scoped clean result states coverage limits.
+Keep the output under about 2,000 tokens.
 
 ## Output formats
 

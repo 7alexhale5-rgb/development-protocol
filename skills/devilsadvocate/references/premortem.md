@@ -153,7 +153,7 @@ applied, before `/build-stack` starts.
 | ----------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------ |
 | `/devilsadvocate --premortem`             | After a plan is written, before `/build-stack` starts. Forces failure-mode listing. | Fixed table per failure chain        |
 | `/devilsadvocate` (default mode)          | After research is gathered, before acting. Open-ended claim triage.                 | Claim triage in V/P/U/X buckets      |
-| Skeptic pass inside `/brainstorm-stack`   | Automatic while brainstorming; no separate call                                     | 1 to 5 findings on framing and scope |
+| Skeptic pass inside `/brainstorm-stack`   | Automatic while brainstorming; no separate call                                     | 0 to 5 supported findings on framing and scope |
 | A multi-model panel, if your team has one | A judgment call or fork where several model views help                              | Several separate model outputs       |
 
 Run the premortem AND the default mode on critical plans. The default mode finds invented claims

@@ -2,6 +2,24 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-02T16:42:05-05:00
+
+- Ship and closeout now block outward release when required review or verification is missing.
+  Intake captures the work baseline before planning commits; review binds the complete candidate.
+- Version 2.4.0: integrate all 15 Superpowers methods within the existing protocol.
+  Behavior changes require red-green evidence, every class needs independent review, and
+  skipped required checks end with a blocked record. Bounded improvement reports distinguish
+  truthful learning from measured adoption; this package requires a reviewed measurement adapter.
+- Align canonical skeptic briefs and brainstorm, planning, research and review consumers with
+  evidence-backed clean results. Retain full baseline-to-head scope and coverage gaps.
+- Intentional note-only public divergence in `skills/research-stack/references/focus/tags.json`:
+  the metadata note uses a generic workflow-consumer description. Triggers, lenses and
+  `FOCUS_HINTS` are unchanged. This removes a private implementation pointer from current
+  public files; the earlier published history retains it and is not rewritten.
+- Source fingerprints are not reset merely to hide drift. Installation and review receipts
+  must bind this candidate before its release. No vendor package or measured gain is claimed.
+
+
 ## 2026-10-02T13:26:41-05:00
 
 - skill:research-stack: re-ported from upstream research-stack 3.2.1 (`3af6987`). New: hunter/gatherer

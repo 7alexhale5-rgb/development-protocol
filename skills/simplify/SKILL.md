@@ -8,7 +8,19 @@ description: Reviews the uncommitted diff against four falsifiable tests (surgic
 Last-stop gate before commit. Reviews the in-progress diff against four common pitfalls of
 agent-written code, each distilled to a test you can fail. Fix what fails, leave what passes.
 
+`--check` is a read-only pass on the complete recorded BASE..HEAD and current candidate.
+It reports violations without editing. Use it after final committed-candidate review to
+renew the simplify row; a material finding blocks release until fixed and re-reviewed.
+Label task-owned changes separately from integrated upstream changes, using the recorded
+pre-sync HEAD and fetched integration tip. Apply request scope and speculative-feature
+tests to task-owned changes; inspect correctness and interactions across the complete
+candidate. Upstream changes are not this task's unsolicited additions.
+In ordinary mutating mode, any changed bytes invalidate prior review and need final
+verification and independent review after the final commit.
+
 ## Checklist row
+
+After a mutating simplify changes files, rerun and re-record independent review on the new candidate before recording simplify. Only a read-only `--check` pass on an already re-reviewed candidate records directly; required test and review gaps still block its row.
 
 This skill satisfies the `simplify` row of the development-protocol checklist. Save the report
 below as the evidence, re-run the full suite as the verifier, and pass the test files as
@@ -16,7 +28,7 @@ instruments so a weakened test cannot keep an old pass:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step simplify --result pass --evidence .devproto/evidence/simplify.md \
+  --id=<work-id> --step simplify --result pass --evidence .devproto/evidence/simplify.md \
   --verify "<the project's full test command>" --instrument <main test file>
 ```
 
@@ -39,8 +51,9 @@ the report for the reviewer and the user.
 
 ## The four tests
 
-Run each test against the current diff, staged and unstaged together. For each violation, fix it
-in place. If a violation is borderline, leave it and note it in the report.
+In `--check` mode, inspect the complete recorded BASE..HEAD plus staged, unstaged and
+new files. Report violations without editing. In ordinary mutating mode, inspect staged
+and unstaged changes, fixing only this task's violations. Leave borderline items with reasons.
 
 ### Test 1: Surgical changes. Every changed line traces to the request.
 
@@ -136,7 +149,11 @@ Verdict: clean / fixed / borderline-only
 
 ## Hand-off
 
-After `/simplify` reports clean or fixed, the next steps are `/commit`, then `/ship`. Run them in
+For `--check`, return the report and renewed receipt to the caller, then stop this skill.
+Do not edit code, create a commit, or invoke `/ship`; the caller owns the next transition.
+
+For standalone mutating mode, after `/simplify` reports clean or fixed, the next steps are
+`/commit`, then `/ship`. Run them in
 the same turn. Do not put a menu between them. (`/commit` still shows the files and message and
 asks for a yes before it commits; that confirmation is part of `/commit`, not a menu.)
 

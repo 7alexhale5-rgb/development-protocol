@@ -21,7 +21,7 @@ brief that keeps things as simple as possible without restricting the build.
 
   ```text
   python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id <work-id> --step premortem --result pass \
+    --id=<work-id> --step premortem --result pass \
     --evidence .devproto/evidence/premortem.md \
     --verify "python3 <development-protocol skill folder>/scripts/_shared.py --evidence .devproto/evidence/premortem.md --section 'Top revisions to apply BEFORE building'"
   ```
@@ -44,7 +44,7 @@ rows pass in order: it cannot record `pass` while an earlier row (1 to 7) is sti
 running this mode inside a checklist-tracked project, check where you stand:
 
 ```text
-python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> status --id <work-id>
+python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> status --id=<work-id>
 ```
 
 If an earlier row is neither `pass` nor `n/a`, do that row (or mark it `n/a` with a reason) first.

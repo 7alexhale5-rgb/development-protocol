@@ -15,8 +15,8 @@ alphabetically). The keyword tables and this rule live in one place, `scripts/le
 Run it; do not apply the rule by eye. It matches whole words (plurals count), so "prod" does not fire on
 "product".
 
-Each lens runs on a small, fast model by default and escalates to a stronger model when its
-escalation trigger is met (see `perspectives.md`, "Escalation").
+Use an actually available model appropriate to the decision. Escalation requires a
+documented capability or evidence gap, never a finding-count quota.
 
 ---
 
@@ -25,7 +25,7 @@ escalation trigger is met (see `perspectives.md`, "Escalation").
 ```yaml
 name: adversary
 trigger: always on
-escalation_trigger: "0 findings on a plan with auth, payments, webhooks, multi-tenancy, or external integrations"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -77,7 +77,7 @@ with no plausible attacker motive.
 insider access. high = moderate skill or partial insider access, real financial or data-theft
 risk. warn = the surface widens or detection erodes. info = dual-use or future friction.
 
-Always returns at least 1 finding.
+Return supported findings only; evidence-backed zero findings is valid.
 
 ---
 
@@ -86,7 +86,7 @@ Always returns at least 1 finding.
 ```yaml
 name: observability
 trigger: always on
-escalation_trigger: "0 findings on any plan step adding a service, endpoint, queue, async boundary, or external dependency"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -145,7 +145,7 @@ security (security).
 high = time to recovery 2 to 5 times longer than necessary. warn = diagnosis needs digging
 through raw logs. info = minor improvement.
 
-Always returns at least 1 finding.
+Return supported findings only; evidence-backed zero findings is valid.
 
 ---
 
@@ -154,7 +154,7 @@ Always returns at least 1 finding.
 ```yaml
 name: reversibility
 trigger: always on
-escalation_trigger: "fewer than 2 findings on a plan with 5 or more steps"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -217,7 +217,7 @@ the extra-diligence step. UNCLEAR rows: name the condition that tips it.
 significant recovery cost. warn = UNCLEAR with a narrow adoption window. info = a TYPE-2 carrying
 reversibility checks it does not need, or a warning about accumulating flags.
 
-Always emit the full Ledger and at least 1 finding.
+Always emit the full Ledger. Return supported findings; zero findings is valid.
 
 ---
 
@@ -226,7 +226,7 @@ Always emit the full Ledger and at least 1 finding.
 ```yaml
 name: economist
 trigger: always on
-escalation_trigger: "0 findings on a plan with new infrastructure, a new vendor, or estimated effort over 1 person-week"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -288,8 +288,8 @@ organizational cost (support tickets nobody priced in).
 budget. warn = the plan ignores ongoing maintenance or opportunity cost. info = future friction
 worth tracking.
 
-Always returns at least 1 finding. If the plan is genuinely worth it, an info-level note on the
-dominant ongoing cost.
+Always retain relevant cost evidence in the ROI Snapshot. Return supported findings only;
+zero findings is valid.
 
 ---
 
@@ -298,7 +298,7 @@ dominant ongoing cost.
 ```yaml
 name: test-strategist
 trigger: always on
-escalation_trigger: "the plan adds a service boundary, auth layer, or async pipeline and 0 contract or integration findings came back"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -356,7 +356,7 @@ Lead with the **Golden Path** in one sentence, then:
 high = an inverted pyramid and a slow, brittle suite are likely. warn = the wrong layer for this
 class of bug. info = a chance to prune the pyramid.
 
-Always returns the Golden Path and at least 1 finding.
+Always return the Golden Path. Return supported findings; zero findings is valid.
 
 ---
 
@@ -365,7 +365,7 @@ Always returns the Golden Path and at least 1 finding.
 ```yaml
 name: sre
 trigger: keyword-gated (deploy, infra, runtime, scaling, prod, latency, uptime, region...)
-escalation_trigger: "0 findings on a plan with new infrastructure, a new region, a new external dependency, or a production cutover"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -433,7 +433,7 @@ capacity or dependency concern.
 ```yaml
 name: data-integrity
 trigger: keyword-gated (schema, migration, database, postgres, backfill, sync, cutover...)
-escalation_trigger: "0 findings on a plan with schema changes, backfills, or cross-system sync"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -498,7 +498,7 @@ info = a note on secondary-store consistency.
 ```yaml
 name: concurrency
 trigger: keyword-gated (async, queue, worker, lock, transaction, cron, webhook, retry, multi-tenant...)
-escalation_trigger: "0 findings on work touching queues, webhooks, cron, multi-tenant writes, payment flows, or shared mutable state"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -578,7 +578,7 @@ inconsistency. info = correct today, fragile at scale.
 ```yaml
 name: supply-chain
 trigger: keyword-gated (package, library, npm, pip, sdk, integrate, third-party, dependency, container, vendor...)
-escalation_trigger: "0 findings when the plan adds a new direct dependency or changes a base image"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt
@@ -639,7 +639,7 @@ network, no SBOM. info = automated updates not configured, LGPL linked dynamical
 ```yaml
 name: compliance
 trigger: keyword-gated (pii, gdpr, hipaa, pci, payment, billing, audit, consent, auth, health...)
-escalation_trigger: "the plan touches payment data, health data, or cross-border transfers and 0 findings came back"
+escalation_trigger: "Missing required evidence or a documented capability gap; finding count alone does not trigger escalation"
 ```
 
 ### System prompt

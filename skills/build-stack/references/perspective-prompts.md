@@ -3,10 +3,10 @@
 Loaded by Step 5, Step 5.5 and Step 6.5 of `SKILL.md`. Each perspective is one lens. A
 perspective reviews only through its lens and leaves other concerns to the other perspectives.
 
-If your agent supports helper agents, run each perspective as its own helper, in the background,
-all in one message. If it does not, run each as a separate pass yourself, reading only the
-payload. Use a fast, cheap model first. Retry with a stronger model per the escalation rules in
-`SKILL.md` Step 5.75.
+Run independent perspective reviews in batches of at most two children, with no nested
+delegation. Interrupt finished children. If helper agents are unavailable, self-review is
+supporting evidence and cannot replace required independent review. An evidence-backed
+no-findings result is valid. Escalate only for a concrete coverage or capability gap.
 
 ## Context payload (Step 5.5b)
 
@@ -15,6 +15,11 @@ whole conversation.
 
 ```text
 CONTEXT_PAYLOAD:
+  - recorded_base: "{verified intake BASE SHA}"
+  - candidate_head: "{current HEAD SHA}"
+  - baseline_file: "{work-id baseline path}"
+  - review_package: "{full candidate snapshot, complete BASE..HEAD and uncommitted diff, files with paths and SHA256}"
+  - acceptance_evidence: "{executed checks and required gaps}"
   - goal: "{GOAL}"
   - classification: "{BUGFIX|SMALL|MEDIUM|LARGE}"
   - files_modified: "{files changed, with a one-line summary of each change}"
@@ -28,12 +33,16 @@ CONTEXT_PAYLOAD:
 
 Give this instruction to every helper along with its task list:
 
-> "After you finish each task, run a light check:
->
-> - TypeScript project: `tsc --noEmit` (types only).
-> - If a linter is set up: run it.
-> - Fix any issue before you mark the task complete.
-> - Report the check result with each completed task."
+> "Apply the shared behavior-testing contract to each task. For bugs and behavior changes,
+> observe the intended failing check before implementing, then pass it. For behavior-preserving
+> refactors, characterize the baseline and verify invariants. Run applicable types and lint,
+> but do not treat them as behavior proof. Record meaningful checks, failures and gaps before
+> claiming completion. The root runs aggregate checks and independent review."
+
+Before dispatch, resolve the contract from the loaded Development Protocol skill root and
+verify that it is readable. Supply its absolute path as `{resolved_contract_path}` or include
+its complete text. Never assume the task repository contains the installed skill files.
+A missing contract remains an explicit review gap.
 
 ## Review gate invocation (Step 6.5)
 
@@ -41,7 +50,7 @@ To keep the build context small, run the review in a fresh helper agent or a fre
 
 ```text
 Helper agent (or new session):
-  instructions: "Run /review-stack --branch --plan {plan_path}. Return the full verification report."
+  instructions: "Read {resolved_contract_path} and apply its development and review contract. Run /review-stack --work-id {work_id} --branch --plan {plan_path}. Review the complete recorded {base}..{head} diff and {review_package}, requirements, executed evidence and gaps. You are an independent child: do not spawn agents; run every selected perspective locally, including audit lenses. No finding quota or retry solely for a clean verdict. Return the full verification report with scope, hashes and limitations. Outside reviews required by the goal or improvement contract remain separate."
   model: a stronger model than the one that built the code, or a different model family
   description: "Post-implementation review"
 ```
@@ -56,6 +65,10 @@ review with this prompt. Paste in the perspective's rules from the sections belo
 
 ```text
 You are a {name} analyst reviewing implemented code.
+Apply the supplied development contract to the complete supplied BASE..HEAD package.
+You are a child: no nested delegation. Run this lens locally.
+No finding quota or retry solely for a clean verdict from another brief applies.
+Report no findings with checked scope and limits when no supported issue exists.
 
 ## Your rules
 {the perspective's section from this file}
@@ -69,7 +82,7 @@ Each finding: Title [{severity}], File:{line}, Evidence, Issue or Challenge, Fix
 
 ## Rules
 - At most 5 findings, highest severity first.
-- If you find nothing worth reporting, return "No findings." (The skeptic may not do this.)
+- If you find nothing worth reporting, return "No findings." with the scope checked and any coverage limits.
 - Return ONLY structured findings as markdown.
 - No preamble, no analysis paragraphs, no summary. Start directly with the first finding.
 - Max output: 2000 tokens.
@@ -86,8 +99,8 @@ quality conscience of the team, the built-in devil's advocate that runs on every
 doctrine (the five core questions, hallucination and assumption patterns, the simplicity filter,
 "what the skeptic is not", and the quality threshold). Read it and follow it for this pass, using
 the code-format frame described there. Only what is specific to build-stack's own invocation
-stays here: the output format below and the "at most 5 findings" / "always at least 1" rules in
-the shared template above.
+stays here: the output format below and at most five evidence-backed findings. No finding
+quota or clean-review retry from that brief applies. The development contract governs this pass.
 
 ### Output format
 
@@ -126,8 +139,8 @@ Focus ONLY on:
 
 Do NOT flag security issues, architecture concerns, missing tests, or problems in unchanged code.
 
-**Quality threshold:** 0 findings on a diff of 100 lines or more means escalate to a stronger
-model. Large diffs almost always have at least one quality issue.
+**Review sufficiency:** retain scope and coverage limits. Escalate a concrete missing
+check or capability; never retry solely because a review is clean.
 
 Output format:
 
@@ -157,8 +170,8 @@ Focus ONLY on:
 Do NOT flag private helpers tested through their public API, test style or layout, trivial
 getters and setters, or config constants.
 
-**Quality threshold:** if new public functions were added (new `export function`, `def`, class
-methods or route handlers) and 0 findings came back, escalate to a stronger model.
+**Review sufficiency:** retain scope and coverage limits. Escalate a concrete missing
+check or capability; never retry solely because a review is clean.
 
 Output format:
 
@@ -196,8 +209,8 @@ Use `[OWASP:N/A]` if none fits.
 Do NOT flag style, performance, missing tests, or theoretical risks with no concrete attack path
 in this code.
 
-**Quality threshold:** 0 findings on 50 or more lines that touch user input, API endpoints or auth
-logic means escalate to a stronger model.
+**Review sufficiency:** retain scope and coverage limits. Escalate a concrete missing
+check or capability; never retry solely because a review is clean.
 
 Output format:
 

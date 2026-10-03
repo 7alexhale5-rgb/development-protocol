@@ -126,14 +126,14 @@ For each tool in the chosen mode that is missing (or all of them with `--force`)
 the matching setup. Each prints its own lines, returns success or a clear failure, and is safe to
 re-run.
 
-| Tool       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | lighthouse | Installs Lighthouse as a devDependency (version by Node), finds Chrome, detects routes, picks the target URL (starts `build` then `start` if nothing is running, waits 30 seconds, stops the server after), writes `ops/lighthouse/run-baseline.sh`, copies `lh_baseline.py` beside it, then runs the script: N runs per route, the median run kept as `ops/lighthouse/baseline/<slug>.report.json`, plus `SUMMARY.md`. Fails unless every declared capture is complete and valid. |
-| axe        | Installs `@playwright/test` (if absent) and `@axe-core/playwright`, downloads Chromium (`npx playwright install chromium`, skips cached browsers), writes `playwright.config.ts` only when none exists, then writes `<testDir>/a11y/smoke.spec.ts` from `references/axe-playwright-starter.spec.ts` with the detected routes. An existing spec is kept unless `--force`.                                                                                 |
-| bundle     | Next.js: installs `@next/bundle-analyzer`, adds an `analyze` script (`ANALYZE=true <pm> build`), saves the config snippet to `ops/audit/bundle-analyzer-snippet.md` and prints it. Vite: installs `rollup-plugin-visualizer`, saves and prints its snippet. Astro and other builds: installs `size-limit` and `@size-limit/preset-app`, writes `.size-limit.json` (250 KB starter budget) if absent. No framework detected: skipped with a reason.       |
-| knip       | Installs knip, writes `knip.json` (the Next.js preset from `references/knip.example.json`, or a generic `src/` preset), adds a `dead-code` script.                                                                                                                                                                                                                                                                                                       |
-| quality-ci | See `--ci` below.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ci         | See `--ci-only` below.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| axe        | Installs `@playwright/test` (if absent) and `@axe-core/playwright`, downloads Chromium (`npx playwright install chromium`, skips cached browsers), writes `playwright.config.ts` only when none exists, then writes `<testDir>/a11y/smoke.spec.ts` from `references/axe-playwright-starter.spec.ts` with the detected routes. An existing spec is kept unless `--force`.                                                                                                           |
+| bundle     | Next.js: installs `@next/bundle-analyzer`, adds an `analyze` script (`ANALYZE=true <pm> build`), saves the config snippet to `ops/audit/bundle-analyzer-snippet.md` and prints it. Vite: installs `rollup-plugin-visualizer`, saves and prints its snippet. Astro and other builds: installs `size-limit` and `@size-limit/preset-app`, writes `.size-limit.json` (250 KB starter budget) if absent. No framework detected: skipped with a reason.                                 |
+| knip       | Installs knip, writes `knip.json` (the Next.js preset from `references/knip.example.json`, or a generic `src/` preset), adds a `dead-code` script.                                                                                                                                                                                                                                                                                                                                 |
+| quality-ci | See `--ci` below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ci         | See `--ci-only` below.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 Installs use the project's package manager, found from the lockfile (`pnpm-lock.yaml`,
 `yarn.lock`, `bun.lockb` or `bun.lock`, else npm). An npm install that fails is retried once with
@@ -327,6 +327,10 @@ Preflight only. Safe anywhere.
 
 ## What this skill does not do
 
+If a newly created workflow requires its first PR run to finish setup proof, use
+the authorized CI-bootstrap draft path in `/ship`. The draft only collects evidence;
+audit-setup and downstream release rows remain incomplete until exact-head CI passes.
+
 - **It is not a review.** It sets up inputs; `/review-stack --audit` uses them.
 - **It does not edit `next.config.*`, `vite.config.*` or an existing `playwright.config.*`.** It
   prints and saves a minimal snippet for the user to apply.
@@ -341,20 +345,20 @@ Preflight only. Safe anywhere.
 
 ## Graceful degradation
 
-| Situation                     | Behavior                                                                                                                      |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| No `package.json`             | Stop: "Not a Node project. Run from a package root." For the checklist row itself, see "Non-Node repos" above.                |
-| Unknown framework             | Set up Lighthouse, axe and knip. Skip the bundle check: "needs Next.js, Vite or a known build."                               |
-| Node older than 18            | Stop the Lighthouse and axe steps: "Upgrade Node first."                                                                      |
-| Node 18 to 22.18              | Install Lighthouse 12.6.1, the last release for older Node. Say so.                                                           |
-| Node 22.19 or newer           | Install Lighthouse 13.                                                                                                        |
-| No routes detected            | Use `/` and say so. The user can pass `--routes`.                                                                             |
-| Install fails mid-way         | Report which install failed, leave partial state, exit 1. Re-running resumes.                                                 |
-| Lighthouse target unreachable | Fail the Lighthouse step only; other tools still run. Say: set `--target-url` or `PREVIEW_URL`, or make build and start work. |
-| No Chrome or Chromium         | Fail the Lighthouse step: set `CHROME_PATH` or run `npx playwright install chromium`.                                         |
-| Playwright not installed      | The axe step installs `@playwright/test` and Chromium.                                                                        |
-| `gh` CLI not installed        | `--ci` still writes the files; the user applies the required-check ruleset in the repository settings page instead.           |
-| `zizmor` not installed        | Skip the workflow lint and say so.                                                                                            |
+| Situation                     | Behavior                                                                                                                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `package.json`             | Do not initialize here. Inspect affected package roots, including nested web/app; run from an applicable package root. Otherwise use "Projects without an affected web runtime" below. |
+| Unknown framework             | Set up Lighthouse, axe and knip. Skip the bundle check: "needs Next.js, Vite or a known build."                                                                                        |
+| Node older than 18            | Stop the Lighthouse and axe steps: "Upgrade Node first."                                                                                                                               |
+| Node 18 to 22.18              | Install Lighthouse 12.6.1, the last release for older Node. Say so.                                                                                                                    |
+| Node 22.19 or newer           | Install Lighthouse 13.                                                                                                                                                                 |
+| No routes detected            | Use `/` and say so. The user can pass `--routes`.                                                                                                                                      |
+| Install fails mid-way         | Report which install failed, leave partial state, exit 1. Re-running resumes.                                                                                                          |
+| Lighthouse target unreachable | Fail the Lighthouse step only; other tools still run. Say: set `--target-url` or `PREVIEW_URL`, or make build and start work.                                                          |
+| No Chrome or Chromium         | Fail the Lighthouse step: set `CHROME_PATH` or run `npx playwright install chromium`.                                                                                                  |
+| Playwright not installed      | The axe step installs `@playwright/test` and Chromium.                                                                                                                                 |
+| `gh` CLI not installed        | `--ci` still writes the files; the user applies the required-check ruleset in the repository settings page instead.                                                                    |
+| `zizmor` not installed        | Skip the workflow lint and say so.                                                                                                                                                     |
 
 ---
 
@@ -389,7 +393,7 @@ verifier only reads it and fails on any recorded failure:
 
 ```text
 python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-  --id <work-id> --step audit-setup --result pass --evidence ops/audit/STATUS.md \
+  --id=<work-id> --step audit-setup --result pass --evidence ops/audit/STATUS.md \
   --verify "grep -q '^## Ran this invocation' ops/audit/STATUS.md && ! grep -q '^- FAILED' ops/audit/STATUS.md"
 ```
 
@@ -406,37 +410,27 @@ If a tool genuinely does not apply (an API-only project needs no bundle check), 
 in the evidence. If a required tool failed, record the row as `blocked` with the reason. Do not
 pass it.
 
-### Non-Node repos (no `package.json`)
+### Projects without an affected web runtime
 
-The kit's tools are Node-only by design (Lighthouse, axe, the bundle check and knip all need a JS
-build), so none of them can run on a Python, Go, Rust or other non-Node repo. `audit-setup` is
-still required by default there (it is only conditional when the goal itself reads as trivial),
-so there must be a way to close the row without the kit:
+A missing root `package.json` does not establish that the project is non-web. Inspect the
+changed files, workspace configuration and affected package/runtime roots, including nested
+`web/`, `app/` and other application directories. For an affected web application, run the
+kit from its applicable package directory and prove its required browser/audit setup; retain
+the repository-root checklist and record that package's executed checks as evidence.
 
-- **Pass it on the repo's own CI and test config**, when that config already gates quality the
-  way the kit's tools gate a Node project (lint and tests running in CI on every PR). Evidence
-  names the CI workflow and test config found; the verifier re-checks both still exist:
+Use this non-web route only after establishing that no affected web runtime requires those
+checks. For Python, Go, Rust or other non-web work, prove the applicable test/build/CI setup
+with the project's actual commands. Record command output, exit codes, source identity,
+selected CI workflows and the reason each frontend tool does not apply. Retain configuration
+and checker files as instruments; use a repeatable executed check or a source-bound receipt
+read-back verifier. Merely checking whether configuration files exist does not prove working
+quality gates.
 
-  ```text
-  printf 'CI: %s\nTests: %s\n' .github/workflows/ci.yml pyproject.toml > .devproto/evidence/audit-setup.txt
-  python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id <work-id> --step audit-setup --result pass --evidence .devproto/evidence/audit-setup.txt \
-    --verify "test -f .github/workflows/ci.yml && test -f pyproject.toml"
-  ```
-
-- **Make the row optional mid-run**, if there is no CI/test gate yet to point to, or the goal made
-  it required and it plainly does not apply this time:
-
-  ```text
-  python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> set-optional \
-    --id <work-id> --step audit-setup --reason "pure Python repo, no package.json"
-  python3 <development-protocol skill folder>/scripts/devproto.py --project <repo> step \
-    --id <work-id> --step audit-setup --result na --reason "pure Python repo, no package.json"
-  ```
-
-  Unlike `start`'s `--require`/`--optional`, `set-optional` works after earlier rows have already
-  passed -- it does not require abandoning the work id and re-proving rows 1 onward under a new
-  one just to mark one later row not applicable.
+Pass the existing audit-setup row only with this applicable proof. If required test or CI
+setup is missing, establish it within the authorized task or record the row as blocked.
+Do not make a mandatory row optional or mark it not-applicable merely because the project
+lacks Node tooling. A row already conditional for a genuinely trivial task may retain a
+reasoned skip where the initialized checklist permits it.
 
 ## Acceptance scenarios
 
