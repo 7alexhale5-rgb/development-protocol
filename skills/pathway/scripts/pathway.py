@@ -255,9 +255,90 @@ def blank() -> dict:
 
 def completion_digest(item: dict) -> str:
     payload = [item["work_id"], item["goal"], item["pathways"]]
+    payload.append(item.get("candidate_binding"))
     if "checklist_generation" in item:
         payload.append(item["checklist_generation"])
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def candidate_binding(project: Path) -> dict:
+    """Bind executed proof to observed source bytes, never to a session label."""
+    from _shared import candidate_snapshot
+
+    probe = subprocess.run(
+        ["git", "-C", str(project), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        timeout=10,
+    )
+    if probe.returncode == 0:
+        if Path(os.fsdecode(probe.stdout).strip()).resolve() != project.resolve():
+            raise ValueError("candidate must name the repository root")
+        before = (
+            subprocess.run(
+                ["git", "-C", str(project), "rev-parse", "HEAD"],
+                capture_output=True,
+                timeout=10,
+                check=True,
+            )
+            .stdout.decode()
+            .strip()
+        )
+        snapshot = candidate_snapshot(project)
+        after = (
+            subprocess.run(
+                ["git", "-C", str(project), "rev-parse", "HEAD"],
+                capture_output=True,
+                timeout=10,
+                check=True,
+            )
+            .stdout.decode()
+            .strip()
+        )
+        if before != after:
+            raise ValueError("candidate HEAD changed during observation")
+        return {"version": 1, "kind": "git", "head": before, "snapshot": snapshot}
+
+    def scan():
+        rows = []
+        size = 0
+        for directory, dirs, files in os.walk(project, followlinks=False):
+            base = Path(directory)
+            if base == project:
+                dirs[:] = [name for name in dirs if name not in {".devproto", ".git"}]
+            if any((base / name).is_symlink() for name in dirs):
+                raise ValueError("non-Git candidate cannot follow directory symlinks")
+            for name in sorted(files):
+                path = base / name
+                if path.is_symlink() or not path.is_file():
+                    raise ValueError("non-Git candidate needs regular source files")
+                size += path.stat().st_size
+                if len(rows) >= 5000 or size > 64 * 1024 * 1024:
+                    raise ValueError("non-Git candidate exceeds bounded scan limits")
+                before = path.stat()
+                sha = digest(path)
+                after = path.stat()
+                if (
+                    before.st_ino,
+                    before.st_size,
+                    before.st_mtime_ns,
+                    before.st_ctime_ns,
+                    before.st_mode,
+                ) != (
+                    after.st_ino,
+                    after.st_size,
+                    after.st_mtime_ns,
+                    after.st_ctime_ns,
+                    after.st_mode,
+                ):
+                    raise ValueError("candidate file changed during observation")
+                rows.append((path.relative_to(project).as_posix(), before.st_mode, sha))
+        return sorted(rows)
+
+    first = scan()
+    if scan() != first:
+        raise ValueError("candidate changed during observation")
+    sha = hashlib.sha256(json.dumps(first).encode()).hexdigest()
+    return {"version": 1, "kind": "files", "sha256": sha}
 
 
 def archive_directory(project: Path, item: dict) -> Path:
@@ -275,6 +356,9 @@ def archive_directory(project: Path, item: dict) -> Path:
 def retained_completion(project: Path, item: dict, artifact_provider=None) -> bool:
     try:
         completion = item["completion"]
+        binding = item.get("candidate_binding")
+        if not isinstance(binding, dict) or binding.get("version") != 1:
+            return False
         if artifact_provider is None:
             archive = archive_directory(project, item)
         else:
@@ -304,6 +388,7 @@ def retained_completion(project: Path, item: dict, artifact_provider=None) -> bo
                 or row.get("exit") != 0
                 or not row.get("verified_at")
                 or not row.get("verify_sha256")
+                or row.get("candidate_binding") != binding
                 or not re.fullmatch(r"[0-9a-f]{64}", sha)
             ):
                 return False
@@ -451,7 +536,9 @@ def cover(
     with _store_lock(project):
         item = load(project, work_id)
         if item.get("closed"):
-            raise ValueError("closed outcome is historical; use reopen before changing coverage")
+            raise ValueError(
+                "closed outcome is historical; use reopen before changing coverage"
+            )
         ways = item["pathways"]
         if add:
             if pathway not in ways:
@@ -509,6 +596,7 @@ def log(
         sha = digest(ev)
         prior = json.dumps(item["pathways"][pathway], sort_keys=True)
         prior_generation = item.get("checklist_generation")
+        binding = candidate_binding(project)
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     # Reuses devproto's verifier runner: temp-file output (no pipe a background
@@ -533,7 +621,8 @@ def log(
                 "checklist generation changed while the verifier ran; verify it again"
             )
         stable = digest(ev) == sha
-        passed = code == 0 and stable
+        candidate_stable = candidate_binding(project) == binding
+        passed = code == 0 and stable and candidate_stable
         try:
             shown = ev.resolve().relative_to(project.resolve()).as_posix()
         except ValueError:
@@ -544,7 +633,11 @@ def log(
             else (
                 "The verifier changed the evidence file. Write evidence first, then verify it with a read-only command."
                 if not stable
-                else f"Verifier exited {code}."
+                else (
+                    "Candidate changed while the verifier ran."
+                    if not candidate_stable
+                    else f"Verifier exited {code}."
+                )
             )
         )
         item["pathways"][pathway].update(
@@ -559,6 +652,7 @@ def log(
             reason=reason,
             stale=False,
             output_tail=redact(output)[-2000:],
+            candidate_binding=binding,
         )
         item["log"].append(
             {
@@ -677,14 +771,22 @@ def _report_locked(project: Path, work_id: str) -> dict:
     stale = [p for p, v in ways.items() if v.get("stale")]
     # Preserve the canonical catalog while deferring outward release until all
     # candidate-changing work, including documentation, is proved.
-    open_ = [p for p in open_ if p != "release"] + (["release"] if "release" in open_ else [])
-    stale = [p for p in stale if p != "release"] + (["release"] if "release" in stale else [])
+    open_ = [p for p in open_ if p != "release"] + (
+        ["release"] if "release" in open_ else []
+    )
+    stale = [p for p in stale if p != "release"] + (
+        ["release"] if "release" in stale else []
+    )
     owed = len(ways) - len(na)
     rate = round(len(proved) / owed, 2) if owed else 0.0
-    historical_valid = retained_completion(project, item) if item.get("closed") else None
+    historical_valid = (
+        retained_completion(project, item) if item.get("closed") else None
+    )
     trust = "fail" if stale or historical_valid is False else "pass"
     confidence, why_conf = checklist_confidence(project, work_id)
-    eligible_stale = [p for p in stale if p != "release" or not any(q != "release" for q in open_)]
+    eligible_stale = [
+        p for p in stale if p != "release" or not any(q != "release" for q in open_)
+    ]
     if eligible_stale:
         pick, why = (
             eligible_stale[0],
@@ -775,6 +877,18 @@ def close(project: Path, work_id: str) -> dict:
             )
             return out
         item = load(project, work_id)
+        binding = candidate_binding(project)
+        if any(
+            row["status"] == "proved" and row.get("candidate_binding") != binding
+            for row in item["pathways"].values()
+        ):
+            out.update(
+                ok=False,
+                closed=False,
+                error="Candidate changed; re-prove all owed pathways.",
+            )
+            return out
+        item["candidate_binding"] = binding
         seal_completion(project, item)
         item.update(closed=True, closed_at=now())
         item["log"].append({"at": now(), "action": "close"})
@@ -787,8 +901,23 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
         raise ValueError("reopen needs a written reason")
     with locked(project / ".devproto" / ".lock"), _store_lock(project):
         item = load(project, work_id)
+        _check_checklist_goal_locked(project, work_id, item["goal"])
+        import devproto
+
+        checklist_path = devproto.store_path(project, work_id)
+        record = devproto.load(checklist_path) if checklist_path.exists() else None
+        if record is not None and (
+            type(record.get("execution_generation")) is not int
+            or record["execution_generation"] < 1
+        ):
+            raise ValueError(
+                "Reopen requires an active checklist with a known generation."
+            )
         if not item.get("closed"):
-            raise ValueError("outcome is not closed")
+            if record is None or record.get("completion"):
+                raise ValueError(
+                    "outcome is not closed; open reset requires an active checklist"
+                )
         item.setdefault("completion_history", []).append(
             {
                 **(
@@ -798,6 +927,7 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
                 ),
                 "closed_at": item.get("closed_at"),
                 "goal": item["goal"],
+                "candidate_binding": item.pop("candidate_binding", None),
                 "completion": item.pop("completion", None),
                 "pathways": item["pathways"],
                 "reason": reason.strip(),
@@ -1017,7 +1147,9 @@ def main(argv=None) -> int:
         help="close the outcome when every pathway is proved or n/a",
     )
     p.add_argument("--id", required=True)
-    p = sub.add_parser("reopen", parents=[common], help="explicitly reopen a closed outcome")
+    p = sub.add_parser(
+        "reopen", parents=[common], help="explicitly reopen a closed outcome"
+    )
     p.add_argument("--id", required=True)
     p.add_argument("--reason", required=True)
     p = sub.add_parser(

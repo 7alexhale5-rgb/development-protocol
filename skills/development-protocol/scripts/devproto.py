@@ -671,6 +671,10 @@ def retained_completion(project: Path, record: dict) -> bool:
                 return False
             if item.get("checklist_generation") != generation:
                 return False
+            if item.get("candidate_binding") != provenance.get(
+                "itinerary_candidate_binding"
+            ):
+                return False
             if item.get("work_id") != record["work_id"] or not item.get("closed"):
                 return False
             if not record.get("completion") and not router.retained_completion(
@@ -1080,7 +1084,6 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
         return summary(project, record)
 
 
-
 def pathway_router():
     script = Path(__file__).resolve().parents[2] / "pathway/scripts/pathway.py"
     spec = importlib.util.spec_from_file_location("_completion_pathway", script)
@@ -1136,6 +1139,10 @@ def itinerary_completion(
         if not item.get("closed") or not router.retained_completion(project, item):
             raise ValueError(
                 "Shared itinerary completion proof is open, missing, or invalid."
+            )
+        if item.get("candidate_binding") != router.candidate_binding(project):
+            raise ValueError(
+                "Shared itinerary proves another candidate; explicitly reset and re-prove it."
             )
         paths = {portable(project, path): digest(path)}
         archive = router.archive_directory(project, item)
@@ -1324,6 +1331,13 @@ def step(
                         "itinerary_required": bool(itinerary_paths),
                         "itinerary_source": itinerary_source if itinerary_paths else "",
                         "itinerary_sha256": itinerary_paths.get(itinerary_source, ""),
+                        "itinerary_candidate_binding": (
+                            json.loads(
+                                resolve(project, itinerary_source).read_text()
+                            ).get("candidate_binding")
+                            if itinerary_paths
+                            else None
+                        ),
                     }
                     for name, receipt_sha in itinerary_paths.items():
                         target["instruments"][name] = {

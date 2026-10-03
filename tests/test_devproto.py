@@ -23,6 +23,56 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_closed_itinerary_must_prove_the_current_candidate(self):
+        self.init_git()
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        (self.project / "check.sh").write_text("# corrected implementation\nexit 0\n")
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+        router.reopen(self.project, "w1", "renew proof for corrected candidate")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_progressed_open_itinerary_can_explicitly_reset_for_checklist(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        router.log(self.project, "w1", "govern", "ev.md", "true")
+        prior = router.load(self.project, "w1")["pathways"]["govern"]
+        self.start()
+        reset = router.reopen(self.project, "w1", "enroll fresh checklist proof")
+        self.assertFalse(reset["closed"])
+        item = router.load(self.project, "w1")
+        self.assertEqual(item["completion_history"][-1]["pathways"]["govern"], prior)
+        self.assertIsNone(item["completion_history"][-1]["completion"])
+        self.assertEqual(item["checklist_generation"], 1)
+        self.assertTrue(
+            all(row["status"] == "open" for row in item["pathways"].values())
+        )
+        for name in item["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+
+    def test_itinerary_cannot_seal_old_candidate_rows_under_new_binding(self):
+        self.init_git()
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        (self.project / "check.sh").write_text(
+            "# changed after pathway proof\nexit 0\n"
+        )
+        self.assertFalse(router.close(self.project, "w1")["ok"])
+
     def test_conflicting_goal_intake_is_rejected_without_partial_enrollment(self):
         router = devproto.pathway_router()
         router.start(self.project, FEATURE, "live", "itinerary-first")

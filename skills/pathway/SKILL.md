@@ -274,10 +274,17 @@ Do not present a menu.
    reseals history using a new task's live report. To change an old outcome, explicitly
    run `PATHWAY --project <repo> reopen --id=<work-id> --reason "<approved new scope>"`
    and reopen its matching checklist when applicable; original history remains saved.
+   Each executed pathway records the observed source candidate. Closing cannot relabel
+   old proof after code changes, and checklist closeout requires the same candidate.
+   A progressed open itinerary created before checklist intake can use the same explicit
+   `reopen --reason` command to reset and enroll fresh proof. Its prior rows remain saved
+   as incomplete history, without inventing a completion receipt. Association and generation
+   checks run before this reset changes either record. Keep proof files under `.devproto`
+   so writing new evidence does not change the source candidate being verified.
    Prefer a new work ID for an independent outcome.
 3. If it closed, inspect `DEVPROTO --project <repo> status --id=<work-id> --json`.
    For a completed checklist, run `DEVPROTO --project <repo> check --id=<work-id>
-   --historical`; this checks retained past proof and cannot certify a new candidate.
+--historical`; this checks retained past proof and cannot certify a new candidate.
    For an active checklist, run ordinary `DEVPROTO --project <repo> check --id=<work-id>`.
    Report both answers. Missing, invalid, or unknown historical proof remains a gap;
    itinerary closure alone does not clear the checklist. Do not reopen completed work
