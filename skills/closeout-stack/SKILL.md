@@ -204,6 +204,17 @@ audit, a client approval record), run it before Step 4 and carry any failing con
 resume prompt under Blockers. If the gate cannot be run by a command, mark it `gate: manual` in
 the report. Never mark a manual gate as passed on a person's behalf.
 
+## Step 3.5: Renew the committed candidate locally
+
+After Step 3 creates or preserves the final commit, run Full Verify, required independent
+review, read-only simplify and proof of that existing commit, in checklist order. Renew
+all affected receipts with fresh current-SHA evidence. Inspect their actual result; no
+idempotent receipt proves a new execution. Recompute review_blocked and release_blocked
+from these current checks. Clear them only when required findings and gaps are resolved
+and through-commit/current-candidate checks pass. Failed or unavailable preparation
+keeps outward actions blocked while session persistence continues. This local sequence
+runs even when the preliminary Step 2 flags are true; it never pushes, merges or deploys.
+
 ## Step 4: Ship (gated)
 
 ```text
