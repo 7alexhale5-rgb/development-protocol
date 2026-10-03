@@ -630,13 +630,16 @@ def log(
         # Retire an old pass before releasing the lock. A crash leaves an open
         # attempt, and no concurrent release or close can certify that old pass.
         row = item["pathways"][pathway]
+        # Renewal is owed independently of attempt status. Failed or crashed
+        # read-only checks must never restore the mutating execution profile.
+        renewal = bool(row.get("stale")) or row["status"] == "proved"
         row.update(
             status="open",
             revision=row.get("revision", 0) + 1,
             verified_at="",
             exit=None,
             reason="Verification is in progress; fresh successful proof is owed.",
-            stale=False,
+            stale=renewal,
         )
         save(project, item)
         prior = json.dumps(row, sort_keys=True)
@@ -705,7 +708,7 @@ def log(
             exit=code,
             verified_at=now(),
             reason=reason,
-            stale=False,
+            stale=False if passed else renewal,
             output_tail=redact(output)[-2000:],
             candidate_binding=binding,
             candidate_inspection_error=inspection_error,

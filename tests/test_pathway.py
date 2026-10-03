@@ -18,6 +18,59 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_unsuccessful_renewals_keep_read_only_routing(self):
+        for outcome in ("failure", "timeout", "crash"):
+            for name in ("data", "release"):
+                with self.subTest(outcome=outcome, pathway=name):
+                    work = outcome + "-" + name
+                    pathway.start(self.project, "renew controlled proof", work_id=work)
+                    item = pathway.load(self.project, work)
+                    item["pathways"] = {
+                        name: item["pathways"].get(name, pathway.blank())
+                    }
+                    pathway.save(self.project, item)
+                    pathway.log(self.project, work, name, "ev.md", "true")
+                    (self.project / "ev.md").write_text("changed " + work)
+                    self.assertEqual(
+                        pathway.report(self.project, work)["card"]["mode"],
+                        "renew-proof",
+                    )
+
+                    inflight_modes = []
+                    run_verifier = pathway._run_verifier
+
+                    def interrupted(*args):
+                        current = pathway.report(self.project, work)
+                        inflight_modes.append(current["card"].get("mode"))
+                        if outcome == "crash":
+                            raise RuntimeError("interrupted renewal")
+                        return (
+                            124 if outcome == "timeout" else 1
+                        ), "unsuccessful renewal"
+
+                    with patch.object(
+                        pathway, "_run_verifier", side_effect=interrupted
+                    ):
+                        if outcome == "crash":
+                            with self.assertRaises(RuntimeError):
+                                pathway.log(self.project, work, name, "ev.md", "false")
+                        else:
+                            self.assertFalse(
+                                pathway.log(self.project, work, name, "ev.md", "false")[
+                                    "ok"
+                                ]
+                            )
+                    report = pathway.report(self.project, work)
+                    self.assertEqual(inflight_modes, ["renew-proof"])
+                    self.assertEqual(report["card"].get("mode"), "renew-proof")
+                    self.assertEqual(
+                        report["card"]["execution_stack"], ["/karpathy verify"]
+                    )
+                    pathway.log(self.project, work, name, "ev.md", "true")
+                    self.assertFalse(
+                        pathway.load(self.project, work)["pathways"][name]["stale"]
+                    )
+
     def test_standalone_release_requires_known_positive_generation(self):
         import devproto
 

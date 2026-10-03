@@ -23,6 +23,47 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_inflight_dependent_proof_rejects_reproved_prerequisite(self):
+        self.start()
+        self.close_until("build")
+        (self.project / "build.md").write_text("candidate A build proof")
+        self.pass_step("build", evidence="build.md")
+        self.close_until("verify")
+        entered, resume = threading.Event(), threading.Event()
+        original = devproto.run_verifier
+        results = []
+
+        def verifier(command, project, timeout):
+            if threading.current_thread().name == "dependent-verifier":
+                entered.set()
+                if not resume.wait(10):
+                    raise RuntimeError("fixture timeout")
+                return 0, "old candidate A verification"
+            return original(command, project, timeout)
+
+        def visit():
+            try:
+                results.append(self.pass_step("verify"))
+            except Exception as error:
+                results.append(error)
+
+        worker = threading.Thread(target=visit, name="dependent-verifier")
+        with patch.object(devproto, "run_verifier", side_effect=verifier):
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                (self.project / "build.md").write_text("candidate B build proof")
+                self.assertTrue(self.pass_step("build", evidence="build.md")["ok"])
+            finally:
+                resume.set()
+                worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertIsInstance(results[0], ValueError)
+        self.assertNotEqual(
+            self.rows(devproto.status(self.project, "w1"))["verify"]["status"], "passed"
+        )
+        self.assertTrue(self.pass_step("verify")["ok"])
+
     def test_failed_required_recheck_prevents_overlapping_closeout(self):
         self.init_git()
         self.start()

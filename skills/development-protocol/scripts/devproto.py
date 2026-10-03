@@ -1246,6 +1246,10 @@ def step(
         before = {k: target.get(k) for k in RECORD_KEYS}
         before_revision = target.get("revision", 0)
         before_generation = record.get("execution_generation")
+        prerequisite_revisions = [
+            (row["step_id"], row.get("revision", 0))
+            for row in record["steps"][: target["sequence"] - 1]
+        ]
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     code, output = run_verifier(verify_cmd, project, timeout)
@@ -1262,6 +1266,10 @@ def step(
             target.get("revision", 0) != before_revision
             or record.get("execution_generation") != before_generation
             or {k: target.get(k) for k in RECORD_KEYS} != before
+            or prerequisite_revisions != [
+                (row["step_id"], row.get("revision", 0))
+                for row in record["steps"][: target["sequence"] - 1]
+            ]
         ):
             raise ValueError(
                 "this step was changed by someone else while the verifier ran; retry"
