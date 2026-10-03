@@ -4,6 +4,7 @@ import io
 import json
 import sys
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stdout, contextmanager
 from unittest.mock import patch
@@ -15,6 +16,75 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_inflight_verifier_cannot_cross_checklist_generation(self):
+        import devproto
+
+        goal = "Write a tiny tool"
+        devproto.start(self.project, goal, "w1")
+        pathway.start(self.project, goal, "demoable", "w1")
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        pathway.close(self.project, "w1")
+        for row in devproto.status(self.project, "w1")["steps"]:
+            if row["required"]:
+                devproto.step(
+                    self.project, "w1", row["step_id"], "pass", "ev.md", "true"
+                )
+            else:
+                devproto.step(
+                    self.project,
+                    "w1",
+                    row["step_id"],
+                    "na",
+                    reason="not applicable to fixture",
+                )
+        historical = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertTrue(devproto.retained_completion(self.project, historical))
+        pathway.reopen(self.project, "w1", "renew itinerary first")
+        row_before = pathway.load(self.project, "w1")["pathways"]["govern"]
+        entered, resume = threading.Event(), threading.Event()
+        results, errors = [], []
+
+        def slow(*args):
+            entered.set()
+            if not resume.wait(10):
+                raise AssertionError("test did not release verifier")
+            return 0, "proof started in previous execution generation"
+
+        def visit():
+            try:
+                results.append(
+                    pathway.log(self.project, "w1", "govern", "ev.md", "true")
+                )
+            except Exception as exc:
+                errors.append(exc)
+
+        with patch.object(pathway, "_run_verifier", side_effect=slow):
+            thread = threading.Thread(target=visit)
+            thread.start()
+            try:
+                self.assertTrue(entered.wait(10))
+                devproto.reopen(self.project, "w1", "renew checklist during verifier")
+                item = pathway.load(self.project, "w1")
+                self.assertEqual(item["checklist_generation"], 2)
+                self.assertEqual(item["pathways"]["govern"], row_before)
+            finally:
+                resume.set()
+                thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(results, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ValueError)
+        self.assertIn("generation", str(errors[0]))
+        self.assertEqual(
+            pathway.load(self.project, "w1")["pathways"]["govern"], row_before
+        )
+        self.assertTrue(devproto.retained_completion(self.project, historical))
+        current = pathway.log(self.project, "w1", "govern", "ev.md", "true")
+        self.assertEqual(current["pathways"]["govern"]["status"], "proved")
+        self.assertEqual(pathway.load(self.project, "w1")["checklist_generation"], 2)
+
+
     def test_standalone_reopen_preserves_original_history_digest(self):
         self.start()
         for name in pathway.load(self.project, "w1")["pathways"]:

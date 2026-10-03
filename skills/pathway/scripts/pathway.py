@@ -483,7 +483,9 @@ def log(
     with _store_lock(project):
         item = load(project, work_id)
         if item.get("closed"):
-            raise ValueError("closed outcome is historical; use reopen before recording proof")
+            raise ValueError(
+                "closed outcome is historical; use reopen before recording proof"
+            )
         if pathway not in item["pathways"]:
             raise ValueError(
                 f"{pathway} is not on this outcome's itinerary; add it with cover --add"
@@ -496,6 +498,7 @@ def log(
             )
         sha = digest(ev)
         prior = json.dumps(item["pathways"][pathway], sort_keys=True)
+        prior_generation = item.get("checklist_generation")
 
     # Phase 2, unlocked: the verifier may take minutes; others can still read status.
     # Reuses devproto's verifier runner: temp-file output (no pipe a background
@@ -506,13 +509,19 @@ def log(
     with _store_lock(project):
         item = load(project, work_id)
         if item.get("closed"):
-            raise ValueError("closed outcome is historical; use reopen before recording proof")
+            raise ValueError(
+                "closed outcome is historical; use reopen before recording proof"
+            )
         if pathway not in item["pathways"]:
             raise ValueError(
                 f"{pathway} is not on this outcome's itinerary; add it with cover --add"
             )
         if json.dumps(item["pathways"][pathway], sort_keys=True) != prior:
             raise ValueError("pathway changed while the verifier ran; verify it again")
+        if item.get("checklist_generation") != prior_generation:
+            raise ValueError(
+                "checklist generation changed while the verifier ran; verify it again"
+            )
         stable = digest(ev) == sha
         passed = code == 0 and stable
         try:
