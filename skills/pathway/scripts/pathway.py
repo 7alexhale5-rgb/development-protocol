@@ -271,10 +271,23 @@ def archive_directory(project: Path, item: dict) -> Path:
     return path
 
 
-def retained_completion(project: Path, item: dict) -> bool:
+def retained_completion(project: Path, item: dict, artifact_provider=None) -> bool:
     try:
         completion = item["completion"]
-        archive = archive_directory(project, item)
+        if artifact_provider is None:
+            archive = archive_directory(project, item)
+        else:
+            # A checklist may retain its own copies after the original itinerary
+            # archive is gone. Preserve receipt identity without consulting that
+            # mutable source directory; the provider must supply retained bytes.
+            item_path(project, item["work_id"])
+            archive = (
+                project.resolve()
+                / STORE
+                / "completed"
+                / item["work_id"]
+                / completion_digest(item)
+            )
         if (
             completion["receipt_sha256"] != completion_digest(item)
             or completion["archive_dir"]
@@ -294,6 +307,8 @@ def retained_completion(project: Path, item: dict) -> bool:
             ):
                 return False
             artifact = archive / sha
+            if artifact_provider is not None:
+                artifact = artifact_provider(artifact, sha)
             if (
                 artifact.is_symlink()
                 or not artifact.is_file()

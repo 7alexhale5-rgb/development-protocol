@@ -23,6 +23,106 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_sealed_legacy_unknown_itinerary_provenance_stays_unverified(self):
+        import shutil
+
+        self.init_git()
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        old_archive = devproto.archive_directory(self.project, record)
+        record.pop("completion_provenance", None)
+        legacy_archive = devproto.archive_directory(self.project, record)
+        if legacy_archive != old_archive:
+            shutil.copytree(old_archive, legacy_archive)
+        record["completion"]["archive_dir"] = devproto.portable(
+            self.project, legacy_archive
+        )
+        record["completion"]["receipt_sha256"] = devproto.completion_digest(record)
+        ancestry = json.loads(
+            (old_archive / record["completion"]["ancestry_sha256"]).read_text()
+        )
+        ancestry["receipt_sha256"] = devproto.completion_digest(record)
+        payload = json.dumps(ancestry, sort_keys=True).encode()
+        sha = __import__("hashlib").sha256(payload).hexdigest()
+        (legacy_archive / sha).write_bytes(payload)
+        record["completion"]["ancestry_sha256"] = sha
+        router = devproto.pathway_router()
+        router.start(self.project, "later unrelated itinerary", "live", "w1")
+        for archived in (True, False):
+            with self.subTest(archive_and_ancestry=archived):
+                legacy = json.loads(json.dumps(record))
+                if not archived:
+                    legacy["completion"].pop("archive_dir")
+                    legacy["completion"].pop("ancestry_sha256")
+                original = json.dumps(legacy, sort_keys=True)
+                self.assertFalse(devproto.retained_completion(self.project, legacy))
+                self.assertFalse(devproto.refresh(self.project, legacy))
+                self.assertEqual(json.dumps(legacy, sort_keys=True), original)
+
+
+    def test_explicit_itinerary_absence_is_immutable_and_bound(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertEqual(record.get("completion_provenance", {}).get("version"), 2)
+        self.assertIs(record["completion_provenance"]["itinerary_required"], False)
+        router = devproto.pathway_router()
+        router.start(self.project, "future open itinerary", "live", "w1")
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
+        changed = json.loads(json.dumps(record))
+        changed["completion_provenance"]["itinerary_required"] = True
+        self.assertFalse(devproto.retained_completion(self.project, changed))
+
+
+    def test_required_itinerary_proof_survives_origin_loss_and_archive_transfer(self):
+        import shutil
+
+        self.start()
+        self.close_until("closeout")
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.pass_step("closeout")
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertIs(
+            record.get("completion_provenance", {}).get("itinerary_required"), True
+        )
+        item = router.load(self.project, "w1")
+        shutil.rmtree(router.archive_directory(self.project, item))
+        (self.project / ".devproto/pathway/w1.json").unlink()
+        self.assertTrue(devproto.retained_completion(self.project, record))
+        with tempfile.TemporaryDirectory() as directory:
+            transferred = Path(directory).resolve()
+            shutil.copytree(self.project / ".devproto", transferred / ".devproto")
+            self.assertTrue(devproto.retained_completion(transferred, record))
+            provenance = record["completion_provenance"]
+            copied_json = devproto.historical_artifact(
+                transferred,
+                record,
+                provenance["itinerary_source"],
+                provenance["itinerary_sha256"],
+            )
+            original = copied_json.read_bytes()
+            copied_json.write_bytes(b"corrupt")
+            self.assertFalse(devproto.retained_completion(transferred, record))
+            copied_json.write_bytes(original)
+            proof_sha = next(
+                row["sha256"]
+                for row in item["pathways"].values()
+                if row["status"] == "proved"
+            )
+            proof = devproto.historical_artifact(transferred, record, "", proof_sha)
+            proof.unlink()
+            self.assertFalse(devproto.retained_completion(transferred, record))
+
+
     def test_shared_itinerary_missing_archive_blocks_checklist_closeout(self):
         import importlib.util
         script = ROOT / "skills/pathway/scripts/pathway.py"

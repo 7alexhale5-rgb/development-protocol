@@ -15,6 +15,42 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_retained_artifact_provider_preserves_proof_validation(self):
+        import shutil
+
+        self.start()
+        for name in pathway.load(self.project, "w1")["pathways"]:
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        pathway.close(self.project, "w1")
+        item = pathway.load(self.project, "w1")
+        archive = pathway.archive_directory(self.project, item)
+        copies = self.project / "retained-copies"
+        copies.mkdir()
+        for row in item["pathways"].values():
+            if row["status"] == "proved":
+                shutil.copyfile(archive / row["sha256"], copies / row["sha256"])
+        shutil.rmtree(archive)
+        provider = lambda source, sha: copies / sha
+        self.assertFalse(pathway.retained_completion(self.project, item))
+        self.assertTrue(
+            pathway.retained_completion(self.project, item, artifact_provider=provider)
+        )
+        artifact = next(copies.iterdir())
+        original = artifact.read_bytes()
+        artifact.write_bytes(b"corrupt")
+        self.assertFalse(
+            pathway.retained_completion(self.project, item, artifact_provider=provider)
+        )
+        artifact.write_bytes(original)
+        linked = self.project / "linked-proof"
+        linked.write_bytes(original)
+        artifact.unlink()
+        artifact.symlink_to(linked)
+        self.assertFalse(
+            pathway.retained_completion(self.project, item, artifact_provider=provider)
+        )
+
+
     def test_stale_release_is_ineligible_while_docs_remain_owed(self):
         self.start(tier="demoable")
         for name in list(pathway.load(self.project, "w1")["pathways"]):

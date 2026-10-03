@@ -499,9 +499,10 @@ def completion_digest(record: dict) -> str:
             for name, meta in row.get("instruments", {}).items()
         }
         rows.append(fields)
-    return hashlib.sha256(
-        json.dumps([record["work_id"], rows], sort_keys=True).encode()
-    ).hexdigest()
+    payload = [record["work_id"], rows]
+    if "completion_provenance" in record:
+        payload.append(record["completion_provenance"])
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 def archive_directory(project: Path, record: dict) -> Path:
@@ -591,23 +592,59 @@ def retained_completion(project: Path, record: dict) -> bool:
                 path = historical_artifact(project, record, name, sha)
                 if path.is_symlink() or not path.is_file() or digest(path) != sha:
                     return False
+        provenance = record.get("completion_provenance", {})
+        if provenance.get("version") != 2 or not isinstance(
+            provenance.get("itinerary_required"), bool
+        ):
+            return False
         itinerary = project / STORE_DIR / "pathway" / (record["work_id"] + ".json")
-        if not record.get("completion") and (itinerary.exists() or itinerary.is_symlink()):
-            if itinerary.is_symlink():
-                return False
-            router = pathway_router()
-            item = router.load(project, record["work_id"])
-            if not item.get("closed") or not router.retained_completion(project, item):
+        if provenance["itinerary_required"]:
+            source = provenance.get("itinerary_source")
+            sha = provenance.get("itinerary_sha256", "")
+            if source != portable(project, itinerary) or not re.fullmatch(
+                r"[0-9a-f]{64}", sha
+            ):
                 return False
             bindings = rows[-1].get("instruments", {})
-            required = {portable(project, itinerary): digest(itinerary)}
-            archive = router.archive_directory(project, item)
-            required.update({portable(project, archive / r["sha256"]): r["sha256"]
-                             for r in item["pathways"].values() if r["status"] == "proved"})
-            if any((bindings.get(name, {}).get("sha256")
-                    if isinstance(bindings.get(name), dict) else bindings.get(name)) != sha
-                   for name, sha in required.items()):
+
+            def copied_artifact(path, expected_sha):
+                name = portable(project, path)
+                binding = bindings.get(name)
+                bound_sha = (
+                    binding.get("sha256") if isinstance(binding, dict) else binding
+                )
+                if bound_sha != expected_sha:
+                    raise ValueError(
+                        "required itinerary artifact was not bound at closeout"
+                    )
+                return historical_artifact(project, record, name, expected_sha)
+
+            retained = copied_artifact(itinerary, sha)
+            if (
+                retained.is_symlink()
+                or not retained.is_file()
+                or digest(retained) != sha
+            ):
                 return False
+            router = pathway_router()
+            item = json.loads(retained.read_text())
+            if item.get("work_id") != record["work_id"] or not item.get("closed"):
+                return False
+            if not record.get("completion") and not router.retained_completion(
+                project, item
+            ):
+                return False
+            if not router.retained_completion(
+                project,
+                item,
+                artifact_provider=copied_artifact,
+            ):
+                return False
+        elif (
+            provenance.get("itinerary_source") != ""
+            or provenance.get("itinerary_sha256") != ""
+        ):
+            return False
         review = next(r for r in rows if r["step_id"] == "review")
         baseline = (
             project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
@@ -712,6 +749,8 @@ def publish_archive(destination: Path, sha: str, source=None, payload=None) -> N
 
 
 def seal_completion(project: Path, record: dict) -> None:
+    if record.get("completion_provenance", {}).get("version") != 2:
+        raise ValueError("unknown completion provenance cannot be sealed")
     completion = {
         "state": "completed",
         "completed_at": record["steps"][-1]["verified_at"],
@@ -1011,16 +1050,18 @@ def pathway_router():
 def itinerary_completion(project: Path, work_id: str):
     """Hold the pathway lock while checking and retaining its closed proof."""
     path = project / STORE_DIR / "pathway" / (work_id + ".json")
-    if not path.exists() and not path.is_symlink():
-        yield {}
-        return
     router = pathway_router()
     with router._store_lock(project):
+        if not path.exists() and not path.is_symlink():
+            yield {}
+            return
         if path.is_symlink():
             raise ValueError("Shared itinerary cannot follow a symlink.")
         item = router.load(project, work_id)
         if not item.get("closed") or not router.retained_completion(project, item):
-            raise ValueError("Shared itinerary completion proof is open, missing, or invalid.")
+            raise ValueError(
+                "Shared itinerary completion proof is open, missing, or invalid."
+            )
         paths = {portable(project, path): digest(path)}
         archive = router.archive_directory(project, item)
         for row in item["pathways"].values():
@@ -1191,10 +1232,22 @@ def step(
         with contextlib.ExitStack() as closing:
             if passed and step_id == "closeout":
                 try:
-                    itinerary_paths = closing.enter_context(itinerary_completion(project, work_id))
+                    itinerary_paths = closing.enter_context(
+                        itinerary_completion(project, work_id)
+                    )
+                    itinerary_source = portable(
+                        project, project / STORE_DIR / "pathway" / (work_id + ".json")
+                    )
+                    record["completion_provenance"] = {
+                        "version": 2,
+                        "itinerary_required": bool(itinerary_paths),
+                        "itinerary_source": itinerary_source if itinerary_paths else "",
+                        "itinerary_sha256": itinerary_paths.get(itinerary_source, ""),
+                    }
                     for name, receipt_sha in itinerary_paths.items():
                         target["instruments"][name] = {
-                            "sha256": receipt_sha, "stat": _fp(resolve(project, name))
+                            "sha256": receipt_sha,
+                            "stat": _fp(resolve(project, name)),
                         }
                 except (OSError, ValueError, KeyError, TypeError) as exc:
                     passed = False
