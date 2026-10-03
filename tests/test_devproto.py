@@ -23,6 +23,38 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_shared_itinerary_missing_archive_blocks_checklist_closeout(self):
+        import importlib.util
+        script = ROOT / "skills/pathway/scripts/pathway.py"
+        spec = importlib.util.spec_from_file_location("itinerary_test", script)
+        router = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router)
+        self.start()
+        self.close_until("closeout")
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        item = router.load(self.project, "w1")
+        archive = router.archive_directory(self.project, item)
+        sha = next(row["sha256"] for row in item["pathways"].values())
+        artifact = archive / sha
+        original = artifact.read_bytes()
+        artifact.unlink()
+        out = self.pass_step("closeout")
+        self.assertFalse(out["ok"])
+        self.assertFalse(out["ready"])
+        artifact.write_bytes(original)
+        out = self.pass_step("closeout")
+        self.assertTrue(out["completed"])
+        artifact.unlink()
+        self.assertTrue(devproto.status(self.project, "w1")["historical_receipts_valid"])
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        row = self.rows(out)["closeout"]
+        retained = devproto.historical_artifact(self.project, record, str(artifact), sha)
+        retained.write_bytes(b"corrupt")
+        self.assertFalse(devproto.status(self.project, "w1")["historical_receipts_valid"])
+
     def test_closeout_rejects_successful_verifier_without_completion_provenance(self):
         self.start()
         self.close_until("closeout")

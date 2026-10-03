@@ -618,10 +618,11 @@ def _report_locked(project: Path, work_id: str) -> dict:
     historical_valid = retained_completion(project, item) if item.get("closed") else None
     trust = "fail" if stale or historical_valid is False else "pass"
     confidence, why_conf = checklist_confidence(project, work_id)
-    if stale:
+    eligible_stale = [p for p in stale if p != "release" or not any(q != "release" for q in open_)]
+    if eligible_stale:
         pick, why = (
-            stale[0],
-            f"trust failed: the proof for {stale[0]} no longer matches its evidence",
+            eligible_stale[0],
+            f"trust failed: the proof for {eligible_stale[0]} no longer matches its evidence",
         )
     elif open_:
         pick, why = (

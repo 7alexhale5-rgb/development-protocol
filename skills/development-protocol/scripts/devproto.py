@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -590,6 +591,23 @@ def retained_completion(project: Path, record: dict) -> bool:
                 path = historical_artifact(project, record, name, sha)
                 if path.is_symlink() or not path.is_file() or digest(path) != sha:
                     return False
+        itinerary = project / STORE_DIR / "pathway" / (record["work_id"] + ".json")
+        if not record.get("completion") and (itinerary.exists() or itinerary.is_symlink()):
+            if itinerary.is_symlink():
+                return False
+            router = pathway_router()
+            item = router.load(project, record["work_id"])
+            if not item.get("closed") or not router.retained_completion(project, item):
+                return False
+            bindings = rows[-1].get("instruments", {})
+            required = {portable(project, itinerary): digest(itinerary)}
+            archive = router.archive_directory(project, item)
+            required.update({portable(project, archive / r["sha256"]): r["sha256"]
+                             for r in item["pathways"].values() if r["status"] == "proved"})
+            if any((bindings.get(name, {}).get("sha256")
+                    if isinstance(bindings.get(name), dict) else bindings.get(name)) != sha
+                   for name, sha in required.items()):
+                return False
         review = next(r for r in rows if r["step_id"] == "review")
         baseline = (
             project / STORE_DIR / "evidence" / (record["work_id"] + "-build-base.txt")
@@ -980,6 +998,38 @@ def set_optional(project: Path, work_id: str, step_id: str, reason: str) -> dict
         return summary(project, record)
 
 
+
+def pathway_router():
+    script = Path(__file__).resolve().parents[2] / "pathway/scripts/pathway.py"
+    spec = importlib.util.spec_from_file_location("_completion_pathway", script)
+    router = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(router)
+    return router
+
+
+@contextlib.contextmanager
+def itinerary_completion(project: Path, work_id: str):
+    """Hold the pathway lock while checking and retaining its closed proof."""
+    path = project / STORE_DIR / "pathway" / (work_id + ".json")
+    if not path.exists() and not path.is_symlink():
+        yield {}
+        return
+    router = pathway_router()
+    with router._store_lock(project):
+        if path.is_symlink():
+            raise ValueError("Shared itinerary cannot follow a symlink.")
+        item = router.load(project, work_id)
+        if not item.get("closed") or not router.retained_completion(project, item):
+            raise ValueError("Shared itinerary completion proof is open, missing, or invalid.")
+        paths = {portable(project, path): digest(path)}
+        archive = router.archive_directory(project, item)
+        for row in item["pathways"].values():
+            if row["status"] == "proved":
+                artifact = archive / row["sha256"]
+                paths[portable(project, artifact)] = row["sha256"]
+        yield paths
+
+
 def step(
     project: Path,
     work_id: str,
@@ -1138,22 +1188,26 @@ def step(
             verified_at=now(),
             reason="" if passed else why,
         )
-        if passed and step_id == "closeout":
-            itinerary = project / STORE_DIR / "pathway" / (work_id + ".json")
-            if itinerary.exists():
-                outcome = json.loads(itinerary.read_text())
-                if not outcome.get("closed") or not outcome.get("completion"):
+        with contextlib.ExitStack() as closing:
+            if passed and step_id == "closeout":
+                try:
+                    itinerary_paths = closing.enter_context(itinerary_completion(project, work_id))
+                    for name, receipt_sha in itinerary_paths.items():
+                        target["instruments"][name] = {
+                            "sha256": receipt_sha, "stat": _fp(resolve(project, name))
+                        }
+                except (OSError, ValueError, KeyError, TypeError) as exc:
                     passed = False
-                    why = "Close the fully proved pathway itinerary before sealing the checklist."
-            if passed and not retained_completion(project, record):
-                passed = False
-                why = "Completion provenance is missing or invalid; closeout remains blocked."
-            if not passed:
-                target.update(status="blocked", reason=why)
-        _commit(project, path, record, target, before)
-        if passed and step_id == "closeout":
-            seal_completion(project, record)
-            save(path, record)
+                    why = str(exc)
+                if passed and not retained_completion(project, record):
+                    passed = False
+                    why = "Completion provenance is missing or invalid; closeout remains blocked."
+                if not passed:
+                    target.update(status="blocked", reason=why)
+            _commit(project, path, record, target, before)
+            if passed and step_id == "closeout":
+                seal_completion(project, record)
+                save(path, record)
         out = summary(project, record)
         if not passed:
             out.update(ok=False, error=why)

@@ -15,6 +15,17 @@ import pathway  # noqa: E402
 
 
 class PathwayTest(unittest.TestCase):
+    def test_stale_release_is_ineligible_while_docs_remain_owed(self):
+        self.start(tier="demoable")
+        for name in list(pathway.load(self.project, "w1")["pathways"]):
+            pathway.log(self.project, "w1", name, "ev.md", "true")
+        pathway.cover(self.project, "w1", "release", True, False)
+        (self.project / "release.md").write_text("released")
+        pathway.log(self.project, "w1", "release", "release.md", "true")
+        pathway.cover(self.project, "w1", "docs", True, False)
+        (self.project / "release.md").write_text("changed")
+        self.assertEqual(pathway.report(self.project, "w1")["recommended_pathway"], "docs")
+
     def test_documentation_precedes_release_and_closeout_waits_for_itinerary(self):
         self.start()
         for name in pathway.CATALOG:
