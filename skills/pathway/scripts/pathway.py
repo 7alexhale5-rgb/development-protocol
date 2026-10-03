@@ -368,7 +368,8 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
         raise ValueError("goal is required")
     if tier not in TIERS:
         raise ValueError(f"tier must be one of: {', '.join(TIERS)}")
-    with _store_lock(project):
+    # Match checklist closeout's lock order: checklist store, then pathway store.
+    with locked(project / ".devproto" / ".lock"), _store_lock(project):
         for it in _live_items_locked(
             project
         ):  # reuse even when stale proof reopens work
@@ -378,6 +379,7 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
                 and (not work_id or it["work_id"] == work_id)
             ):
                 out = _report_locked(project, it["work_id"])
+                _enroll_checklist_locked(project, it["work_id"])
                 out["note"] = (
                     "an open outcome with this goal already exists; reusing it"
                 )
@@ -396,7 +398,23 @@ def start(project: Path, goal: str, tier: str = "live", work_id: str = "") -> di
             "log": [],
         }
         save(project, item)
+        _enroll_checklist_locked(project, work_id)
         return _report_locked(project, work_id)
+
+
+
+def _enroll_checklist_locked(project: Path, work_id: str) -> None:
+    """An actual enrollment adds an obligation; it never edits sealed history."""
+    import devproto
+
+    path = devproto.store_path(project, work_id)
+    if not path.exists():
+        return
+    record = devproto.load(path)
+    if record.get("completion"):
+        return
+    record["itinerary_enrollment"] = {"version": 1, "mode": "required"}
+    devproto.save(path, record)
 
 
 def cover(

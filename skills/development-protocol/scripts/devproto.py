@@ -345,7 +345,7 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
     work_id = work_id or f"{datetime.now():%Y%m%d}-{slug(goal)}"
     path = store_path(project, work_id)
     required, notes = required_steps(goal, force, optional)
-    with locked(path):
+    with locked(path), pathway_router()._store_lock(project):
         if path.exists():
             record = load(path)
             if refresh(project, record):
@@ -392,6 +392,12 @@ def start(project: Path, goal: str, work_id: str = "", force=(), optional=()) ->
         record = {
             "work_id": work_id,
             "goal": goal,
+            "itinerary_enrollment": {
+                "version": 1,
+                "mode": "required"
+                if (project / STORE_DIR / "pathway" / (work_id + ".json")).exists()
+                else "standalone",
+            },
             "rule_notes": notes,
             "created_at": now(),
             "steps": [
@@ -502,6 +508,8 @@ def completion_digest(record: dict) -> str:
     payload = [record["work_id"], rows]
     if "completion_provenance" in record:
         payload.append(record["completion_provenance"])
+    if "itinerary_enrollment" in record:
+        payload.append(record["itinerary_enrollment"])
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -593,6 +601,21 @@ def retained_completion(project: Path, record: dict) -> bool:
                 if path.is_symlink() or not path.is_file() or digest(path) != sha:
                     return False
         provenance = record.get("completion_provenance", {})
+        enrollment = record.get("itinerary_enrollment", {})
+        if (
+            not isinstance(enrollment, dict)
+            or enrollment.get("version") != 1
+            or enrollment.get("mode")
+            not in {
+                "standalone",
+                "required",
+            }
+        ):
+            return False
+        if not isinstance(provenance, dict) or provenance.get(
+            "itinerary_required"
+        ) is not (enrollment["mode"] == "required"):
+            return False
         if provenance.get("version") != 2 or not isinstance(
             provenance.get("itinerary_required"), bool
         ):
@@ -1047,14 +1070,34 @@ def pathway_router():
 
 
 @contextlib.contextmanager
-def itinerary_completion(project: Path, work_id: str):
+def itinerary_completion(project: Path, work_id: str, enrollment: dict):
     """Hold the pathway lock while checking and retaining its closed proof."""
     path = project / STORE_DIR / "pathway" / (work_id + ".json")
     router = pathway_router()
     with router._store_lock(project):
+        if (
+            not isinstance(enrollment, dict)
+            or enrollment.get("version") != 1
+            or enrollment.get("mode")
+            not in {
+                "standalone",
+                "required",
+            }
+        ):
+            raise ValueError(
+                "Itinerary enrollment is unknown; closeout remains blocked."
+            )
         if not path.exists() and not path.is_symlink():
+            if enrollment["mode"] == "required":
+                raise ValueError(
+                    "Required shared itinerary is missing; closeout remains blocked."
+                )
             yield {}
             return
+        if enrollment["mode"] != "required":
+            raise ValueError(
+                "Shared itinerary is not bound to this intake; enroll before closeout."
+            )
         if path.is_symlink():
             raise ValueError("Shared itinerary cannot follow a symlink.")
         item = router.load(project, work_id)
@@ -1233,7 +1276,9 @@ def step(
             if passed and step_id == "closeout":
                 try:
                     itinerary_paths = closing.enter_context(
-                        itinerary_completion(project, work_id)
+                        itinerary_completion(
+                            project, work_id, record.get("itinerary_enrollment", {})
+                        )
                     )
                     itinerary_source = portable(
                         project, project / STORE_DIR / "pathway" / (work_id + ".json")
@@ -1292,6 +1337,12 @@ def reopen(project: Path, work_id: str, reason: str) -> dict:
             {
                 "completion": record.pop("completion"),
                 "steps": json.loads(json.dumps(record["steps"])),
+                "completion_provenance": json.loads(
+                    json.dumps(record.get("completion_provenance"))
+                ),
+                "itinerary_enrollment": json.loads(
+                    json.dumps(record.get("itinerary_enrollment"))
+                ),
                 "reopened_at": now(),
                 "reason": reason.strip(),
             }

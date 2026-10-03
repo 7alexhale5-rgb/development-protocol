@@ -23,6 +23,65 @@ TRIVIAL = "Fix typo in footer"
 
 
 class DevprotoTest(unittest.TestCase):
+    def test_deleted_enrolled_itinerary_cannot_become_standalone(self):
+        self.start()
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        (self.project / ".devproto/pathway/w1.json").unlink()
+        self.close_until("closeout")
+        out = self.pass_step("closeout")
+        self.assertFalse(out["ok"])
+        self.assertFalse(out["completed"])
+        record = devproto.load(devproto.store_path(self.project, "w1"))
+        self.assertEqual(record["itinerary_enrollment"]["mode"], "required")
+
+    def test_unknown_enrollment_cannot_close_as_standalone(self):
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        record = devproto.load(path)
+        record.pop("itinerary_enrollment", None)
+        devproto.save(path, record)
+        self.start()  # Resume cannot manufacture an absent historical obligation.
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+
+    def test_pathway_first_intake_records_required_enrollment(self):
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        self.start()
+        path = devproto.store_path(self.project, "w1")
+        self.assertEqual(
+            devproto.load(path)["itinerary_enrollment"]["mode"], "required"
+        )
+        (self.project / ".devproto/pathway/w1.json").unlink()
+        self.close_until("closeout")
+        self.assertFalse(self.pass_step("closeout")["ok"])
+
+    def test_reopen_retains_each_completion_provenance_independently(self):
+        self.start()
+        self.close_until("closeout")
+        self.pass_step("closeout")
+        path = devproto.store_path(self.project, "w1")
+        first = devproto.load(path)
+        devproto.reopen(self.project, "w1", "Add shared pathway coverage")
+        router = devproto.pathway_router()
+        router.start(self.project, FEATURE, "live", "w1")
+        for name in router.load(self.project, "w1")["pathways"]:
+            router.log(self.project, "w1", name, "ev.md", "true")
+        router.close(self.project, "w1")
+        self.close_until("closeout")
+        self.assertTrue(self.pass_step("closeout")["completed"])
+        current = devproto.load(path)
+        prior = dict(current["completion_history"][0], work_id="w1")
+        self.assertEqual(
+            prior.get("completion_provenance"), first["completion_provenance"]
+        )
+        self.assertTrue(devproto.retained_completion(self.project, prior))
+        self.assertTrue(devproto.retained_completion(self.project, current))
+        self.assertFalse(prior["completion_provenance"]["itinerary_required"])
+        self.assertTrue(current["completion_provenance"]["itinerary_required"])
+
+
     def test_sealed_legacy_unknown_itinerary_provenance_stays_unverified(self):
         import shutil
 
