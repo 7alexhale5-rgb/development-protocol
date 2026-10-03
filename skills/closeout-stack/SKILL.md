@@ -161,13 +161,13 @@ Never delete anything until the second copy is proven. The rest is preference.
 
 Look back through the conversation for a `/review-stack` verdict (or any independent review):
 
-| Last verdict                       | Action                                                                                                                              |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| SHIP IT / READY TO SHIP            | Proceed normally.                                                                                                                   |
-| FIX THEN SHIP / SHIP WITH CAVEATS  | Proceed. Put the remediation items under Blockers in the resume prompt.                                                             |
+| Last verdict                       | Action                                                                                        |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| SHIP IT / READY TO SHIP            | Proceed normally.                                                                             |
+| FIX THEN SHIP / SHIP WITH CAVEATS  | Proceed. Put the remediation items under Blockers in the resume prompt.                       |
 | NEEDS WORK or BLOCKED (unresolved) | Block Step 4 shipping; retain the blocker and continue saving evidence, handoff and learning. |
-| No review found, MODE=ship         | Block Step 4 shipping until required independent review is verified.                                      |
-| No review found, MODE=eod or pivot | Continue persistence; any later choice to ship must first apply the MODE=ship review rule.                                                                                                                   |
+| No review found, MODE=ship         | Block Step 4 shipping until required independent review is verified.                          |
+| No review found, MODE=eod or pivot | Continue persistence; any later choice to ship must first apply the MODE=ship review rule.    |
 
 Set STATE_PAYLOAD.release_blocked initially true until fresh through-commit and current
 candidate-review checks pass. Set it true again on any failed shipping prerequisite,
@@ -242,7 +242,6 @@ On success, capture **STATE_PAYLOAD.pr_url**.
 When review_blocked or release_blocked, this step is read-only: report drift, keep local evidence and
 backups, and never merge, push or deploy. Any later outward action requires renewed
 candidate verification and required independent review first.
-
 
 Run this on **every** ship-mode closeout, not only when a claim spans repositories. Widened on
 2026-09-04 after a production site ran a branch 454 files ahead of `main` for five days, and an
@@ -462,7 +461,21 @@ Mode-gated:
 Skip with `--no-compound`.
 
 **Idempotency.** If `.devproto/learnings/<YYYY-MM-DD>-compound-*.md` exists for today and this
-project, skip silently. Compound already ran this cycle.
+project, avoid duplicate report generation. Its existence does not prove the current
+checklist row; renewed upstream evidence may have reopened that row.
+
+### Renew retained compound proof
+
+After the shipping prerequisites pass, inspect the compound row for this work id.
+If it is pending, check that the retained report covers this exact work and its
+current findings. Update the local report when coverage is incomplete, then execute
+its verifier and record a fresh compound receipt before Step 9.5. Require the
+verifier to check the report's work identity and required learning content; inspect
+its actual result. Reusing the report never means reusing an invalidated receipt.
+If the row is already passed, preserve its valid receipt. If prerequisites remain
+open, the report is missing, or its verifier fails or is unavailable, leave the row
+pending or blocked at the earliest eligible prerequisite and name the closeout gap.
+`--no-compound` and pivot skips cannot waive a required checklist row.
 
 Non-critical: log a failure, never stop the pipeline.
 
@@ -471,7 +484,6 @@ Non-critical: log a failure, never stop the pipeline.
 When review_blocked or release_blocked, retain approved artifacts locally with verified backups. Do not
 push, merge or deploy them. Renew final candidate proof and required independent review
 before any later outward action; local persistence does not clear the review blocker.
-
 
 After all session logs, handoffs, lessons and documentation writes, inspect status again.
 Classify every generated artifact as committed and pushed, intentionally local with a

@@ -111,7 +111,6 @@ class DevprotoTest(unittest.TestCase):
                     )["completed"]
                 )
 
-
     def test_deleted_enrolled_itinerary_cannot_become_standalone(self):
         self.start()
         router = devproto.pathway_router()
@@ -170,7 +169,6 @@ class DevprotoTest(unittest.TestCase):
         self.assertFalse(prior["completion_provenance"]["itinerary_required"])
         self.assertTrue(current["completion_provenance"]["itinerary_required"])
 
-
     def test_sealed_legacy_unknown_itinerary_provenance_stays_unverified(self):
         import shutil
 
@@ -209,7 +207,6 @@ class DevprotoTest(unittest.TestCase):
                 self.assertFalse(devproto.refresh(self.project, legacy))
                 self.assertEqual(json.dumps(legacy, sort_keys=True), original)
 
-
     def test_explicit_itinerary_absence_is_immutable_and_bound(self):
         self.start()
         self.close_until("closeout")
@@ -225,7 +222,6 @@ class DevprotoTest(unittest.TestCase):
         changed = json.loads(json.dumps(record))
         changed["completion_provenance"]["itinerary_required"] = True
         self.assertFalse(devproto.retained_completion(self.project, changed))
-
 
     def test_required_itinerary_proof_survives_origin_loss_and_archive_transfer(self):
         import shutil
@@ -270,9 +266,9 @@ class DevprotoTest(unittest.TestCase):
             proof.unlink()
             self.assertFalse(devproto.retained_completion(transferred, record))
 
-
     def test_shared_itinerary_missing_archive_blocks_checklist_closeout(self):
         import importlib.util
+
         script = ROOT / "skills/pathway/scripts/pathway.py"
         spec = importlib.util.spec_from_file_location("itinerary_test", script)
         router = importlib.util.module_from_spec(spec)
@@ -296,12 +292,18 @@ class DevprotoTest(unittest.TestCase):
         out = self.pass_step("closeout")
         self.assertTrue(out["completed"])
         artifact.unlink()
-        self.assertTrue(devproto.status(self.project, "w1")["historical_receipts_valid"])
+        self.assertTrue(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
         record = devproto.load(devproto.store_path(self.project, "w1"))
         row = self.rows(out)["closeout"]
-        retained = devproto.historical_artifact(self.project, record, str(artifact), sha)
+        retained = devproto.historical_artifact(
+            self.project, record, str(artifact), sha
+        )
         retained.write_bytes(b"corrupt")
-        self.assertFalse(devproto.status(self.project, "w1")["historical_receipts_valid"])
+        self.assertFalse(
+            devproto.status(self.project, "w1")["historical_receipts_valid"]
+        )
 
     def test_closeout_rejects_successful_verifier_without_completion_provenance(self):
         self.start()
@@ -791,6 +793,40 @@ class DevprotoTest(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertFalse(out["ready"])
         self.assertTrue(out["historical_receipts_valid"])
+
+    def test_retained_compound_report_requires_renewal_after_review_changes(self):
+        # The instruction assertion checks structure; the real checklist below
+        # proves that retaining today's report alone cannot complete closeout.
+        instructions = (ROOT / "skills/closeout-stack/SKILL.md").read_text()
+        self.assertIn("Renew retained compound proof", instructions)
+        self.init_git()
+        self.start()
+        self.close_until("compound")
+        report = self.project / ".devproto/learnings/retained.md"
+        report.parent.mkdir(parents=True)
+        report.write_text("### Learnings\nWork w1: retain the confirmed finding.\n")
+        self.assertTrue(self.pass_step("compound", evidence=str(report))["ok"])
+        renewed = self.project / ".devproto/reviews/renewed.md"
+        renewed.parent.mkdir(parents=True)
+        renewed.write_text("Renewed independent review of this candidate.\n")
+        self.assertTrue(self.pass_step("review", evidence=str(renewed))["ok"])
+        self.assertEqual(
+            self.rows(devproto.status(self.project, "w1"))["compound"]["status"],
+            "pending",
+        )
+        self.close_until("compound")
+        with self.assertRaisesRegex(ValueError, "earlier steps"):
+            self.pass_step("closeout")
+        verifier = "test -f .devproto/learnings/retained.md && grep -q 'Work w1:' .devproto/learnings/retained.md && printf renewed-compound-proof"
+        renewed_proof = self.pass_step(
+            "compound", evidence=str(report), verify=verifier
+        )
+        self.assertTrue(renewed_proof["ok"])
+        self.assertIn(
+            "renewed-compound-proof",
+            self.rows(renewed_proof)["compound"]["output_tail"],
+        )
+        self.assertTrue(self.pass_step("closeout")["completed"])
 
     def test_post_ship_source_changes_block_earliest_review_not_downstream(self):
         self.init_git()
