@@ -34,7 +34,6 @@ record a pass from a web page you read by eye.
 Accept `--work-id=<id>` or resolve the existing active checklist for this branch. An
 existing work item with unknown identity is a proof gap, never an ad-hoc bypass.
 
-
 ```bash
 git status --porcelain -- . ':!.devproto'
 git branch --show-current
@@ -56,7 +55,7 @@ python3 <development-protocol skill folder>/scripts/devproto.py --project <repo>
 python3 <review-stack skill folder>/scripts/verify_review.py .devproto/evidence/review.json --commit "$(git rev-parse HEAD)" --project <repo> --work-id=<work-id>
 ```
 
-A nonzero result blocks shipping before any outward action. Report open rows and retain
+A nonzero result blocks release actions, subject only to the explicit CI bootstrap below. Report open rows and retain
 resume evidence. Never reinterpret a missing work ID as permission to bypass an existing
 work item. Re-run these checks after a sync changes the commit or candidate; stale reviews
 must be renewed. An ad-hoc release still needs the declared checks and independent review.
@@ -68,6 +67,19 @@ committed candidate. Re-record review, then re-pass simplify with `/simplify --c
 creating another commit. These renewed receipts allow `check --through commit` to pass.
 If read-only simplification finds a defect, fix it, test, commit and repeat final review.
 Do not refresh a review hash or commit field without the required independent review.
+
+### CI bootstrap: obtain first-run evidence without releasing
+
+When a newly configured workflow needs its first PR run before audit-setup can pass,
+use an authorized draft PR solely to collect that CI evidence. Record this purpose
+and the unresolved audit/checklist rows under `.devproto/` before pushing. Require
+the actual committed candidate, local applicable tests, privacy checks and independent
+code review first; missing review or other required correctness proof still blocks
+this path. Push the feature branch normally and create or reuse a draft PR. Do not
+mark ship passed, mark the PR ready, merge, deploy, publish, or run closeout release
+actions. Re-read checks on the exact PR head, renew audit-setup and each subsequent
+required row in order, then run the ordinary through-commit and review checks above.
+Draft status alone grants no permission; use the session's existing push/PR authority.
 
 ### 0b: Detect the base branch
 
@@ -286,13 +298,13 @@ Shipped.
 
 ## Flags
 
-| Flag                        | Effect                           |
-| --------------------------- | -------------------------------- |
+| Flag                        | Effect                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------- |
 | `--work-id=<id>`            | Bind the through-commit check and candidate review verifier to this work item |
-| `--skip-tests`              | Skip Step 2 entirely             |
-| `--draft`                   | Create the pull request as draft |
-| `--no-sync`                 | Skip Step 1 (merge with base)    |
-| `--reviewers @user1,@user2` | Request reviewers on the PR      |
+| `--skip-tests`              | Skip Step 2 entirely                                                          |
+| `--draft`                   | Create the pull request as draft                                              |
+| `--no-sync`                 | Skip Step 1 (merge with base)                                                 |
+| `--reviewers @user1,@user2` | Request reviewers on the PR                                                   |
 
 `--skip-tests` is an exception, not a pass: say so in the report and in the pull request body,
 and the local test line reads "skipped".

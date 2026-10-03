@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 from datetime import datetime
@@ -255,7 +256,10 @@ def selftest() -> int:
 
 
 def candidate_snapshot(project):
-    """Hash the complete nonignored candidate without modifying the user's Git index."""
+    """Hash a candidate, rejecting detected changes during this bounded two-pass scan.
+
+    This detects mutations between observations; it is not an atomic filesystem snapshot.
+    """
     project = project.resolve()
     def git(*args):
         try:
@@ -267,16 +271,36 @@ def candidate_snapshot(project):
         return result.stdout
     if Path(os.fsdecode(git('rev-parse', '--show-toplevel')).strip()).resolve() != project:
         raise ValueError('--project must name the repository root')
+    def git_state():
+        return (git('rev-parse', '--verify', 'HEAD'),
+                git('rev-parse', '--symbolic-full-name', 'HEAD'),
+                git('ls-tree', '-rz', 'HEAD'),
+                git('ls-files', '-z', '-co', '--exclude-standard'),
+                git('ls-files', '-sz'))
+
+    def fingerprint(path):
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            return ('absent',)
+        target = os.fsencode(os.readlink(path)) if stat.S_ISLNK(metadata.st_mode) else None
+        return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_size,
+                metadata.st_mtime_ns, metadata.st_ctime_ns, target)
+
+    before_git = git_state()
     head_entries = {}
-    for entry in git('ls-tree', '-rz', 'HEAD').split(b'\0'):
+    for entry in before_git[2].split(b'\0'):
         if entry:
             metadata, name = entry.split(b'\t', 1)
             head_entries[name] = metadata.split(b' ')[0]
     names = set(head_entries)
-    names.update(git('ls-files', '-z', '-co', '--exclude-standard').split(b'\0'))
+    names.update(before_git[3].split(b'\0'))
+    scanned_names = sorted(name for name in names - {b''}
+                           if name != b'.devproto' and not name.startswith(b'.devproto/'))
+    before_files = {name: fingerprint(project / os.fsdecode(name)) for name in scanned_names}
     digest = hashlib.sha256()
     index_modes = {}
-    for entry in git('ls-files', '-sz').split(b'\0'):
+    for entry in before_git[4].split(b'\0'):
         if not entry:
             continue
         metadata, name = entry.split(b'\t', 1)
@@ -284,9 +308,7 @@ def candidate_snapshot(project):
             continue
         index_modes[name] = metadata.split(b' ')[0]
         digest.update(b'index\0' + entry + b'\0')
-    for name in sorted(names - {b''}):
-        if name == b'.devproto' or name.startswith(b'.devproto/'):
-            continue
+    for name in scanned_names:
         path = project / os.fsdecode(name)
         if index_modes.get(name) == b'160000':
             raise ValueError('candidate includes an unsupported indexed submodule')
@@ -306,6 +328,10 @@ def candidate_snapshot(project):
         else:
             raise ValueError('candidate includes an unsupported directory or submodule')
         digest.update(kind + b'\0' + hashlib.sha256(content).digest())
+    after_git = git_state()
+    after_files = {name: fingerprint(project / os.fsdecode(name)) for name in scanned_names}
+    if before_git != after_git or before_files != after_files:
+        raise ValueError('Git state or files changed during candidate scan')
     return digest.hexdigest()
 
 
