@@ -37,7 +37,7 @@ length once private material is removed. When a rule carries a dated lesson ("me
 `/development-protocol`, `/pathway`, `/brainstorm-stack`, `/research-stack`, `/karpathy`,
 `/planning-stack`, `/visual-spec`, `/design-stack`, `/devilsadvocate`, `/audit-setup`,
 `/build-stack`, `/review-stack`, `/simplify`, `/commit`, `/ship`, `/compound`, `/closeout-stack`,
-`/relentless`, `/1pct`
+`/relentless`, `/1pct`, `/icm`
 
 ## Wire into the checklist
 

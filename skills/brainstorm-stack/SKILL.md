@@ -375,7 +375,8 @@ If `--for-plan` is set, append:
    ```
 
 2. If `--for-plan` is set and a `.planning/` folder exists, also write the document to
-   `.planning/CONTEXT.md`.
+   `.planning/BRAINSTORM.md`. Never `.planning/CONTEXT.md`: under the ICM folder method
+   (`/icm`) that name is reserved for the planning room's contract.
 3. Read the file back once to confirm it saved what you meant.
 4. Record the checklist row (see the top of this file).
 
@@ -402,7 +403,7 @@ By depth:
   for a full plan."
 
 If the goal is still fuzzy after this, `/karpathy spec` pins the decision this work drives before
-the plan is written. If `--for-plan` was set: "Context written to `.planning/CONTEXT.md`.
+the plan is written. If `--for-plan` was set: "Context written to `.planning/BRAINSTORM.md`.
 `/planning-stack` will pick it up."
 
 ---

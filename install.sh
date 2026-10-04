@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the development-protocol stack: 19 skills for Claude Code and/or Codex.
+# Install the development-protocol stack: 20 skills for Claude Code and/or Codex.
 # Safe to re-run. Any existing skill with the same name is backed up first.
 set -Eeuo pipefail
 

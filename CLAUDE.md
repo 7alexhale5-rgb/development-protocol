@@ -1,14 +1,14 @@
 # development-protocol: agent context
 
-The public development-protocol stack: 19 portable skills and a 17-row evidence checklist for
+The public development-protocol stack: 20 portable skills and a 17-row evidence checklist for
 Claude Code and Codex, installed by `install.sh` or as a Claude Code plugin. Every skill here is a
 port of a private working setup. **Nothing private ships**: no home paths, no private names, no
 house-only tooling. A private-data scanner enforces it.
 
 ## Where to go
 
-This repo follows the ICM folder method: this file routes, each room's
-`CONTEXT.md` holds its contract.
+This repo follows the ICM folder method (the bundled `/icm` skill): this file routes, each
+room's `CONTEXT.md` holds its contract.
 
 | Task                                                        | Go to             | Read                                                   | Skills |
 | ----------------------------------------------------------- | ----------------- | ------------------------------------------------------ | ------ |
@@ -18,6 +18,7 @@ This repo follows the ICM folder method: this file routes, each room's
 | Record or check the drift lock against upstream sources     | `sync/`           | [sync/CONTEXT.md](sync/CONTEXT.md)                     | none   |
 | Change the plugin or marketplace manifest, bump a version   | `.claude-plugin/` | [.claude-plugin/CONTEXT.md](.claude-plugin/CONTEXT.md) | none   |
 | Change CI                                                   | `.github/`        | [.github/CONTEXT.md](.github/CONTEXT.md)               | none   |
+| Change a maintainer release check (version bump guard)      | `scripts/`        | [scripts/CONTEXT.md](scripts/CONTEXT.md)               | none   |
 
 `skills/<name>/` folders are copied whole by `install.sh` and loaded by the plugin, so no
 `CONTEXT.md` or other agent file goes inside one; `skills/CONTEXT.md` covers them all. Root files
@@ -36,7 +37,10 @@ stay put: `README.md`, `CHANGELOG.md`, `UPDATES.md`, `LICENSE`, `install.sh`, `u
 - Use "the maintainer", never a personal name, outside the credit files the scanner allows
   (`README.md`, `docs/SETUP.md`, `docs/UPDATING.md`, `CHANGELOG.md`, `.claude-plugin/*.json`).
 - Each re-port or public maintenance change gets a dated `UPDATES.md` entry; anything a user would
-  notice also gets a `CHANGELOG.md` version line and a matching version in both plugin manifests.
+  notice also gets a `CHANGELOG.md` version line and a new `version` in `.claude-plugin/plugin.json`
+  (the only place it lives). Any change under `skills/` or `.claude-plugin/` needs that bump:
+  synced plugin installs update only when the version changes, and CI's `version` job fails
+  without it.
 - Commit on a branch, open a pull request, merge when CI is green.
 
 ## Verify
@@ -45,6 +49,7 @@ stay put: `README.md`, `CHANGELOG.md`, `UPDATES.md`, `LICENSE`, `install.sh`, `u
   because root ignores `chmod 0`: `test_backup_and_manifest_survive_a_crash_partway_through_install`
   and `test_crash_midcopy_then_reinstall_and_uninstall_recovers_cleanly`. As a normal user all pass.
 - `bash tests/sanitization.sh` (same as `python3 tests/scan_private.py`) prints `clean`.
+- `python3 skills/icm/scripts/icm_check.py .` holds (exit 0) for this repo's own layout.
 - Install into a throwaway home, then check and remove, as CI does:
   `HOME="$(mktemp -d)" bash -c './install.sh --yes --target both && ./health-check.sh --target both && ./uninstall.sh --yes'`
 

@@ -11,6 +11,7 @@ It connects the existing rooms below; source and tooling paths stay where they a
 - [Drift lock against upstream sources](sync/CONTEXT.md)
 - [Plugin and marketplace manifests](.claude-plugin/CONTEXT.md)
 - [Continuous integration](.github/CONTEXT.md)
+- [Maintainer release checks](scripts/CONTEXT.md)
 
 ## Start or resume work
 
@@ -30,6 +31,6 @@ Read the newest entries in [UPDATES.md](UPDATES.md) and [CHANGELOG.md](CHANGELOG
 their claims with current files and tests. A file existing is not approval or proof of current
 operation.
 
-From this checkout, run `git status`, `python3 -m unittest discover tests` and
-`bash tests/sanitization.sh`. Use this worktree's path when checking a branch.
+From this checkout, run `git status`, `python3 -m unittest discover tests`,
+`bash tests/sanitization.sh` and `python3 skills/icm/scripts/icm_check.py .`. Use this worktree's path when checking a branch.
 Record the command and result in the task receipt; keep failed work open.

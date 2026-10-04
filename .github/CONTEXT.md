@@ -5,11 +5,13 @@ Paths relative to the repo root.
 
 ## Inputs
 
-- `.github/workflows/ci.yml`: one `test` job on `ubuntu-latest` and `macos-latest` with Python
-  3.9 and 3.13.
+- `.github/workflows/ci.yml`: a `test` job on `ubuntu-latest` and `macos-latest` with Python
+  3.9 and 3.13, and a `version` job on pull requests only.
 - The checks it runs: `python3 -m unittest discover tests -v`, `bash tests/sanitization.sh`, then
   `./install.sh --yes --target both`, `./health-check.sh --target both` and `./uninstall.sh --yes`
-  in a clean temporary `HOME`.
+  in a clean temporary `HOME`. The `version` job checks out full history and runs
+  `python3 scripts/check_version_bump.py --base "origin/$BASE_REF"` (see
+  [scripts/CONTEXT.md](../scripts/CONTEXT.md)).
 
 ## Process
 

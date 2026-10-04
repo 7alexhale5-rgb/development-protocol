@@ -52,6 +52,7 @@ It commits, checks CI, writes the handoff, records lessons, and prints a resume 
 | `/review-stack --audit`               | full review with runtime checks                             |
 | `/relentless`                         | exhaustive sweeps with a coverage ledger                    |
 | `/1pct`                               | stop hedging on approved work and do the next step          |
+| `/icm`                                | where a new file goes; walk-test the folder layout          |
 | `/compound`                           | what we learned this week                                   |
 | `/compound --metrics global`          | cross-project retro over every repo under one parent folder |
 
