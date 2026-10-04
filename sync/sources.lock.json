@@ -16,8 +16,8 @@
     "recorded": "2026-09-30"
   },
   "skill:brainstorm-stack": {
-    "sha256": "f80aa847797dff46c5c59b53a1011a328e3c6817a5af18e88ce11fdb335b7bdb",
-    "recorded": "2026-09-29"
+    "sha256": "a663e8d6b22db97d5c41f42a6fa91a3deadbdf22c4096eebfb8fa5089dedffce",
+    "recorded": "2026-10-04"
   },
   "skill:build-stack": {
     "sha256": "bf5ba88c9c7232b224c6725b40ffc52cf93439b1f69905a8d79e91e16e856a40",
@@ -47,6 +47,10 @@
     "sha256": "63e0386588ad3bbba40e2ce323419201cfc103c432b5c304d8061ba1b45677cb",
     "recorded": "2026-09-29"
   },
+  "skill:icm": {
+    "sha256": "e053dbda3272c3f1e9008e996caf8130d4460e3ff2dd0cb9e51dc6dcc42164f4",
+    "recorded": "2026-10-04"
+  },
   "skill:karpathy": {
     "sha256": "56a78028cb0024163cd9dfe3701c48be1fa8a42a1d18b8325fdeeada24eaf713",
     "recorded": "2026-09-29"
@@ -56,16 +60,16 @@
     "recorded": "2026-09-29"
   },
   "skill:planning-stack": {
-    "sha256": "f34a581a2ab4eeebdf7bc7cb70a3eed3d432cbb652e8391424a484e0258cbe54",
-    "recorded": "2026-09-29"
+    "sha256": "57656740c37beefba275dbd1d19a37eef4993ba5af6d8aa34db629f0e67d3d22",
+    "recorded": "2026-10-04"
   },
   "skill:relentless": {
     "sha256": "512aeed1854b835f77eb0bb778e0aaecf11958f47829076d4c605d8082d3499e",
     "recorded": "2026-10-02"
   },
   "skill:research-stack": {
-    "sha256": "a210304981ffff9ea6be8d40746070c391520357a088a0269ce1d8870a105dc2",
-    "recorded": "2026-09-29"
+    "sha256": "6a51639015cd25f42b5e714c76a20cd20e66db7440c6aa7d8319319049fc4521",
+    "recorded": "2026-10-04"
   },
   "skill:review-stack": {
     "sha256": "848390a3a898c94f0e261a9850340b9b27681ed2becb0434779a9f010a81be9d",

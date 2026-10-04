@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.5.0 (2026-10-04)
+
+- New skill `/icm` (20 skills now): files every project file by the ICM folder method (a root
+  `CLAUDE.md` router, one `CONTEXT.md` contract per room with Inputs, Process, Outputs and Human
+  check) and ships `scripts/icm_check.py`, a standard-library walk test that exits 0 when the
+  layout holds, 1 when it is broken and 2 when it could not measure.
+- Filing follows the room map: `/brainstorm-stack --for-plan` writes `.planning/BRAINSTORM.md`
+  (never `.planning/CONTEXT.md`), `/planning-stack` names the room for every file the plan
+  creates or moves, and `/build-stack` and `/design-stack` file project files by the map.
+- `/development-protocol` and `docs/STANDARD.md`: three risk lanes (Small, Normal, Irreversible)
+  decide which rows carry work and where a person looks; irreversible work (live-data
+  migrations, money movement, external sends, production infrastructure) is checked first and
+  needs a named go-ahead. New permission-mode rules for agents with a classifier-based auto mode.
+  Close includes the ICM walk test.
+- Research focus tags reach more callers: `/design-stack` (`ui-ux`, `a11y`, `market`), `/1pct`
+  (`/research-stack --no-ask` with one tag) and the `/planning-stack` depth table.
+- Plugin updates: `version` now lives only in `.claude-plugin/plugin.json` (removed from the
+  marketplace entry), and CI fails a pull request that changes `skills/` or `.claude-plugin/`
+  without a new version, so installs that sync automatically always receive the change.
+- `/pathway` and `/research-stack` descriptions no longer contain angle-bracket placeholders.
+  claude.ai's marketplace sync rejects them as XML tags and stores the text with the brackets
+  removed. A package test now fails on any `<` or `>` in a skill description.
+
 ## 2.4.0 (2026-10-02)
 
 - Review handoffs retain complete task scope and explicit gaps; no finding quotas or clean-result retries.

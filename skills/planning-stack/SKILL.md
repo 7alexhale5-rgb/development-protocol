@@ -109,6 +109,10 @@ after the filing rules had been read. A naming rule that lives in attention fail
 **Names are computed, never chosen and never asked for.** A project that declares a name in its
 package manifest or its git remote already has an identity. Read it. Do not rename it.
 
+**Inside the project, every file the plan creates or moves names its room** under the ICM folder
+method (`/icm`): the plan's files-that-change table lists the room and its routing row, and a new
+room ships with its `CONTEXT.md` in the same change.
+
 Rules:
 
 - Ask conversationally, two or three related questions at a time, never a numbered dump.
@@ -414,13 +418,13 @@ clearly marked as ungrounded.
 
 Every run is deep:
 
-| Component         | Behaviour                                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| Context           | All five sources plus extended analysis                                                                    |
-| Research          | `/research-stack` if unknowns are detected (or 3 to 4 web searches without it); skipped by `--no-research` |
-| Verification      | Up to 3 passes plus an alternatives matrix                                                                 |
-| Perspectives      | skeptic, architecture, security, performance, first-principles, risk-assessor, pattern-matcher             |
-| Specialist lenses | 5 always on plus up to 5 keyword-gated, capped at 8                                                        |
+| Component         | Behaviour                                                                                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Context           | All five sources plus extended analysis                                                                                                                                                   |
+| Research          | `/research-stack` if unknowns are detected (or 3 to 4 web searches without it); skipped by `--no-research`. Pass focus tags: `devtools,security` for a library or architecture pick, `ui-ux,a11y` for UI |
+| Verification      | Up to 3 passes plus an alternatives matrix                                                                                                                                                |
+| Perspectives      | skeptic, architecture, security, performance, first-principles, risk-assessor, pattern-matcher                                                                                            |
+| Specialist lenses | 5 always on plus up to 5 keyword-gated, capped at 8                                                                                                                                       |
 
 If your agent has a reasoning-effort setting, use its high setting for this skill.
 

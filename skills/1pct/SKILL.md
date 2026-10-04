@@ -355,6 +355,7 @@ This skill is downstream of planning and upstream of completion.
 | `/review-stack`                                 | When the verdict is `SHIP IT` or `READY TO SHIP`, this skill says: commit and ship. Do NOT prompt for `/simplify` first unless the plan or the user asked for it.                         |
 | `/commit`, then `/ship`, then `/closeout-stack` | Pre-approved successors when the plan's exit clause is "ship". No re-prompt between them, unless a step crosses a stop sign (a push to a shared branch, a deploy the plan did not name).  |
 | `/closeout-stack`                               | The doctrine's exit ramp. Hand off cleanly; do not re-summarize what the user just watched.                                                                                               |
+| `/research-stack`                               | Fact-resolver for external unknowns. Always run it with `--no-ask` and one `--focus` tag so it never re-asks the user. Fold its answer in with a deviation log; a result that changes the plan's scope is a stop sign. |
 | `/relentless`                                   | The other half. This skill is for an agent that will not act. Relentless is for an agent that acts and then quits early. On a sweep, both apply.                                          |
 
 If your team uses an executing-plans skill with its own critical stop conditions, those map

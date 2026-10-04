@@ -39,10 +39,61 @@ running it out of habit. This block is a fast-recall aid; `SKILL.md`'s "Invoke" 
 | Ship        | Check the exact commit that will merge. Require green CI, the current head SHA, and the repository's release checks.                                  | CI link or receipt tied to that commit.                       |
 | Close       | Re-check a fresh copy of merged main, update the handoff, and record unresolved work as unknown.                                                      | Fresh-checkout result and a closeout note.                    |
 
+Every plan, proof, receipt and handoff an interval writes is filed by the project's ICM map: the
+routing table, then the room's `CONTEXT.md` Outputs (`/icm`). Checklist evidence stays under
+`.devproto/`. Close includes the ICM walk test (`icm_check.py <project>` in the `icm` skill
+folder); a broken layout is recorded like any other exception.
+
 No interval is complete because a command ran. It is complete when the result is readable,
 repeatable, and tied to the artifact or commit it claims to prove.
 
 The repository's own documented test and release commands always win over any example here.
+
+## Risk lanes
+
+The task size from `docs/STANDARD.md` picks one of three lanes. The lane decides which rows carry
+work and where a person looks.
+
+| Lane                                                         | Rows that carry work                                                                                                | Where a person looks                                                                 |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Small (Trivial, Bug fix)                                     | The always-required rows (pathway, build, review, commit, ship, closeout), with verify done by the repo's own CI on the pull request | Nowhere extra. The pull request merges when CI is green and the rows pass.           |
+| Normal (Feature, UI or UX)                                   | Small, plus spec, planning, visual spec and design for UI, and one independent reviewer                             | The spec before build and the pull request evidence at merge.                        |
+| Irreversible (Big or architecture, or any irreversible step) | Every row                                                                                                           | The spec, the pull request evidence, and a named go-ahead for the irreversible step. |
+
+Irreversible means a live-data migration, money movement, customer data leaving its repo, an
+external send, or production infrastructure. It is checked first and overrides size, however
+small the diff.
+
+Pick the lane at intake and record it in the goal text (`start` has no lane option), for example
+`--goal "<goal> (lane: normal)"`. At `start`, pass `--optional <row>` for each row outside the
+lane, then mark it `na` with the reason `lane: <name>`, so every row stays
+visible. The always-required rows cannot be made optional, so they carry work in every lane. A
+lane can move up mid-task, never down: when it moves up, record the rows the new lane adds with
+real evidence (a row marked `na` can be recorded again with `--result pass`).
+
+## Permission mode
+
+If your agent has a classifier-based auto mode (Claude Code's auto mode reviews each action in
+place of a prompt), it can be the default for every interval. Other agents keep their own
+approval settings. The rules below hold either way.
+
+- Build and verify run without prompts. The classifier still blocks force pushes, secret leaks,
+  data leaving the trusted boundary, and production changes. Never use a bypass-all-permissions
+  mode outside a throwaway sandbox.
+- Ship: on every repo that deploys, `main` changes only through a pull request. Enforce it with
+  branch protection or rulesets, then push to a branch and open a pull request. Merging with a
+  failing required check (an admin override) needs a person to name that pull request.
+- A production deploy, a remote migration, or a production environment change runs only when a
+  person named that project and action. Otherwise the step stops and is recorded as waiting on
+  them.
+- External sends (email, chat, calendar invites) stay behind the team's own guard. Hooks run
+  before the classifier, so auto mode never loosens that rule.
+- A denial is an exception, recorded like any other. Fix it one of three ways: an environment
+  entry for a place the team trusts, an allow rule for a routine command, or a person stating
+  intent for a one-off. Never route around a denial with a different command shape.
+- In Claude Code, auto mode rules are read from the user settings file, not from a project's
+  `.claude/` folder. After any change run `claude auto-mode critique` and
+  `claude auto-mode config`.
 
 ## Independent review
 

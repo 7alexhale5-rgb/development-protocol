@@ -1,4 +1,4 @@
-# Skills room: the 19 bundled skills
+# Skills room: the 20 bundled skills
 
 One job: keep every bundled skill a standalone, portable port that works on a fresh machine with
 only this repo installed. Paths relative to the repo root.

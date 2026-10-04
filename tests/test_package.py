@@ -80,6 +80,17 @@ class PackageTest(unittest.TestCase):
                 40 <= len(desc) <= 1024, f"{name}: description length {len(desc)}"
             )
 
+    def test_descriptions_have_no_angle_brackets(self):
+        """claude.ai's marketplace sync rejects XML-like tags in a SKILL.md description
+        ("SKILL.md description cannot contain XML tags") and stores it with angle brackets
+        removed, so a placeholder such as <project> silently loses its meaning."""
+        bad = []
+        for name in sorted(BUNDLED):
+            desc = frontmatter((SKILLS / name / "SKILL.md").read_text()).get("description", "")
+            if re.search(r"[<>]", desc):
+                bad.append(f"{name}: {desc[:80]}")
+        self.assertEqual(bad, [], "descriptions with < or >:\n" + "\n".join(bad))
+
     def test_slash_references_resolve(self):
         missing = []
         for f in shipped_markdown():
@@ -260,6 +271,34 @@ class PackageTest(unittest.TestCase):
         for p in (ROOT / ".claude-plugin").glob("*.json"):
             data = json.loads(p.read_text())
             self.assertIn("name", data)
+
+    def test_version_lives_only_in_plugin_json(self):
+        """Synced installs update when plugin.json's version changes; a second copy in the
+        marketplace entry can disagree with it, so it must not exist."""
+        plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
+        self.assertRegex(plugin.get("version", ""), r"^\d+\.\d+\.\d+$")
+        market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+        self.assertNotIn("version", market)
+        for entry in market["plugins"]:
+            self.assertNotIn("version", entry, entry.get("name"))
+        changelog = (ROOT / "CHANGELOG.md").read_text()
+        self.assertIn(f"## {plugin['version']}", changelog)
+
+    def test_skill_counts_match_the_bundled_skills(self):
+        files = [
+            ".claude-plugin/plugin.json",
+            ".claude-plugin/marketplace.json",
+            "README.md",
+            "CLAUDE.md",
+            "install.sh",
+            "skills/CONTEXT.md",
+        ]
+        wrong = []
+        for rel in files:
+            for m in re.finditer(r"\b(\d+) (?:portable |bundled )?skills\b", (ROOT / rel).read_text()):
+                if int(m.group(1)) != len(BUNDLED):
+                    wrong.append(f"{rel}: {m.group(0)}")
+        self.assertEqual(wrong, [], f"{len(BUNDLED)} skills are bundled")
 
     def test_scripts_are_standard_library_only(self):
         allowed_third_party = set()

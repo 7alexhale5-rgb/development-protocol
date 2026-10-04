@@ -2,6 +2,82 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-04T13:52:09-05:00
+
+- skill:brainstorm-stack: source fingerprint recorded for drift monitoring; this is not a re-port
+- skill:planning-stack: source fingerprint recorded for drift monitoring; this is not a re-port
+- skill:research-stack: source fingerprint recorded for drift monitoring; this is not a re-port
+- skill:icm: source fingerprint recorded for drift monitoring; this is not a re-port
+
+## 2026-10-04T13:50:51-05:00
+
+Release 2.5.0. Each drifted item was compared with the committed source version its lock hash
+matches, then re-ported from the committed changes since. A source with uncommitted edits that
+this port did not make is ported from its committed version only, and its lock is not updated.
+
+- skill:icm (new): ported from the private ICM folder standard and its checker. Files:
+  `skills/icm/SKILL.md`, `skills/icm/scripts/icm_check.py` (standard library, exit 0 holds,
+  1 broken, 2 could not measure), `tests/test_icm.py` (43 tests, including the seeded broken
+  fixture `tests/fixtures/icm-broken/`) and a test that this repo passes its own walk test.
+  Dropped: private corpus and rollout-ledger paths, the home-folder project finder and owner
+  family names that only private hooks used, private hook names (now "enforcement, if your team
+  wants it"), private examples in the forms table, and personal approval wording ("the owner's
+  approval"). Kept: every rule, the 13 conventions, the six forms, the walk test, the dated
+  2026-09-30 project-boundary lessons and the paper's own limits. Lock recorded.
+- skill:brainstorm-stack: full re-port. The focus-tag line was already in the port. Added the
+  committed ICM rule that `--for-plan` writes `.planning/BRAINSTORM.md`, never
+  `.planning/CONTEXT.md` (it was in the recorded source but missing here). Lock recorded.
+- skill:planning-stack: full re-port. Depth table passes focus tags; the interview names the
+  room for every file the plan creates or moves. The source's visual-pack path change does not
+  apply: `/visual-spec` owns the pack here. Lock recorded.
+- skill:research-stack: no content change needed. Drift cause: the source folder is its own git
+  repository, ignored by the parent repository, so its two commits since the lock never showed
+  in the parent's history. One replaced the private copy with public research-stack
+  3.3.0 plus a private `local/` add-on; the other changed only that add-on. The lock also still
+  held the pre-v3 fingerprint from before the 2.2.0 and 2.3.0 re-ports. The public files equal
+  upstream 3.3.0 byte for byte, and the only SKILL.md change since the 3.2.1 port is the optional
+  `config/` and `local/` overlay lines, left out on purpose (this port has neither). The
+  maintainer's drift check now skips private-only add-ons inside a mapped folder (`local/`,
+  `config/config.md`, per-machine agent memory), so an add-on edit no longer counts as drift.
+  Lock recorded.
+- Focus tags: `references/focus/tags.json` still differs from upstream only in its metadata
+  note, the allowed public divergence (upstream names a private implementation). Triggers,
+  addenda, bundles and `FOCUS_HINTS` match.
+- skill:1pct: partial. Added the `/research-stack` composition row; the external-unknowns rule
+  and its examples were already ported. Lock not updated: the source has uncommitted edits.
+- skill:design-stack: partial. The `/research-stack` row passes focus tags (`ui-ux`, `a11y`,
+  `market`), and a project-filing note points to `/icm`. Lock not updated: the source has
+  uncommitted edits.
+- skill:karpathy: partial. The committed focus-tag change was already in the port; nothing new.
+  Lock not updated: the source has uncommitted edits.
+- skill:build-stack: partial. No committed change since the lock; added the project-filing note
+  that was in the recorded source. Lock not updated: the source has uncommitted edits.
+- skill:compound: partial. No committed change since the lock; nothing to port. Lock not
+  updated: the source has uncommitted edits.
+- skill:development-protocol: partial. `reference.md` gains the three risk lanes, generalized
+  permission-mode rules and the ICM walk test at close; `SKILL.md` applies the lane at `start`
+  and adds the auto-mode config check. Lock not updated: the source has uncommitted edits.
+- doc:STANDARD: partial. The irreversible class (checked first), the risk-lane table, the
+  file-by-the-map gate, and the cloud-thread note for desktop Projects. Lock not updated: one
+  source file has uncommitted edits.
+- Intentional divergence: the source's Small lane omits review and closeout. Here they stay,
+  because the checklist always requires pathway, build, review, commit, ship and closeout.
+  `audit-setup` and `review-stack` did not take the source's project-filing note: their ports
+  write fixed paths that `/review-stack` and the checklist look for.
+- skill:pathway and skill:research-stack: frontmatter descriptions rewritten with no `<` or `>`
+  (placeholders spelled out, meaning unchanged). claude.ai's marketplace sync of 478c147 warned
+  "SKILL.md description cannot contain XML tags" for both and stored them with the brackets
+  removed. `tests/test_package.py` now fails on any angle bracket in a skill description. The
+  research-stack description now differs from upstream in that one sentence; upstream should
+  take the same wording.
+- Version 2.5.0. `version` lives only in `.claude-plugin/plugin.json`;
+  `scripts/check_version_bump.py` and CI's `version` job fail a pull request that changes
+  `skills/` or `.claude-plugin/` without a bump. New `scripts/` room with its contract.
+- Review follow-up on the pull request: the version check also fails when the version still
+  matches the branch point after the base released (new tests seeded red first); the filing
+  notes name both map files (`CLAUDE.md` or `AGENTS.md`); the lane goes in the goal text because
+  `start` has no lane option; the `/icm` router wording now matches what the walk test accepts.
+
 ## 2026-10-02T16:42:05-05:00
 
 - Ship and closeout now block outward release when required review or verification is missing.

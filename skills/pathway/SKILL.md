@@ -1,6 +1,6 @@
 ---
 name: pathway
-description: Tells a project which engineering pathway to run next (govern, research, data, security, design, implementation, quality, field, observability, techdebt, release, docs), tracks every pathway against one shared work id, and will not let the outcome close until each owed pathway is proved on a real file or marked not applicable with a reason. Use when someone asks "what should I do next on this project", "what's left", "keep going until it's done", "run the next step", "go", types /pathway <project> go or loop, or wants a measured pilot across several projects. Loop mode runs determine, execute, prove, advance continuously, with autonomy earned by the proof rate.
+description: Tells a project which engineering pathway to run next (govern, research, data, security, design, implementation, quality, field, observability, techdebt, release, docs), tracks every pathway against one shared work id, and will not let the outcome close until each owed pathway is proved on a real file or marked not applicable with a reason. Use when someone asks "what should I do next on this project", "what's left", "keep going until it's done", "run the next step", "go", types /pathway followed by a project and go or loop, or wants a measured pilot across several projects. Loop mode runs determine, execute, prove, advance continuously, with autonomy earned by the proof rate.
 ---
 
 # Pathway: the next best move for a project

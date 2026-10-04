@@ -34,11 +34,16 @@ work and picks the lane.
 
 | Size                | Looks like                                                                        |
 | ------------------- | --------------------------------------------------------------------------------- |
+| Irreversible        | Checked first; overrides size. See below                                          |
 | Trivial             | Under 10 lines, one file, no design decision: a typo, a rename, a log line        |
 | Bug fix             | A bounded fix in one to a few files with a clear way to reproduce it              |
 | Feature             | Several files, new behavior a user can see, some design choices                   |
 | Big or architecture | Two or more features, crosses systems, changes a schema or contract, hard to undo |
 | UI or UX            | Any screen or component a user touches. Combine with the size above               |
+
+**Irreversible** work is a live-data migration, money movement, customer data leaving its repo,
+an external send, or a change to production infrastructure. It runs the big lane plus a named
+go-ahead from a person for the step that cannot be undone, however small the diff.
 
 When unsure between two sizes, pick the larger. Over-planning a small task costs minutes.
 Under-planning a big one costs a rewrite.
@@ -55,7 +60,28 @@ Under-planning a big one costs a rewrite.
 
 Focus tags aim research at one area. Add `data-infra` to the big lane when a schema or data store
 is involved. Launch work runs `/research-stack #launch` (seo, perf, a11y, content). When the
-research row turns on, the checklist suggests tags from the goal's words.
+research row turns on, the checklist suggests tags from the goal's words; confirm them at the
+research scope gate, never apply them silently.
+
+Work handed to a desktop Project's cloud threads (a coordinator plus threads) instead of a local
+session runs this same lane through the `development-protocol` plugin. A person merges after a
+second-model review.
+
+### Risk lanes: where a person looks
+
+The size picks the lane. The lane decides which rows carry work and where a person spends
+attention.
+
+| Lane                                                    | Rows that carry work                                                                                     | Where a person looks                                                             |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Small (Trivial, Bug fix)                                | The rows the checklist always requires, with verify done by the repo's own CI on the pull request        | Nowhere extra. The pull request merges when CI is green and the rows pass.       |
+| Normal (Feature, UI or UX)                              | Small, plus spec, planning, visual spec and design for UI, and one independent reviewer                  | The spec before build and the pull request evidence at merge.                    |
+| Irreversible (Big or architecture, or any irreversible step) | Every row                                                                                                | The spec, the pull request evidence, and a named go-ahead for the irreversible step. |
+
+Pick the lane at intake and record it with the goal. A lane can move up mid-task, never down.
+Rows outside the lane are made optional at `start` and marked n/a with the reason
+`lane: <name>`, so every row stays visible. The rows the checklist always requires (pathway,
+build, review, commit, ship, closeout) stay required in every lane.
 
 ## The checklist
 
@@ -96,6 +122,8 @@ written reason.
   present. A repo without one gets `/audit-setup` first.
 - **The builder does not grade its own work.** Review comes from a different model family, a fresh
   session, or a teammate.
+- **File by the map.** Every file the lane creates or moves goes where the project's routing
+  table and room `CONTEXT.md` say (`/icm`). Check the layout with its walk test at close.
 - **Keep a written ledger on long tasks.** Past about ten steps, write down goal, done, next, open
   questions and constraints, and re-read it at each phase.
 - **Unknown is not pass.** A check that could not run is reported as not verified, with the reason.

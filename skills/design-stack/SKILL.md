@@ -8,6 +8,12 @@ description: Runs UI and UX design work through one pipeline, from intent interv
 A multi-step design pipeline, the design counterpart of `/planning-stack`. It turns a goal into a
 brief, a built interface and proof that the interface works, with a fresh critique at the end.
 
+> **Project filing**: files this skill writes into the project itself (code, notes, assets)
+> go where the project's ICM map (`CLAUDE.md` or `AGENTS.md`) and room `CONTEXT.md` say; see
+> `/icm`. Checklist evidence under `.devproto/` stays where the checklist expects it. Other
+> paths below are defaults for when no room names one; in a staged repo `.planning/` holds
+> tool state only.
+
 Read `references/quality-floor.md` once per design task. It sets the fidelity floor and leaves
 style open. Its **Understand and reproduce the production method** section applies to every
 reference you adopt: Steps 4, 6 and 7 recover, build and test the method behind a reference. A
@@ -322,7 +328,7 @@ it does not substitute for executing the checks or reviewing their linked eviden
 | Skill               | Role                                                                           |
 | ------------------- | ------------------------------------------------------------------------------ |
 | `/brainstorm-stack` | Before `/design-stack` on a greenfield design goal                             |
-| `/research-stack`   | Competitor analysis or aesthetic research                                      |
+| `/research-stack`   | Pattern research `--focus ui-ux` (add `a11y` for forms or dialogs); competitors `--focus market` |
 | `/planning-stack`   | For a cross-cutting feature, plan first, then `/design-stack --new` for the UI |
 | `/visual-spec`      | Produces the spec pack Step 2 needs for a new screen or product                |
 | `/audit-setup`      | Installs the axe, Lighthouse and bundle tools Step 7 uses                      |

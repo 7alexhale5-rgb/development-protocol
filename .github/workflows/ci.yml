@@ -27,3 +27,15 @@ jobs:
           ./install.sh --yes --target both
           ./health-check.sh --target both
           ./uninstall.sh --yes
+  version:
+    # A change users receive must carry a new plugin version, or synced installs never update.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Version bumped when skills or manifests change
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/check_version_bump.py --base "origin/$BASE_REF"

@@ -1,6 +1,6 @@
 # development-protocol
 
-A complete, plug-and-play AI development stack for Claude Code and Codex: **19 skills that take
+A complete, plug-and-play AI development stack for Claude Code and Codex: **20 skills that take
 software work from idea to shipped, and a checklist that will not call anything done without
 proof.**
 
@@ -69,6 +69,7 @@ Needs Python 3.9+ and git. No packages to install; every script is standard libr
 | `/closeout-stack`       | Commit, ship, handoff, lessons, and a resume prompt                                              |
 | `/relentless`           | Coverage ledger for exhaustive sweeps, so nothing is missed                                      |
 | `/1pct`                 | Stops hedging on approved work; executes the next step                                           |
+| `/icm`                  | Files every project file by the ICM folder method; checks the layout with a walk test            |
 
 ## Read next
 

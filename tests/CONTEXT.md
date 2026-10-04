@@ -6,11 +6,13 @@ nothing private ships. Paths relative to the repo root.
 ## Inputs
 
 - `tests/test_*.py`: unittest modules, one per scripted skill (`test_devproto.py`,
-  `test_pathway.py`, `test_focus.py`, `test_validate_report.py`, `test_audit_setup.py`, and
-  others), plus `test_package.py` (frontmatter, slash references, zsh-safe shell snippets,
+  `test_pathway.py`, `test_focus.py`, `test_validate_report.py`, `test_audit_setup.py`,
+  `test_icm.py`, and others), `test_check_version_bump.py` for the maintainer script, plus `test_package.py` (frontmatter, slash references, zsh-safe shell snippets,
   stdlib-only imports, manifests valid JSON, CI pinned by SHA, private scan clean) and
   `test_install.py` (install, uninstall and recovery against a throwaway home).
-- `tests/fixtures/`: research report fixtures, good and bad, with and without focus addenda.
+- `tests/fixtures/`: research report fixtures, good and bad, with and without focus addenda;
+  `tests/fixtures/icm-broken/`, a seeded broken ICM project for `test_icm.py` (broken on
+  purpose; its own `CLAUDE.md` makes it a nested project the repo's walk test skips).
 - `tests/scan_private.py` and its wrapper `tests/sanitization.sh`; patterns in
   `tests/generic-patterns.txt`.
 - Optional maintainer-only private list via `DEVPROTO_PRIVATE_PATTERNS`; never commit it
