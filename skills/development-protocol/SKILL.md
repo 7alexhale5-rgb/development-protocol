@@ -132,10 +132,11 @@ proves the real thing happened" means. Push a branch and open a pull request to 
 
 ## How to run it
 
-1. Pick the risk lane (Small, Normal or Irreversible; `reference.md`, "Risk lanes") and `start`
-   the work item with it: `--optional <row>` for each row outside the lane, then mark those rows
-   n/a with the reason `lane: <name>`. Read the rule notes `start` prints and fix wrong matches
-   now. A lane can move up mid-task, never down.
+1. Pick the risk lane (Small, Normal or Irreversible; `reference.md`, "Risk lanes"). `start` has
+   no lane option, so record it in the goal text (for example `--goal "<goal> (lane: normal)"`),
+   pass `--optional <row>` for each row outside the lane, then mark those rows n/a with the
+   reason `lane: <name>`. Read the rule notes `start` prints and fix wrong matches now. A lane
+   can move up mid-task, never down.
 2. Rows 1 to 8 are the spec half. Do them properly; they decide most of the outcome. Use the
    strongest model available for these rows.
 3. Build in three to five phases, never more. Each phase ships one runnable thing against its gate

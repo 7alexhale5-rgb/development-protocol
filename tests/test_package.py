@@ -80,6 +80,17 @@ class PackageTest(unittest.TestCase):
                 40 <= len(desc) <= 1024, f"{name}: description length {len(desc)}"
             )
 
+    def test_descriptions_have_no_angle_brackets(self):
+        """claude.ai's marketplace sync rejects XML-like tags in a SKILL.md description
+        ("SKILL.md description cannot contain XML tags") and stores it with angle brackets
+        removed, so a placeholder such as <project> silently loses its meaning."""
+        bad = []
+        for name in sorted(BUNDLED):
+            desc = frontmatter((SKILLS / name / "SKILL.md").read_text()).get("description", "")
+            if re.search(r"[<>]", desc):
+                bad.append(f"{name}: {desc[:80]}")
+        self.assertEqual(bad, [], "descriptions with < or >:\n" + "\n".join(bad))
+
     def test_slash_references_resolve(self):
         missing = []
         for f in shipped_markdown():

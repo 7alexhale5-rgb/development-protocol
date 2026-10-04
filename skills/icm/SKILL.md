@@ -25,10 +25,12 @@ filesystem rules govern; inside a project, this does.
 ## The layers
 
 1. **Router: `CLAUDE.md`** at the project root, with `AGENTS.md` a symlink to it (one copy,
-   read by both Claude Code and Codex). Two or three sentences on the work, then where to go: a
-   routing table (`| Task | Go to | Read | Skills |`) or a "Where to go" list of `*/CONTEXT.md`
-   links, plus the naming convention. Aim for about 60 lines; past one screen, room content is
-   hiding in it.
+   read by both Claude Code and Codex). A project whose agents read only one of the two may
+   keep just that file as the map; the walk test accepts either and warns when `CLAUDE.md` has
+   no `AGENTS.md` beside it. Add the symlink when both agents work in the project. Two or three
+   sentences on the work, then where to go: a routing table (`| Task | Go to | Read | Skills |`)
+   or a "Where to go" list of `*/CONTEXT.md` links, plus the naming convention. Aim for about
+   60 lines; past one screen, room content is hiding in it.
 2. **Workspace context: root `CONTEXT.md`** when the project has three or more rooms: purpose
    and boundary, the chosen form and why, how a run or record starts, stable versus changing
    material, where status is recorded, and the first useful test.

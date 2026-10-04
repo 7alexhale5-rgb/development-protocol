@@ -9,10 +9,10 @@ A multi-step design pipeline, the design counterpart of `/planning-stack`. It tu
 brief, a built interface and proof that the interface works, with a fresh critique at the end.
 
 > **Project filing**: files this skill writes into the project itself (code, notes, assets)
-> go where the project's ICM router (`CLAUDE.md`) and room `CONTEXT.md` say; see `/icm`.
-> Checklist evidence under `.devproto/` stays where the checklist expects it. Other paths
-> below are defaults for when no room names one; in a staged repo `.planning/` holds tool
-> state only.
+> go where the project's ICM map (`CLAUDE.md` or `AGENTS.md`) and room `CONTEXT.md` say; see
+> `/icm`. Checklist evidence under `.devproto/` stays where the checklist expects it. Other
+> paths below are defaults for when no room names one; in a staged repo `.planning/` holds
+> tool state only.
 
 Read `references/quality-floor.md` once per design task. It sets the fidelity floor and leaves
 style open. Its **Understand and reproduce the production method** section applies to every

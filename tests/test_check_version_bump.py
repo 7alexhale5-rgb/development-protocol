@@ -113,6 +113,31 @@ class CheckVersionBumpTest(unittest.TestCase):
         self.commit("docs on branch")
         self.assertEqual(self.run_check()[0], 0)
 
+    def test_stale_branch_version_fails_when_base_moved_on(self):
+        """The base released 1.1.0 after the branch point; a branch still at 1.0.0 differs
+        from the base but matches where it started, so installs never see its change."""
+        self.git("switch", "-q", "main")
+        self.write("docs/notes.md", "base moved\n")
+        self.write_version("1.1.0")
+        self.commit("base release")
+        self.git("switch", "-q", "feature")
+        self.write("skills/demo/SKILL.md", "v2\n")
+        self.commit("change skill, no bump")
+        code, out = self.run_check()
+        self.assertEqual(code, 1, out)
+        self.assertIn("the branch point", out)
+
+    def test_branch_matching_the_base_release_fails(self):
+        """Both sides bumped to the same number: after merge the version would not change."""
+        self.git("switch", "-q", "main")
+        self.write_version("1.1.0")
+        self.commit("base release")
+        self.git("switch", "-q", "feature")
+        self.write("skills/demo/SKILL.md", "v2\n")
+        self.write_version("1.1.0")
+        self.commit("change skill, same bump as base")
+        self.assertEqual(self.run_check()[0], 1)
+
     def test_unknown_base_cannot_measure(self):
         code, out = self.run_check(base="no-such-branch")
         self.assertEqual(code, 2, out)

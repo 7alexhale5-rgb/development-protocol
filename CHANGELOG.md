@@ -19,6 +19,9 @@
 - Plugin updates: `version` now lives only in `.claude-plugin/plugin.json` (removed from the
   marketplace entry), and CI fails a pull request that changes `skills/` or `.claude-plugin/`
   without a new version, so installs that sync automatically always receive the change.
+- `/pathway` and `/research-stack` descriptions no longer contain angle-bracket placeholders.
+  claude.ai's marketplace sync rejects them as XML tags and stores the text with the brackets
+  removed. A package test now fails on any `<` or `>` in a skill description.
 
 ## 2.4.0 (2026-10-02)
 

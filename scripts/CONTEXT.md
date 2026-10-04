@@ -13,7 +13,8 @@ One job: hold the maintainer-only checks that guard a release. Nothing here is i
 ## Process
 
 1. `python3 scripts/check_version_bump.py --base origin/main` compares the branch with its base.
-   A change under `skills/` or `.claude-plugin/` with the base's version exits 1.
+   A change under `skills/` or `.claude-plugin/` whose version matches the base's current version
+   or the version where the branch started exits 1.
 2. Scripts are Python 3.9+ standard library only, each with a unit test under `tests/`
    (`tests/test_check_version_bump.py`).
 3. A new check added here goes into `.github/workflows/ci.yml` in the same change.

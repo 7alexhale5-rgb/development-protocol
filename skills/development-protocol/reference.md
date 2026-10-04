@@ -64,8 +64,9 @@ Irreversible means a live-data migration, money movement, customer data leaving 
 external send, or production infrastructure. It is checked first and overrides size, however
 small the diff.
 
-Pick the lane at intake and record it with the goal. At `start`, pass `--optional <row>` for each
-row outside the lane, then mark it `na` with the reason `lane: <name>`, so every row stays
+Pick the lane at intake and record it in the goal text (`start` has no lane option), for example
+`--goal "<goal> (lane: normal)"`. At `start`, pass `--optional <row>` for each row outside the
+lane, then mark it `na` with the reason `lane: <name>`, so every row stays
 visible. The always-required rows cannot be made optional, so they carry work in every lane. A
 lane can move up mid-task, never down: when it moves up, record the rows the new lane adds with
 real evidence (a row marked `na` can be recorded again with `--result pass`).

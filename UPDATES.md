@@ -64,9 +64,19 @@ this port did not make is ported from its committed version only, and its lock i
   because the checklist always requires pathway, build, review, commit, ship and closeout.
   `audit-setup` and `review-stack` did not take the source's project-filing note: their ports
   write fixed paths that `/review-stack` and the checklist look for.
+- skill:pathway and skill:research-stack: frontmatter descriptions rewritten with no `<` or `>`
+  (placeholders spelled out, meaning unchanged). claude.ai's marketplace sync of 478c147 warned
+  "SKILL.md description cannot contain XML tags" for both and stored them with the brackets
+  removed. `tests/test_package.py` now fails on any angle bracket in a skill description. The
+  research-stack description now differs from upstream in that one sentence; upstream should
+  take the same wording.
 - Version 2.5.0. `version` lives only in `.claude-plugin/plugin.json`;
   `scripts/check_version_bump.py` and CI's `version` job fail a pull request that changes
   `skills/` or `.claude-plugin/` without a bump. New `scripts/` room with its contract.
+- Review follow-up on the pull request: the version check also fails when the version still
+  matches the branch point after the base released (new tests seeded red first); the filing
+  notes name both map files (`CLAUDE.md` or `AGENTS.md`); the lane goes in the goal text because
+  `start` has no lane option; the `/icm` router wording now matches what the walk test accepts.
 
 ## 2026-10-02T16:42:05-05:00
 

@@ -3,12 +3,13 @@
 
 Plugin installs that sync automatically only fetch a new copy when `version` in
 `.claude-plugin/plugin.json` changes. So when a branch changes anything under `skills/` or
-`.claude-plugin/` compared with its base, its version must differ from the base's.
+`.claude-plugin/` compared with its base, its version must differ from both the base's current
+version and the version where the branch started.
 
     python3 scripts/check_version_bump.py --base origin/main [--repo <folder>]
 
-Exit 0 no shipped change, or the version changed. Exit 1 a shipped change with the base's
-version. Exit 2 could not measure (unknown base ref, unreadable manifest, git failed).
+Exit 0 no shipped change, or the version changed. Exit 1 a shipped change whose version matches
+the base's or the branch point's. Exit 2 could not measure (unknown base ref, unreadable manifest, git failed).
 
 Python 3.9+, standard library only.
 """
@@ -53,10 +54,9 @@ def version_at(repo: Path, ref: str | None) -> str:
     return version.strip()
 
 
-def shipped_changes(repo: Path, base: str) -> list[str]:
+def shipped_changes(repo: Path, merge_base: str) -> list[str]:
     """Files under the shipped paths that differ between the merge base and the working
     tree, committed or not."""
-    merge_base = git(repo, "merge-base", base, "HEAD").strip()
     out = git(repo, "diff", "--name-only", merge_base, "--", *SHIPPED)
     untracked = git(repo, "ls-files", "--others", "--exclude-standard", "--", *SHIPPED)
     return sorted({p for p in (out + untracked).splitlines() if p})
@@ -65,21 +65,25 @@ def shipped_changes(repo: Path, base: str) -> list[str]:
 def check(repo: Path, base: str) -> tuple[int, str]:
     try:
         git(repo, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
-        changed = shipped_changes(repo, base)
+        merge_base = git(repo, "merge-base", base, "HEAD").strip()
+        changed = shipped_changes(repo, merge_base)
         if not changed:
             return (
                 0,
                 f"no change under {', '.join(SHIPPED)} since {base}; no bump needed",
             )
-        old, new = version_at(repo, base), version_at(repo, None)
+        new, old = version_at(repo, None), version_at(repo, base)
+        # The version this branch started from and the base's current version both count:
+        # matching either means installs already at that version never fetch this change.
+        taken = {version_at(repo, merge_base): "the branch point", old: base}
     except Unmeasurable as exc:
         return 2, f"COULD NOT MEASURE: {exc}"
-    if new == old:
+    if new in taken:
         listing = "\n".join(f"  {p}" for p in changed)
         return 1, (
             f"FAIL: {len(changed)} shipped file(s) changed since {base} but "
-            f"{MANIFEST} is still {old}. Bump the version so installed copies update, "
-            f"and add a CHANGELOG.md entry.\n{listing}"
+            f"{MANIFEST} is {new}, the version at {taken[new]}. Bump it so installed "
+            f"copies update, and add a CHANGELOG.md entry.\n{listing}"
         )
     return 0, f"OK: version {old} -> {new} covers {len(changed)} shipped file(s)."
 

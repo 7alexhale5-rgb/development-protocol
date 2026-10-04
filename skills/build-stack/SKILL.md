@@ -10,10 +10,10 @@ small slices, runs a check after each slice, and drives the result to a verified
 ready to commit. It sits between `/planning-stack` (before) and `/review-stack` (after).
 
 > **Project filing**: files this skill writes into the project itself (code, notes, assets)
-> go where the project's ICM router (`CLAUDE.md`) and room `CONTEXT.md` say; see `/icm`.
-> Checklist evidence under `.devproto/` stays where the checklist expects it. Other paths
-> below are defaults for when no room names one; in a staged repo `.planning/` holds tool
-> state only.
+> go where the project's ICM map (`CLAUDE.md` or `AGENTS.md`) and room `CONTEXT.md` say; see
+> `/icm`. Checklist evidence under `.devproto/` stays where the checklist expects it. Other
+> paths below are defaults for when no room names one; in a staged repo `.planning/` holds
+> tool state only.
 
 **Philosophy:** thin orchestrator. Do not copy logic from other skills; call them. In the LARGE
 path, hand the typing to helper agents if your agent supports them. For BUGFIX, SMALL and MEDIUM
