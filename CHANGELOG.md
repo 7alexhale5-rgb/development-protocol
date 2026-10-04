@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.1 (2026-10-04)
+
+- `/research-stack` validator re-ported from the public 3.3.0 follow-ups: `declared_focus` no longer
+  loses lenses to blank or comment rows, YAML block lists, inline comments, CRLF files or `- #tag`
+  null items, and `validate_report.py` fails any `focus:` spelling it cannot read (a wrapped flow
+  list, a value on a later line) instead of skipping every focus check. The focus manifest note now
+  names pathway-operating-layer as a mirror, so the shared-standards focus-tags check agrees again.
+
 ## 2.5.0 (2026-10-04)
 
 - New skill `/icm` (20 skills now): files every project file by the ICM folder method (a root

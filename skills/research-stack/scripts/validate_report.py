@@ -171,7 +171,7 @@ def lens_authorities(tags, manifest=None):
 
 NO_FOCUS = {"none", "null", "~", "-"}
 FRONT_MATTER_RE = re.compile(r"\A\s*---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
-FOCUS_LINE_RE = re.compile(r"^focus:\s*(.*)$", re.MULTILINE)
+FOCUS_LINE_RE = re.compile(r"^focus:[ \t]*(.*)$", re.MULTILINE)
 DEPTH_LINE_RE = re.compile(r"^depth:\s*([\w-]+)", re.MULTILINE)
 # Dashboard lines a --deep run must record (SKILL.md Steps 6.6 and 8.5). A run can skip a
 # step silently and still pass structure; these lines make the skip visible.
@@ -201,16 +201,105 @@ def extract_tags(text):
     return found
 
 
-def declared_focus(text):
-    """Return the focus tags named in the report's front matter, or []."""
+def focus_value_without_comment(value):
+    """Keep quoted hashes and existing hashtag tags; drop YAML trailing comments."""
+    quote = None
+    escaped = False
+    for index, char in enumerate(value):
+        if escaped:
+            escaped = False
+            continue
+        if quote == '"' and char == "\\":
+            escaped = True
+        elif char in "\"'":
+            if quote == char:
+                quote = None
+            elif quote is None:
+                quote = char
+        elif char == "#" and quote is None:
+            prefix = value[:index].rstrip()
+            if (
+                prefix.endswith((",", "["))
+                and index + 1 < len(value)
+                and not value[index + 1].isspace()
+            ):
+                continue
+            if (index > 0 and value[index - 1].isspace()) or (
+                index == 0 and (len(value) == 1 or value[1].isspace())
+            ):
+                return value[:index].rstrip()
+    return value
+
+
+DASH_ROW_RE = re.compile(r"^[ \t]*-(?:[ \t]|$)")
+
+
+def focus_front_matter(text):
+    """Return (header, rows after the focus line) from the front matter, or None."""
     m = FRONT_MATTER_RE.match(text)
     if not m:
-        return []
-    line = FOCUS_LINE_RE.search(m.group(1))
+        return None
+    front = m.group(1).replace("\r\n", "\n")
+    line = FOCUS_LINE_RE.search(front)
     if not line:
+        return None
+    return line.group(1).strip(), front[line.end() :].split("\n")[1:]
+
+
+def focus_form_problem(text):
+    """Name a `focus:` spelling this parser does not read, or None when it reads every row.
+
+    A hand-rolled reader cannot follow YAML scalars and flow lists that wrap or start on a
+    later line. Returning no tags for them would skip every focus check, so check_focus fails
+    them instead and asks for a form the parser reads.
+    """
+    parsed = focus_front_matter(text)
+    if not parsed:
+        return None
+    header, rows = parsed
+    value = focus_value_without_comment(header)
+    if value.startswith("[") and "]" not in value:
+        return "the flow list wraps onto the next line"
+    for row in rows:
+        if not row.strip() or row.lstrip().startswith("#"):
+            continue
+        if DASH_ROW_RE.match(row):
+            if value and not header.startswith("#"):
+                return "list items follow an inline value"
+        elif row[:1] in " \t":
+            return "a value starts or continues on a later line"
+        else:
+            break
+    return None
+
+
+def declared_focus(text):
+    """Return the focus tags named in the report's front matter, or []."""
+    parsed = focus_front_matter(text)
+    if not parsed:
         return []
-    raw = line.group(1).strip().strip("[]")
-    tags = [t.strip().strip("\"'").lstrip("#").lower() for t in raw.split(",") if t.strip()]
+    header, rest = parsed
+    raw = focus_value_without_comment(header).strip("[]")
+    first_value = next((row for row in rest if row.strip() and not row.lstrip().startswith("#")), "")
+    if header.startswith("#") and DASH_ROW_RE.match(first_value):
+        raw = ""  # A following sequence disambiguates YAML comments from legacy hashtags.
+    if not raw:
+        # YAML block list: "focus:" then "  - seo" lines. Without this a report could declare
+        # focus in block form and skip every focus check.
+        items = []
+        for row in rest:
+            if not row.strip() or row.lstrip().startswith("#"):
+                continue
+            item = re.match(r"^[ \t]*-(?:[ \t]+(.*?))?[ \t]*$", row)
+            if not item:
+                break
+            value = item.group(1) or ""
+            # A leading hash in a block item is a YAML comment, so the item is null.
+            items.append("" if value.startswith("#") else focus_value_without_comment(value))
+        raw = ",".join(items)
+    tags = [
+        t.strip().strip("\"'").lstrip("#").lower() for t in raw.split(",") if t.strip()
+    ]
     return [t for t in tags if t not in NO_FOCUS]
 
 
@@ -299,6 +388,12 @@ def check_structure(text):
 def check_focus(text, manifest=None):
     """Focus addenda: one required section per declared tag, plus lens sources."""
     manifest = manifest or MANIFEST
+    problem = focus_form_problem(text)
+    if problem:
+        return "FAIL", [
+            f"Focus: FAIL ({problem})",
+            "  - write `focus: [a, b]` on one line, or a block list of `- tag` rows",
+        ]
     tags = expand_focus(declared_focus(text), manifest)
     if not tags:
         return "PASS", ["Focus: PASS (no focus declared)"]
@@ -596,7 +691,7 @@ def main(argv=None):
     results = []
     if a.check in ("structure", "all"):
         results.append(check_structure(text))
-    if a.check in ("structure", "focus", "all") and (a.check == "focus" or declared_focus(text)):
+    if a.check in ("structure", "focus", "all") and (a.check == "focus" or declared_focus(text) or focus_form_problem(text)):
         results.append(check_focus(text))
     if a.check in ("process", "all") or (a.check == "structure" and declared_depth(text) == "deep"):
         results.append(check_process(text))

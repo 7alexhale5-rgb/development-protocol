@@ -235,5 +235,11 @@ class FallbackChainTest(unittest.TestCase):
             Path(d, "zz.md").write_text("no tools here\n", encoding="utf-8")
             self.assertIn("zz: Z", fc.plan(["zz"], manifest, {}, d))
 
+class BlockListFocusTest(unittest.TestCase):
+    def test_block_list_focus_is_read(self):
+        report = "---\nfocus:\n  - seo\n  - a11y\ndepth: deep\n---\nbody\n"
+        self.assertEqual(vr.declared_focus(report), ["seo", "a11y"])
+
+
 if __name__ == "__main__":
     unittest.main()
