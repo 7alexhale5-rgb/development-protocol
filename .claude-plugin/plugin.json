@@ -1,7 +1,7 @@
 {
   "name": "development-protocol",
   "description": "20 skills that take software work from idea to shipped: pathway, brainstorm, research, spec, planning, visual spec, design, premortem, audit setup, build, verify, review, simplify, commit, ship, compound, closeout, plus relentless, 1pct and icm, run by one evidence-checked checklist.",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "author": {
     "name": "Alex Hale"
   },

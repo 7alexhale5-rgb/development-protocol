@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.2 (2026-10-07)
+
+- `/audit-setup` CI templates: the quality gate and the Dependabot auto-merge job now read
+  `runs-on` from an optional `CI_RUNNER` variable and fall back to `ubuntu-latest` when it is unset
+  or the pull request is from a fork, so teams with a self-hosted runner switch one variable, not
+  every workflow. The Lighthouse job stays on `ubuntu-latest` (Chrome has no Linux arm64 build).
+
 ## 2.5.1 (2026-10-04)
 
 - `/research-stack` validator re-ported from the public 3.3.0 follow-ups: `declared_focus` no longer

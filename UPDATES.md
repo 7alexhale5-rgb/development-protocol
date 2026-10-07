@@ -2,6 +2,14 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-07
+
+- skill:audit-setup: template-only edit, not a re-port. `quality-ci.yml.tmpl` and
+  `dependabot-auto-merge.yml.tmpl` use a `CI_RUNNER` runner expression with an `ubuntu-latest`
+  fallback; `lighthouse-ci.yml.tmpl` keeps `ubuntu-latest` with a comment; `ci-readme.md.tmpl`
+  explains both. The lock is not updated from here (the drift check records hashes), so the next
+  drift check will show this item as drifted until it re-records it.
+
 ## 2026-10-04T13:52:09-05:00
 
 - skill:brainstorm-stack: source fingerprint recorded for drift monitoring; this is not a re-port

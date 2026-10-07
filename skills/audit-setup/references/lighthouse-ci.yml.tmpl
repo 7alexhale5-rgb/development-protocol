@@ -35,6 +35,7 @@ jobs:
       (github.event_name == 'deployment_status' &&
        github.event.deployment_status.state == 'success' &&
        github.event.deployment.environment == 'Preview')
+    # Stays on ubuntu-latest on purpose: Google Chrome has no Linux arm64 build, so a self-hosted arm64 runner cannot run Lighthouse.
     runs-on: ubuntu-latest
     # 5 routes x 3 runs x ~60s/run on 2-core GH runners = ~15min baseline;
     # 20min gives headroom for setup + treosh upload + transient slowness.
