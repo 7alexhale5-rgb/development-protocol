@@ -107,7 +107,7 @@ No other file changes are needed. The PR comment step keeps working alongside.
   Lighthouse comment.
 - The preset (mobile or desktop) must match the captured baseline. If you change the preset in
   `.lighthouserc.json`, recapture with `/audit-setup --lighthouse-only --force`.
-- Scores on GitHub-hosted runners (2 cores) run lower than on a fast laptop or a CDN. A baseline
+- Lighthouse runs on `ubuntu-latest` on purpose (Chrome has no Linux arm64 build); the other templates read `vars.CI_RUNNER` and fall back to `ubuntu-latest`. Scores on GitHub-hosted runners (2 cores) run lower than on a fast laptop or a CDN. A baseline
   captured locally can show a steady 30 to 50 point performance gap with no code change. Capture
   the baseline against the same surface CI audits (for example the production CDN) so deltas mean
   something.

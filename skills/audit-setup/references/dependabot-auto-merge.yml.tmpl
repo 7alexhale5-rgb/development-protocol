@@ -11,7 +11,9 @@ permissions:
   statuses: read
 jobs:
   auto-merge:
-    runs-on: ubuntu-latest
+    # Runner: the repo or org variable CI_RUNNER (a self-hosted runner label) when set. Fork PRs and
+    # repos without the variable fall back to ubuntu-latest, so this is safe anywhere.
+    runs-on: ${{ fromJSON((github.event.pull_request.head.repo.fork && '"ubuntu-latest"') || vars.CI_RUNNER || '"ubuntu-latest"') }}
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Bind metadata to event commit
