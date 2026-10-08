@@ -85,6 +85,8 @@ def _walk(root: str):
             if (d in SKIP_DIRS or d.startswith(".")) and d != ".planning":
                 continue
             full = os.path.join(dirpath, d)
+            if os.path.islink(full):
+                continue
             if is_project_boundary(full):
                 continue
             keep.append(d)

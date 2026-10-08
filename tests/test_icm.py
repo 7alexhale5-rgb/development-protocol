@@ -121,6 +121,33 @@ class IcmCheckTest(unittest.TestCase):
             self.assertIn("unmeasured", measured)
             self.assertEqual(run(root), 2)
 
+    def test_unrouted_unreadable_directory_symlink_is_not_probed(self):
+        project = self.tmp / "project"
+        project.mkdir()
+        root = good(project)
+        target = self.tmp / "outside-unreadable"
+        target.mkdir()
+        link = root / "unrouted-link"
+        link.symlink_to(target, target_is_directory=True)
+        original = icm.os.listdir
+
+        def denied(path):
+            if Path(path) in (link, target):
+                raise PermissionError("unreferenced symlink target cannot be listed")
+            return original(path)
+
+        with mock.patch.object(icm.os, "listdir", side_effect=denied):
+            self.assertEqual(run(root), 0)
+
+    def test_explicitly_routed_symlink_room_still_checks_contract(self):
+        root = good(self.tmp)
+        target = root / ".hidden-room"
+        target.mkdir()
+        (target / "CONTEXT.md").write_text("# Missing required sections\n")
+        (root / "routed-link").symlink_to(target, target_is_directory=True)
+        self.append(root / "CLAUDE.md", "\n[Explicit room](routed-link/CONTEXT.md)\n")
+        self.assertEqual(run(root), 1)
+
     def test_json_report_carries_the_exit_code(self):
         root = good(self.tmp)
         out = io.StringIO()

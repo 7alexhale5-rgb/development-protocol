@@ -2,7 +2,7 @@
 
 ## 2.5.3 (2026-10-07)
 
-- The folder checker now requires exact project-guide filenames. A lower-case team note no longer hides a room from checks on case-insensitive disks.
+- The folder checker now requires exact project-guide filenames. A lower-case team note no longer hides a room from checks on case-insensitive disks. Unreferenced directory links remain outside the walk; explicitly routed room contracts still get checked.
 
 ## 2.5.2 (2026-10-07)
 
