@@ -185,6 +185,8 @@ It checks:
   reference, shortcut and collapsed links, plus backtick routes such as `` `src/CONTEXT.md` ``
   in a routing row. Links inside code spans and fences are examples, not links.
 
+Project boundaries require the exact names `CLAUDE.md`, `AGENTS.md` or `.git`. A lower-case note is ordinary content, even on a case-insensitive disk.
+
 It never descends into a nested project (a folder with its own `CLAUDE.md`, `AGENTS.md` or
 `.git`) or into dependency, build, cache and archive folders. The JSON report includes a
 manifest that binds each guide it read to a SHA-256 of the bytes actually checked, so a proof

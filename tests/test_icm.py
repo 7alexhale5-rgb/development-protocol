@@ -262,6 +262,29 @@ class IcmCheckTest(unittest.TestCase):
         (child / "CLAUDE.md").rename(child / "AGENTS.md")
         self.assertEqual(icm.check(str(root))["rooms"], 1)
 
+    def test_lowercase_agent_note_is_not_a_project_boundary(self):
+        root = good(self.tmp)
+        notes = root / "notes"
+        notes.mkdir()
+        (notes / "agents.md").write_text("# Team notes\n")
+        (notes / "CONTEXT.md").write_text("# Missing room contract\n")
+        actual_exists = icm.os.path.lexists
+
+        def case_insensitive_exists(path):
+            target = Path(path)
+            return actual_exists(path) or (
+                target.parent.is_dir()
+                and target.name.casefold() in {
+                    name.casefold() for name in icm.os.listdir(target.parent)
+                }
+            )
+
+        with mock.patch.object(icm.os.path, "lexists", case_insensitive_exists):
+            self.assertFalse(icm.is_project_boundary(str(notes)))
+            measured = icm.check(str(root))
+        self.assertEqual(measured["rooms"], 2)
+        self.assertTrue(any("Inputs" in error for error in measured["errors"]))
+
     def test_routed_hidden_room_is_counted_and_checked(self):
         root = good(self.tmp)
         (root / ".research").mkdir()

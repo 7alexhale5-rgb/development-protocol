@@ -64,8 +64,9 @@ TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
 
 def is_project_boundary(path):
     """A folder with its own map or repository is a separate project."""
+    names = set(os.listdir(path))
     return any(
-        os.path.lexists(os.path.join(path, name))
+        name in names and os.path.lexists(os.path.join(path, name))
         for name in ("CLAUDE.md", "AGENTS.md", ".git")
     )
 
