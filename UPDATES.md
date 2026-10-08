@@ -2,6 +2,10 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-07T20:56:19-05:00
+
+- skill:icm: source fingerprint recorded for drift monitoring; this is not a re-port
+
 ## 2026-10-07
 
 - skill:icm: ported the current exact-spelling project-boundary rule into the portable checker. The new case-insensitive disk control failed before the repair; all 46 checker tests then passed. A review-found directory-link regression was reproduced and fixed; explicitly routed room checks and unreadable traversed-directory failures remain. Public read-error handling and proof manifests are retained. Private host hooks and filesystem monitors stay outside this package. No source fingerprint is recorded before exact release verification.
