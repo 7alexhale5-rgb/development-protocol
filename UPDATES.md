@@ -4,6 +4,8 @@ Every re-port, source baseline, and public maintenance change, newest first.
 
 ## 2026-10-07
 
+- skill:icm: ported the current exact-spelling project-boundary rule into the portable checker. The new case-insensitive disk control failed before the repair; all 46 checker tests then passed. A review-found directory-link regression was reproduced and fixed; explicitly routed room checks and unreadable traversed-directory failures remain. Public read-error handling and proof manifests are retained. Private host hooks and filesystem monitors stay outside this package. No source fingerprint is recorded before exact release verification.
+
 - skill:audit-setup: template-only edit, not a re-port. `quality-ci.yml.tmpl` and
   `dependabot-auto-merge.yml.tmpl` use a `CI_RUNNER` runner expression with an `ubuntu-latest`
   fallback; `lighthouse-ci.yml.tmpl` keeps `ubuntu-latest` with a comment; `ci-readme.md.tmpl`
