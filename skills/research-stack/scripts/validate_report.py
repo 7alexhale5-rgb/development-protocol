@@ -384,6 +384,10 @@ def metadata_value_problem(value, *, focus_csv=False):
                 continue
             if char == "?" and (index + 1 == len(value) or value[index + 1] in " \t"):
                 return "unsupported explicit mapping key in metadata"
+            if char == "-" and value[index + 1:index + 2] in (" ", "\t"):
+                tail = value[index + 1:].lstrip(" \t")
+                if tail and not tail.startswith("#") and not (focus_csv and tail[0] in ",]"):
+                    return "unsupported sequence indicator inside an inline metadata value"
             node_start = False
             if char in "\"'":
                 quote = char
@@ -470,9 +474,10 @@ def root_mapping_problem(text):
             block_indent = spaces + sequence_width - (last_dash_width if key is None else 0)
         # Sequence mappings may have sibling keys aligned after the dash. Only
         # deeper rows would make this completed value an unsupported parent.
+        has_inline_value = not metadata_row_ignored(unadorned)
         completed_inline_indent = (
             spaces + sequence_width - (last_dash_width if key is None else 0)
-            if scan_focus_value(unadorned, legacy_hashtags=False)[0].strip(" \t") else None
+            if has_inline_value else None
         )
         if spaces:
             continue
@@ -483,7 +488,7 @@ def root_mapping_problem(text):
         if sequence_width or not key or "\\" in key.group(1):
             return "unsupported root mapping/key syntax; use ordinary key: value rows"
         active_key = key_name
-        active_inline_value = bool(scan_focus_value(unadorned, legacy_hashtags=False)[0].strip(" \t"))
+        active_inline_value = has_inline_value
         focus_item_indent = None
     return None
 

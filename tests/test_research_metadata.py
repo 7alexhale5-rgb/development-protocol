@@ -1785,3 +1785,71 @@ class Protocol188ParentBoundary(unittest.TestCase):
             for check in ('focus', 'structure', 'process', 'sources', 'all'):
                 with self.subTest(declaration=declaration, check=check):
                     self.assertEqual(self.cli(declaration, check).returncode, 0)
+
+
+class Protocol189InlineSequence(unittest.TestCase):
+    report = Final184Test.report
+    cli = Final184Test.cli
+    assert_invalid_parent = Protocol188ParentBoundary.assert_invalid_parent
+    PREFIXES = ('title: - ', 'title:\t-\t', 'title: &note !!str - ',
+                'metadata:\n  note: - ', 'authors:\n  - note: - ',
+                'metadata: {note: - ')
+
+    def test_inline_sequence_indicator_cannot_conceal_quoted_root_metadata(self):
+        for prefix in self.PREFIXES:
+            for quote in ('"', "'"):
+                for target in ('focus: content', 'depth: deep'):
+                    self.assert_invalid_parent(prefix + quote + 'Notes\n' + target + ' #' + quote)
+        for declaration in ('title: - [content]', 'title: - item', 'metadata: {note: - item}'):
+            self.assert_invalid_parent(declaration)
+
+    def test_inline_sequence_indicator_fails_all_cli_consumers(self):
+        for declaration in ('title: - "Notes\nfocus: content #"',
+                            "title: - 'Notes\ndepth: deep #'",
+                            'metadata:\n  note: - "Notes\nfocus: content #"',
+                            "authors:\n  - note: - 'Notes\nfocus: content #'",
+                            'title: &note !!str - "Notes\nfocus: content #"'):
+            for check in ('focus', 'structure', 'process', 'sources', 'citations', 'all'):
+                with self.subTest(declaration=declaration, check=check):
+                    result = self.cli(declaration, check)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn('sequence indicator', result.stdout)
+                    self.assertNotIn('official (9/10)', result.stdout)
+
+    def test_row_sequences_sentinels_and_literal_dash_controls_remain_valid(self):
+        for declaration in ('focus: -', 'focus: - # ordinary comment', 'depth: -',
+                            'title: -word', 'title: "- content"', "title: '- content'",
+                            'title: Report - "unfinished quote',
+                            'authors:\n  - "focus: content"',
+                            'authors:\n- - "focus: content"',
+                            'authors:\n  - note: "- content"\n    depth: deep',
+                            'title: |\n  - "Notes\n  focus: content #"'):
+            with self.subTest(declaration=declaration):
+                metadata = vr.validated_metadata(self.report(declaration))
+                self.assertIsNone(vr.metadata_problem(metadata))
+                self.assertEqual(metadata['focus'], [])
+                for check in ('focus', 'structure', 'process', 'sources', 'all'):
+                    self.assertEqual(self.cli(declaration, check).returncode, 0)
+
+    def test_parent_presence_depends_on_value_prefix_not_comment_contents(self):
+        for parent in ('', '# comment ["', '&parent # comment ["', '!<tag:yaml.org,2002:map> # comment ["'):
+            declaration = 'metadata: ' + parent + '\n  focus: content\n  depth: deep'
+            with self.subTest(parent=parent):
+                self.assertIsNone(vr.metadata_problem(vr.validated_metadata(self.report(declaration))))
+                self.assertEqual(self.cli(declaration, 'all').returncode, 0)
+        for parent in ('"# comment"', "'# comment'", '[content]', '{name: content}', '&name "# comment"'):
+            self.assert_invalid_parent('metadata: ' + parent + '\n  focus: content')
+
+
+class Protocol189SentinelSpacing(unittest.TestCase):
+    report = Final184Test.report
+    cli = Final184Test.cli
+
+    def test_no_focus_sentinel_retains_csv_and_flow_spacing(self):
+        for declaration in ('focus: -, security', 'focus: - , security',
+                            'focus: [ - , security ]', 'focus: security, - ',
+                            'focus: [security, - ]'):
+            with self.subTest(declaration=declaration):
+                self.assertEqual(vr.declared_focus(self.report(declaration)), ['security'])
+                self.assertIsNone(vr.metadata_problem(vr.validated_metadata(self.report(declaration))))
+                self.assertEqual(self.cli(declaration, 'all').returncode, 0)
