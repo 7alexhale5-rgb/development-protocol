@@ -1,4 +1,4 @@
-"""Regression cases ported from the released public Research Stack metadata repair."""
+"""Public Research Stack regression cases plus local Protocol188–194 metadata repairs."""
 import io
 import re
 import json
