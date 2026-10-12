@@ -97,7 +97,7 @@ class StructureTest(unittest.TestCase):
                 report = (
                     "---\nfocus:\n"
                     + separator
-                    + "  - seo\n  - security\nother: value\n  - legal\n---\n"
+                    + "  - seo\n  - security\nother:\n  - legal\n---\n"
                 )
                 self.assertEqual(vr.declared_focus(report), ["seo", "security"])
 
@@ -127,7 +127,7 @@ class StructureTest(unittest.TestCase):
             "focus: seo, #perf",
             "focus: #seo",
             "focus: #none\n  - security",
-            "focus:\n- seo\n- security\nother: value\n  - legal",
+            "focus:\n- seo\n- security\nother:\n  - legal",
             "focus: # lenses\n  - seo # search\n  -\n  - 'security'",
             "focus: []",
         ):
