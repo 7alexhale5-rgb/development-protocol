@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.4 (2026-10-12)
+
+- Research validation rejects ambiguous or malformed metadata before reading focus tags, depth, source authority or citations. Supported quoted keys, shared root indentation and literal scalar data keep their meaning. Large headers and distinct focus lists use bounded parsing. The bundled citation check retains its stricter live-source and blocked-fetch rules.
+
 ## 2.5.3 (2026-10-07)
 
 - The folder checker now requires exact project-guide filenames. A lower-case team note no longer hides a room from checks on case-insensitive disks. Unreferenced directory links remain outside the walk; explicitly routed room contracts still get checked.

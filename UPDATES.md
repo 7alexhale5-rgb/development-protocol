@@ -2,6 +2,10 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-12
+
+- skill:research-stack: ported the metadata repair from the released public research-stack revision 6ee443f. Added its regression cases without replacing existing package tests. Kept the bundled citation classification and aggregation rules, public layout, and focus manifest note. Only the public validator and metadata-format guidance changed. Private local overlays, host-specific instructions and configuration are outside this port. No whole-skill source fingerprint is recorded: remaining source differences are still open.
+
 ## 2026-10-07T20:56:19-05:00
 
 - skill:icm: source fingerprint recorded for drift monitoring; this is not a re-port
