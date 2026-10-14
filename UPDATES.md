@@ -1,10 +1,18 @@
+<!-- verified: 2026-10-13T11:55:41-05:00 -->
+
+Metadata validation now requires a separator before comments after quoted or flow values and retains full custom hashtag identities when checking ambiguous block lists.
+
 # Update log
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-13
+
+- skill:research-stack: preserve raw file newline characters before metadata validation so a lone carriage return cannot become an accepted field boundary. Keep ordinary LF and CRLF files valid. Escape nonprintable focus-tag characters in diagnostics without changing parsed tag identity. Three added regression methods cover every CLI gate, newline compatibility and terminal-control output.
+
 ## 2026-10-12
 
-- skill:research-stack: ported the metadata repair from the released public research-stack revision 6ee443f. Added its regression cases without replacing existing package tests. Kept the bundled citation classification and aggregation rules, public layout, and focus manifest note. Only the public validator and metadata-format guidance changed. Private local overlays, host-specific instructions and configuration are outside this port. No whole-skill source fingerprint is recorded: remaining source differences are still open. Local Protocol188–196 repairs extend that port: reject inline sequence indicators, invalid block-scalar indentation, dedents to unopened levels, orphan standalone properties, children under completed scalars, malformed flow entries or separators, repeated colons before flow delimiters, malformed block-scalar headers, and literal quoted-key identity. These are local additions beyond revision 6ee443f, backed by separate regression cases and exact-diff reviews. Two existing positive fixtures used that invalid shape and were corrected to empty parents with every assertion preserved; corrected fixtures pass the original and repaired validators.
+- skill:research-stack: ported the metadata repair from the released public research-stack revision 6ee443f. Added its regression cases without replacing existing package tests. Kept the bundled citation classification and aggregation rules, public layout, and focus manifest note. Only the public validator and metadata-format guidance changed. Private local overlays, host-specific instructions and configuration are outside this port. No whole-skill source fingerprint is recorded: remaining source differences are still open. Local Protocol188–199 repairs extend that port: reject inline sequence indicators, invalid block-scalar indentation, dedents to unopened levels, orphan standalone properties, children under completed scalars, malformed flow entries or separators, repeated colons before flow delimiters, malformed block-scalar headers, literal quoted-key identity, reserved node-start characters, backslashes in nested mapping keys, malformed quoted escapes and out-of-range Unicode escapes. Malformed properties, raw control characters, foreign dash indicators and escaped flow keys are rejected before authority or fetching. Duplicate anchor or tag properties also fail when split across continuation rows of the same pending node; separate sibling and nested nodes retain independent state. One shared YAML decoder preserves supported focus/depth identity and inherited paired Unicode escapes. Alias nodes are explicitly unsupported, including aliases to earlier anchors. Custom manifest tags and bundles now govern comment ambiguity as well as focus expansion; empty manifests retain the default registry. These are local additions beyond revision 6ee443f, backed by separate regression cases and exact-diff reviews. Two existing positive fixtures used that invalid shape and were corrected to empty parents with every assertion preserved; corrected fixtures pass the original and repaired validators.
 
 ## 2026-10-07T20:56:19-05:00
 
@@ -113,7 +121,6 @@ this port did not make is ported from its committed version only, and its lock i
 - Source fingerprints are not reset merely to hide drift. Installation and review receipts
   must bind this candidate before its release. No vendor package or measured gain is claimed.
 
-
 ## 2026-10-02T13:26:41-05:00
 
 - skill:research-stack: re-ported from upstream research-stack 3.2.1 (`3af6987`). New: hunter/gatherer
@@ -209,7 +216,6 @@ portable maintenance changes, not an upstream re-port; source fingerprints remai
 
 - skill:audit-setup: source fingerprint recorded for drift monitoring; this is not a re-port
 
-
 ## 2026-09-29T21:01:33-05:00
 
 Public maintenance release 2.0.1 fixes confirmed release-review findings. These are changes to
@@ -220,7 +226,6 @@ unchanged so future drift checks do not hide upstream differences.
 - Safety and recovery: installer, uninstaller, health check, and scanner.
 - Validation: audit-setup, research-stack, design-stack, and workflow instructions.
 - Reporting: compound metric definitions and local-day grouping.
-
 
 ## 2026-09-29T20:07:41-05:00
 
