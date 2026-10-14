@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.5 (2026-10-13)
+
+- Research validation accepts two valid metadata forms it used to refuse: a plain value starting with a dash then a comma or bracket, and a quoted list item holding an escaped quote then a colon. Complete escaped keys and dash indicators inside flow collections are still refused.
+
 ## 2.5.4 (2026-10-12)
 
 - Research validation rejects ambiguous or malformed metadata before reading focus tags, depth, source authority or citations. Supported quoted keys, shared root indentation and literal scalar data keep their meaning. Large headers and distinct focus lists use bounded parsing. The bundled citation check retains its stricter live-source and blocked-fetch rules.
