@@ -45,7 +45,7 @@ filesystem rules govern; inside a project, this does.
 Every room `CONTEXT.md` is at most 80 lines and has these four headings:
 
 - `## Inputs`: working inputs for this run and stable reference inputs, each with an exact
-  path; the entry condition; what to do when an input is missing (stop, ask, or write NOT FOUND).
+  path and the needed section or range for large inputs (say whole file when needed); the entry condition; what to do when an input is missing (stop, ask, or write NOT FOUND).
 - `## Process`: numbered, concrete actions on the named inputs.
 - `## Outputs`: each output's exact path, format and required fields.
 - `## Human check`: who compares what against which source, what pass means, what happens on
@@ -238,3 +238,18 @@ grep -q '"exit": 0' .devproto/evidence/<work-id>-icm.json
 The closeout row is recorded with `devproto.py ... step --step closeout` as `/closeout-stack`
 describes. Name the walk-test file in the closeout handoff so the reviewer can find it. If the
 checker exits 2, the handoff says "ICM layout not verified" with the reason.
+
+## Routing proof and source currency
+
+A routing row names the task, required inputs, unrelated material to skip, optional method and
+output destination. Load required instructions and dependencies before narrowing context.
+Skipping optional material never overrides authorization, privacy or proof. Keep reusable
+method separate from project facts and run state; stop loading when the task has enough evidence.
+
+For a changed route, try a representative task in a fresh session. Record files actually opened,
+output path and check result. Include an unrelated-task control and a missing-input case.
+The structural checker alone cannot prove that routing works or saves tokens. Preserve public
+checker improvements for read errors, exact spelling, directory links and proof manifests.
+
+Names and dates follow **Source names and dates** in `../development-protocol/reference.md`.
+A new capture or edit does not make an old source current. Keep one home per fact and link it.

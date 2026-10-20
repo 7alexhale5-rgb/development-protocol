@@ -55,6 +55,10 @@ class SetupError(Exception):
     """A step failed in a way the user must see. Message says what to do next."""
 
 
+class BaselinePreserved(SetupError):
+    """Prior evidence was retained, but no new capture was executed."""
+
+
 # --------------------------------------------------------------------------- detection
 
 
@@ -355,20 +359,13 @@ def require_node18() -> None:
 def find_chrome(root: Path = None) -> str:
     if os.environ.get("CHROME_PATH"):
         return os.environ["CHROME_PATH"]
-    mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    if Path(mac).exists():
-        return mac
-    for name in ("google-chrome", "chromium", "chromium-browser"):
-        found = shutil.which(name)
-        if found:
-            return found
     if root is not None:
         try:
             probe = subprocess.run(
                 [
                     "node",
                     "-e",
-                    "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);",
+                    "const fs=require('fs');for (const m of ['playwright', '@playwright/test']) { try { const p=require(m).chromium.executablePath(); if(fs.statSync(p).isFile()){fs.accessSync(p,fs.constants.X_OK);console.log(p);process.exit(0);} } catch {} } process.exit(1);",
                 ],
                 cwd=root,
                 capture_output=True,
@@ -376,10 +373,24 @@ def find_chrome(root: Path = None) -> str:
                 timeout=10,
             )
             candidate = probe.stdout.strip()
-            if probe.returncode == 0 and candidate and Path(candidate).is_file():
+            if probe.returncode == 0 and candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
                 return candidate
         except (OSError, subprocess.TimeoutExpired):
             pass
+    # Use the separate testing bundle before the signed-in interactive browser.
+    testing = Path.home() / "Library/Caches/ms-playwright"
+    candidates = testing.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
+    candidates = sorted(candidates, key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(testing)))])
+    for candidate in reversed(candidates):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if Path(mac).is_file() and os.access(mac, os.X_OK):
+        return mac
+    for name in ("google-chrome", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
     raise SetupError(
         "Chrome or Chromium not found. Set CHROME_PATH, or install one (npx playwright install chromium works)."
     )
@@ -439,10 +450,9 @@ def setup_lighthouse(
             )
         if lighthouse_rerun_stale(root):
             raise SetupError("existing Lighthouse rerun is stale; recapture with --force")
-        print(
-            f"lighthouse: baseline already present ({n} routes). Use --force to recapture."
+        raise BaselinePreserved(
+            f"Lighthouse baseline preserved ({n} routes); no fresh capture. Use --force with explicit target/routes to recapture."
         )
-        return
     node = node_version()
     pkg = lighthouse_pkg(node)
     if pkg.endswith("12.6.1"):
@@ -1404,6 +1414,9 @@ def main(argv=None) -> int:
                 a.uninstall,
                 a.allow_host,
             )
+    except BaselinePreserved as exc:
+        print(f"audit-setup: {exc}", file=sys.stderr)
+        return 2
     except SetupError as exc:
         print(f"audit-setup: {exc}", file=sys.stderr)
         return 1

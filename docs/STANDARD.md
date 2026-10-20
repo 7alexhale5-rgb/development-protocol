@@ -112,8 +112,12 @@ written reason.
 
 ## Gates that apply to every lane above trivial
 
-- **Plan before multi-file work.** Once a plan is approved, build it. Do not ask again at every
-  phase boundary.
+- **A working plan before every task.** Before starting or resuming, show the current plan in
+  the desktop app's rendered browser or the terminal-only Markdown fallback defined below.
+  Requested rendered delivery remains incomplete without rendering. Small work uses a compact view. Preserve saved
+  edits and read them before each phase. Follow the working-plan contract in
+  `skills/development-protocol/reference.md`. Once scope is approved, execute it without asking
+  again at each phase boundary.
 - **Look at git before the first write.** `git status`, recent history, and the target files.
   Someone may have changed them since you last looked.
 - **Verify the real artifact.** The saved row, the deployed page, the measured number. "Tests

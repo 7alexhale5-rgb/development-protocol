@@ -5,6 +5,10 @@ description: Builds a deep, confirmable implementation plan by interviewing the 
 
 # Planning Stack
 
+Before implementation or resumed execution, follow **Working plan before execution** in
+`../development-protocol/reference.md`: show the current plan on the supported host surface,
+preserve saved edits and read them before each phase. This applies to every work task.
+
 A multi-phase planning pipeline. It combines the codebase, prior plans and decisions, research
 and best practices, and a board of critical perspectives into one plan that a person approves
 before any code is written. Two separate modes keep the plan specific: **TECH** for architecture
@@ -314,10 +318,19 @@ Edits here happen before approval. After approval the plan file is frozen.
 Present the plan, then append the Planning Stack Report (`references/plan-templates.md`,
 "Report"). Include the path to `plan-review.md` and a one-line summary of rounds and outcomes.
 
-Optional: if your team has an HTML renderer for plans, render a sibling view for reading. The
-`.md` stays the source of truth, and a failed render never blocks the gate. Point the approver at
-the most readable form you have. Never ask someone to approve raw text they cannot scan when a
-readable view exists.
+On desktop hosts, render the plan using the supported embedded browser. Terminal-only hosts
+use the canonical Markdown review fallback unless rendered delivery was requested. Follow the working-plan contract
+in `../development-protocol/reference.md`: outcome, authored visual body, material risks,
+next action and saved review path. Reuse the existing tab. Keep Markdown authoritative.
+A failed render is a delivery gap, not successful visual review. Do not substitute Chrome,
+a source editor, empty cards or a text-only report for the requested visual plan.
+
+Before showing the plan, check that it contains the current focus, next action, an authored
+visual walkthrough and observable verification checks. A sequence or diagram shows structure;
+UI work also needs the affected screen through the Visual Spec Pack or a labelled real capture.
+Inspect the rendered pixels and saved edits. A structural content check alone does not prove
+usefulness or live behavior. Refuse incomplete replacements while retaining the prior draft.
+The private host renderer is not bundled here; verify equivalent checks on the actual host.
 
 ### Approval gate
 

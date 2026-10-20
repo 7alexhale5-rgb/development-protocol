@@ -102,9 +102,9 @@ Pick the message that matches the state.
 
 - Verification had issues that were surfaced, not auto-fixed:
 
-  > "Implementation complete, but {N} verification issues need attention:
+  > "Implementation not complete: {N} verification issues need attention:
   > {list}
-  > Fix these and I will re-verify. The build row stays open until the checks pass."
+  > Fix and re-verify these in scope. The build row stays open and cannot ship until required checks pass."
 
 - LARGE work:
 

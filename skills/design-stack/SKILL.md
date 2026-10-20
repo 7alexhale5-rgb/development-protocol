@@ -5,6 +5,10 @@ description: Runs UI and UX design work through one pipeline, from intent interv
 
 # Design Stack
 
+Before implementation or resumed execution, follow **Working plan before execution** in
+`../development-protocol/reference.md`: show the current plan on the supported host surface,
+preserve saved edits and read them before each phase. This applies to every work task.
+
 A multi-step design pipeline, the design counterpart of `/planning-stack`. It turns a goal into a
 brief, a built interface and proof that the interface works, with a fresh critique at the end.
 
@@ -31,6 +35,19 @@ proof.
 It satisfies the `design` row of the development-protocol checklist (see "Record it" below).
 
 ---
+
+## Optional connected reference research
+
+For product screens, journeys and website sections, use an available Mobbin connection during
+Step 4. Read `references/mobbin.md` for routing, account checks, image handling and usage limits.
+Keep the reference and adaptation reason in the existing brief. Without access, use attributed
+public products and screenshots. Each host needs its own real result before claiming connection.
+Reference access never proves implementation or grants copying rights.
+
+For generated media or editable production, inspect the actual connected tool inventory before
+selecting a provider. Reuse the existing brief, slots, assets and proof flow; do not add another
+orchestrator. Record source inputs, prompts, tool/model versions, credit use, retained assets and
+the edited result. No fixed cost estimate or membership label authorizes metered calls.
 
 ## Step 0: Parse intent
 

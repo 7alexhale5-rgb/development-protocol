@@ -6,7 +6,7 @@
 # Override with env vars: LH_TARGET_URL, LH_ROUTES ("/ /about"), LH_RUNS, CHROME_PATH.
 #
 # Each route runs LH_RUNS times (default 3) and the median run is kept. Single
-# runs swing by about 3 points on a cold start; the median of 3 removes most of it.
+# runs vary. Three runs are exploratory; use five for a decision and retain all runs.
 
 set -eu
 
@@ -34,19 +34,18 @@ fi
 # audit-setup:publication-lock end
 
 if [ -z "${CHROME_PATH:-}" ]; then
-  if [ -d "/Applications/Google Chrome.app" ]; then
+  CHROME_PATH="$(node -e "const fs=require('fs');for (const m of ['playwright', '@playwright/test']) { try { const p=require(m).chromium.executablePath(); if(fs.statSync(p).isFile()){fs.accessSync(p,fs.constants.X_OK);console.log(p);process.exit(0);} } catch {} } process.exit(1);" 2>/dev/null || true)"
+  if [ ! -f "$CHROME_PATH" ] || [ ! -x "$CHROME_PATH" ]; then
+    CHROME_PATH="$(node -e 'const fs=require("fs"),path=require("path");const base=path.join(require("os").homedir(),"Library/Caches/ms-playwright");let dirs=[];try{dirs=fs.readdirSync(base).filter(n=>/^chromium-[0-9]+$/.test(n)).sort((a,b)=>Number(b.slice(9))-Number(a.slice(9)));}catch{};for(const dir of dirs){let arches=[];try{arches=fs.readdirSync(path.join(base,dir)).filter(n=>n.startsWith("chrome-mac"));}catch{};for(const arch of arches){const p=path.join(base,dir,arch,"Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");try{if(fs.statSync(p).isFile()){fs.accessSync(p,fs.constants.X_OK);console.log(p);process.exit(0);}}catch{}}}' 2>/dev/null || true)"
+  fi
+  if [ -n "$CHROME_PATH" ]; then :
+  elif [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  elif command -v google-chrome >/dev/null 2>&1; then
-    CHROME_PATH="$(command -v google-chrome)"
-  elif command -v chromium >/dev/null 2>&1; then
-    CHROME_PATH="$(command -v chromium)"
-  elif command -v chromium-browser >/dev/null 2>&1; then
-    CHROME_PATH="$(command -v chromium-browser)"
+  elif command -v google-chrome >/dev/null 2>&1; then CHROME_PATH="$(command -v google-chrome)"
+  elif command -v chromium >/dev/null 2>&1; then CHROME_PATH="$(command -v chromium)"
+  elif command -v chromium-browser >/dev/null 2>&1; then CHROME_PATH="$(command -v chromium-browser)"
   fi
-  if [ -z "${CHROME_PATH:-}" ]; then
-    CHROME_PATH="$(node -e "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);" 2>/dev/null || true)"
-  fi
-  if [ -n "${CHROME_PATH:-}" ] && [ -f "$CHROME_PATH" ]; then export CHROME_PATH; fi
+  if [ -n "$CHROME_PATH" ]; then export CHROME_PATH; fi
 fi
 
 case "$RUNS" in ''|*[!0-9]*) echo "LH_RUNS must be a positive integer" >&2; exit 1;; esac

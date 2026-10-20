@@ -720,7 +720,7 @@ def checked_focus_value(value, manifest=None):
     return scalar, None
 
 
-def focus_form_problem(text, manifest=None):
+def focus_form_problem(text, manifest=None, *, _root_checked=False):
     """Name a `focus:` spelling this parser does not read, or None when it reads every row.
 
     A hand-rolled reader cannot follow YAML scalars and flow lists that wrap or start on a
@@ -728,7 +728,7 @@ def focus_form_problem(text, manifest=None):
     them instead and asks for a form the parser reads.
     """
     manifest = manifest or MANIFEST
-    problem = root_mapping_problem(text)
+    problem = None if _root_checked else root_mapping_problem(text)
     if problem:
         return problem
     if len(list(FOCUS_LINE_RE.finditer(normalized_front_matter(text)))) > 1:
@@ -797,9 +797,9 @@ def focus_csv_items(value, manifest=None):
     yield value[start:]
 
 
-def declared_focus(text, manifest=None):
+def declared_focus(text, manifest=None, *, _root_checked=False):
     """Return focus only after establishing its metadata and sequence boundaries."""
-    if root_mapping_problem(text):
+    if not _root_checked and root_mapping_problem(text):
         return []
     parsed = focus_front_matter(text)
     if not parsed:
@@ -828,9 +828,9 @@ def declared_focus(text, manifest=None):
     return [t for t in tags if t not in NO_FOCUS]
 
 
-def depth_scalar(text):
+def depth_scalar(text, *, _root_checked=False):
     """Read the supported scalar depth forms and retain unsupported-form diagnostics."""
-    problem = root_mapping_problem(text)
+    problem = None if _root_checked else root_mapping_problem(text)
     if problem:
         return "", problem
     front = normalized_front_matter(text)
@@ -870,10 +870,15 @@ def declared_depth(text):
 def validated_metadata(text, manifest=None):
     """One validated interpretation for proof checks and lens authority consumers."""
     manifest = manifest or MANIFEST
-    problem = focus_form_problem(text, manifest)
-    depth, depth_problem = depth_scalar(text)
+    # Prove the same immutable text once. Standalone consumers still validate their
+    # own root; reparsing here three times made large accepted headers exceed the CLI cap.
+    problem = root_mapping_problem(text)
+    if problem:
+        return {"problem": problem, "focus": [], "depth": "", "unknown": []}
+    problem = focus_form_problem(text, manifest, _root_checked=True)
+    depth, depth_problem = depth_scalar(text, _root_checked=True)
     problem = problem or depth_problem
-    tags = [] if problem else expand_focus(declared_focus(text, manifest), manifest)
+    tags = [] if problem else expand_focus(declared_focus(text, manifest, _root_checked=True), manifest)
     unknown = [tag for tag in tags if tag not in manifest.get("tags", {})]
     return {"problem": problem, "focus": tags, "depth": "" if problem else depth, "unknown": unknown}
 
