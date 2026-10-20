@@ -4,11 +4,17 @@ Metadata validation now requires a separator before comments after quoted or flo
 
 # Update log
 
+## 2026-10-20
+
+- Reconciled the recovered metadata fixes with current main. Preserved valid scalar support and added newline, diagnostic escaping and complete custom-tag boundary checks from the public upstream PR.
+
 Every re-port, source baseline, and public maintenance change, newest first.
 
 ## 2026-10-13
 
 - skill:research-stack: preserve raw file newline characters before metadata validation so a lone carriage return cannot become an accepted field boundary. Keep ordinary LF and CRLF files valid. Escape nonprintable focus-tag characters in diagnostics without changing parsed tag identity. Three added regression methods cover every CLI gate, newline compatibility and terminal-control output.
+
+- skill:research-stack: stop refusing two valid metadata forms. A dash before a comma or closing bracket is now special only inside flow collections, so `title: -,5` is accepted. A quoted value containing an escaped quote followed by a colon, such as `- "a\": b"`, is no longer read as an escaped key. Complete escaped keys remain refused.
 
 ## 2026-10-12
 
