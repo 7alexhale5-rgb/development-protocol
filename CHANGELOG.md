@@ -7,6 +7,10 @@
 - Prefer a separate testing browser for Lighthouse. Preserving a prior baseline exits 2 rather
   than reporting a fresh capture. Keep stronger public proof, citation and installer checks.
 
+## 2.5.6 (2026-10-20)
+
+- Research validation preserves raw newlines, distinguishes literal backslashes from escaped controls in diagnostics, and requires separators before comments after quoted or flow values. Complete custom hashtag identities remain supported; punctuation after a known hashtag cannot silently erase focus.
+
 ## 2.5.5 (2026-10-13)
 
 - Research validation accepts two valid metadata forms it used to refuse: a plain value starting with a dash then a comma or bracket, and a quoted list item holding an escaped quote then a colon. Complete escaped keys and dash indicators inside flow collections are still refused.

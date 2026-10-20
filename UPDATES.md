@@ -62,6 +62,8 @@ and exact-candidate release review. No private installation, model default or pe
   publication locks, rollback and custom CI configuration preservation stay. Private shell/Node
   helpers are represented by the already bundled Python standard-library kit, not copied in.
 
+- Reconciled the recovered metadata fixes with current main. Preserved valid scalar support and added raw newline preservation, distinct diagnostic escaping, separator-before-comment checks and complete custom-tag boundaries from the public upstream PR. Known-tag punctuation remains reserved so malformed declarations cannot silently erase focus. Duplicate continuation-property rejection was already implemented on main.
+
 ## 2026-10-13
 
 - skill:research-stack: stop refusing two valid metadata forms. A dash before a comma or closing bracket is now special only inside flow collections, so `title: -,5` is accepted. A quoted value containing an escaped quote followed by a colon, such as `- "a\": b"`, is no longer read as an escaped key. Complete escaped keys remain refused.
@@ -177,7 +179,6 @@ this port did not make is ported from its committed version only, and its lock i
 - Source fingerprints are not reset merely to hide drift. Installation and review receipts
   must bind this candidate before its release. No vendor package or measured gain is claimed.
 
-
 ## 2026-10-02T13:26:41-05:00
 
 - skill:research-stack: re-ported from upstream research-stack 3.2.1 (`3af6987`). New: hunter/gatherer
@@ -273,7 +274,6 @@ portable maintenance changes, not an upstream re-port; source fingerprints remai
 
 - skill:audit-setup: source fingerprint recorded for drift monitoring; this is not a re-port
 
-
 ## 2026-09-29T21:01:33-05:00
 
 Public maintenance release 2.0.1 fixes confirmed release-review findings. These are changes to
@@ -284,7 +284,6 @@ unchanged so future drift checks do not hide upstream differences.
 - Safety and recovery: installer, uninstaller, health check, and scanner.
 - Validation: audit-setup, research-stack, design-stack, and workflow instructions.
 - Reporting: compound metric definitions and local-day grouping.
-
 
 ## 2026-09-29T20:07:41-05:00
 
