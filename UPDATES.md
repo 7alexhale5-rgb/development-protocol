@@ -1,24 +1,18 @@
-<!-- verified: 2026-10-13T11:55:41-05:00 -->
-
-Metadata validation now requires a separator before comments after quoted or flow values and retains full custom hashtag identities when checking ambiguous block lists.
-
 # Update log
-
-## 2026-10-20
-
-- Reconciled the recovered metadata fixes with current main. Preserved valid scalar support and added newline, diagnostic escaping and complete custom-tag boundary checks from the public upstream PR.
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
-## 2026-10-13
+## 2026-10-20
 
-- skill:research-stack: preserve raw file newline characters before metadata validation so a lone carriage return cannot become an accepted field boundary. Keep ordinary LF and CRLF files valid. Escape nonprintable focus-tag characters in diagnostics without changing parsed tag identity. Three added regression methods cover every CLI gate, newline compatibility and terminal-control output.
+- Reconciled the recovered metadata fixes with current main. Preserved valid scalar support and added raw newline preservation, distinct diagnostic escaping, separator-before-comment checks and complete custom-tag boundaries from the public upstream PR. Known-tag punctuation remains reserved so malformed declarations cannot silently erase focus. Duplicate continuation-property rejection was already implemented on main.
+
+## 2026-10-13
 
 - skill:research-stack: stop refusing two valid metadata forms. A dash before a comma or closing bracket is now special only inside flow collections, so `title: -,5` is accepted. A quoted value containing an escaped quote followed by a colon, such as `- "a\": b"`, is no longer read as an escaped key. Complete escaped keys remain refused.
 
 ## 2026-10-12
 
-- skill:research-stack: ported the metadata repair from the released public research-stack revision 6ee443f. Added its regression cases without replacing existing package tests. Kept the bundled citation classification and aggregation rules, public layout, and focus manifest note. Only the public validator and metadata-format guidance changed. Private local overlays, host-specific instructions and configuration are outside this port. No whole-skill source fingerprint is recorded: remaining source differences are still open. Local Protocol188–199 repairs extend that port: reject inline sequence indicators, invalid block-scalar indentation, dedents to unopened levels, orphan standalone properties, children under completed scalars, malformed flow entries or separators, repeated colons before flow delimiters, malformed block-scalar headers, literal quoted-key identity, reserved node-start characters, backslashes in nested mapping keys, malformed quoted escapes and out-of-range Unicode escapes. Malformed properties, raw control characters, foreign dash indicators and escaped flow keys are rejected before authority or fetching. Duplicate anchor or tag properties also fail when split across continuation rows of the same pending node; separate sibling and nested nodes retain independent state. One shared YAML decoder preserves supported focus/depth identity and inherited paired Unicode escapes. Alias nodes are explicitly unsupported, including aliases to earlier anchors. Custom manifest tags and bundles now govern comment ambiguity as well as focus expansion; empty manifests retain the default registry. These are local additions beyond revision 6ee443f, backed by separate regression cases and exact-diff reviews. Two existing positive fixtures used that invalid shape and were corrected to empty parents with every assertion preserved; corrected fixtures pass the original and repaired validators.
+- skill:research-stack: ported the metadata repair from the released public research-stack revision 6ee443f. Added its regression cases without replacing existing package tests. Kept the bundled citation classification and aggregation rules, public layout, and focus manifest note. Only the public validator and metadata-format guidance changed. Private local overlays, host-specific instructions and configuration are outside this port. No whole-skill source fingerprint is recorded: remaining source differences are still open. Local Protocol188–198 repairs extend that port: reject inline sequence indicators, invalid block-scalar indentation, dedents to unopened levels, orphan standalone properties, children under completed scalars, malformed flow entries or separators, repeated colons before flow delimiters, malformed block-scalar headers, literal quoted-key identity, reserved node-start characters, backslashes in nested mapping keys, malformed quoted escapes and out-of-range Unicode escapes. Malformed properties, raw control characters, foreign dash indicators and escaped flow keys are rejected before authority or fetching. One shared YAML decoder preserves supported focus/depth identity and inherited paired Unicode escapes. Alias nodes are explicitly unsupported, including aliases to earlier anchors. Custom manifest tags and bundles now govern comment ambiguity as well as focus expansion; empty manifests retain the default registry. These are local additions beyond revision 6ee443f, backed by separate regression cases and exact-diff reviews. Two existing positive fixtures used that invalid shape and were corrected to empty parents with every assertion preserved; corrected fixtures pass the original and repaired validators.
 
 ## 2026-10-07T20:56:19-05:00
 

@@ -2,7 +2,7 @@
 
 ## 2.5.6 (2026-10-20)
 
-- Research validation preserves raw newlines, safely escapes diagnostic tags, and rejects ambiguous custom-tag comments and duplicate continuation properties. Valid scalar forms remain supported.
+- Research validation preserves raw newlines, distinguishes literal backslashes from escaped controls in diagnostics, and requires separators before comments after quoted or flow values. Complete custom hashtag identities remain supported; punctuation after a known hashtag cannot silently erase focus.
 
 ## 2.5.5 (2026-10-13)
 
