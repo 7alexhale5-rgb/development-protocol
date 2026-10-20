@@ -39,6 +39,11 @@ Use the supported client connection flow. An optional server needs no invented A
 Inspect existing client connections before adding one. Repeated account-page entries alone do
 not prove duplicate active transports; identify their owner before revoking anything.
 
+[The Claude Code guide](https://docs.mobbin.com/mcp/clients/claude-code-cli) recommends
+sharing the Claude desktop/web connector. A missing explicit CLI server entry alone does
+not disprove that shared route. Check the existing connector and a real returned result
+before adding a separate CLI-only transport; avoid duplicate carriers.
+
 Plan membership, connector access and a general API grant are different facts. Verify the actual
 plan and available capabilities rather than assuming Team rights from Pro. Search results do
 not prove that the connector can edit collections, export design layers, fetch source code or

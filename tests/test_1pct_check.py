@@ -18,6 +18,34 @@ _spec.loader.exec_module(check)
 
 
 class Patterns(unittest.TestCase):
+    def test_bold_first_action_establishes_lazy_paragraph_scope(self):
+        for outer,indent in (('- Account tasks','  '),('1. Account tasks','   ')):
+            for action in ('You send this draft.','Enter your password.'):
+                for br in ('','  ',chr(92)):
+                    text=outer+'\n'+indent+'## Next steps\n'+indent+'**'+action+'**'+br+'\nThen run the tests.'
+                    self.assertIn('next-steps-heading',check.find_violations(text))
+
+    def test_blank_separated_parent_paragraph_retires_child_scope(self):
+        for text in ('- Parent\n  - Child\n\n  Details.\n    ## Next steps\n    - Enter your password.\n\n  Run the tests.','1. Parent\n   - Child\n\n   Details.\n     ## Next steps\n     - Enter your password.\n\n   Run the tests.'):
+            self.assertIn('next-steps-heading',check.find_violations(text))
+
+    def test_hard_break_does_not_end_lazy_list_paragraph(self):
+        for prefix in ('- Account tasks\n  ## Next steps\n  - Enter your password.','1. Account tasks\n   ## Next steps\n   - Enter your password.'):
+            for br in ('  ',chr(92)):
+                self.assertIn('next-steps-heading',check.find_violations(prefix+br+'\nThen run the tests.'))
+
+    def test_lazy_dedented_continuation_stays_in_next_actions(self):
+        for prefix in ('- Account tasks\n  ## Next steps\n  - Enter your password.\n','1. Account tasks\n   ## Next steps\n   - Enter your password.\n'):
+            for tail in ('Then run the tests.','and run the tests.'):
+                self.assertIn('next-steps-heading',check.find_violations(prefix+tail))
+
+    def test_populated_list_scope_ends_before_sibling_or_dedent(self):
+        for suffix in ('- Tests passed.','\nTests passed.'):
+            text='- Account tasks\n  ## Next steps\n  - Enter your password.\n'+suffix
+            self.assertNotIn('next-steps-heading',check.find_violations(text))
+        text='- Parent\n  - Child\n  ## Next steps\n    ### Next step\n  You send this draft.'
+        self.assertNotIn('next-steps-heading',check.find_violations(text))
+
     def test_context_labels_keep_action_case(self):
         for label in ('### **Account access**:', '### Account access:', '**Account access**:'):
             with self.subTest(label=label):
@@ -39,6 +67,94 @@ class Patterns(unittest.TestCase):
         self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n**Next step**\n- Enter your password.\n## Notes\nTests passed.'))
         for br in ('  ', '\\'):
             self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- You send this draft to Alice'+br+'\n  Run Tests'))
+
+    def test_hard_break_after_wrapped_recipient(self):
+        for br in ('  ', '\\'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- You send this draft\n  to Alice'+br+'\n  Run Tests'))
+
+    def test_backslash_break_keeps_personal_actions_valid(self):
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\\\n  You send this draft.'))
+
+    def test_indented_heading_keeps_nested_work_visible(self):
+        self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n\n  ## Remaining work\n  Run the tests.'))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n## Notes\nTests passed.'))
+
+    def test_markdown_sibling_and_bold_hard_break_boundaries(self):
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n\n ## Notes\nTests passed.'))
+        for br in ('  ', '\\'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- You send this draft to Alice\n  **Run Tests**'+br+'\n- Enter your password.'))
+
+    def test_parent_list_boundary_survives_nested_bullets(self):
+        for outer,inner,indent in (('- ','  - ','  '),('1. ','   - ','   '),('- ','  1. ','  ')):
+            prefix='## Next steps\n'+outer+'Enter your password.\n'+inner+'You send this draft.\n\n'+indent+'## Remaining work\n'+indent
+            self.assertIn('next-steps-heading',check.find_violations(prefix+'Run the tests.'))
+            self.assertNotIn('next-steps-heading',check.find_violations(prefix+'You confirm the scope.'))
+
+    def test_nested_next_container_keeps_parent_context(self):
+        prefix='## Next steps\n- Enter your password.\n\n  **Next step**\n\n  ## Account access\n  '
+        self.assertNotIn('next-steps-heading',check.find_violations(prefix+'You send this draft.'))
+        self.assertIn('next-steps-heading',check.find_violations(prefix+'Run the tests.'))
+
+    def test_tab_columns_keep_nested_work_visible(self):
+        prefix='## Next steps\n- Enter your password.\n\n\t## Remaining work\n\t'
+        self.assertIn('next-steps-heading',check.find_violations(prefix+'Run the tests.'))
+        self.assertNotIn('next-steps-heading',check.find_violations(prefix+'You send this draft.'))
+
+    def test_dedented_paragraph_ends_list_before_sibling(self):
+        prefix='## Next steps\n- Enter your password.\n\nYou send this draft.\n\n  ## Notes\nTests passed.'
+        self.assertNotIn('next-steps-heading',check.find_violations(prefix))
+
+    def test_list_heading_does_not_leak_into_next_section(self):
+        text='## Status\n- Completed work\n  #### Details\n\n**Next steps**\n- Enter your password.\n\n### Remaining work\n- Run the tests.'
+        self.assertIn('next-steps-heading',check.find_violations(text))
+
+    def test_structural_dedent_ends_list_without_blank_line(self):
+        for heading in ('### You send this draft.','### Account access\n  You send this draft.'):
+            self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n'+heading+'\n\n  ## Notes\nTests passed.'))
+
+    def test_explicit_indented_heading_uses_own_level(self):
+        self.assertIn('next-steps-heading',check.find_violations('#### Status\n\n ## Next steps\n- Enter your password.\n\n### Remaining work\n- Run the tests.'))
+        self.assertNotIn('next-steps-heading',check.find_violations(' ## Next steps\n- Enter your password.\n ## Notes\nTests passed.'))
+
+    def test_bold_label_after_real_indented_outer_heading(self):
+        self.assertIn('next-steps-heading',check.find_violations('#### Status\n ## Work\n**Next steps**\n- Enter your password.\n### Remaining work\n- Run the tests.'))
+
+    def test_empty_trailing_next_step_is_not_borrowed_content(self):
+        for text in ('**Next steps**\n- Enter your password.\n\n**Next steps**','## Next steps\n- Enter your password.\n### Next steps'):
+            self.assertIn('next-steps-heading',check.find_violations(text))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n### Next step\n- Enter your password.'))
+
+    def test_empty_nested_heading_closes_at_its_own_sibling(self):
+        for sibling in ('### Account access','### Next step'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n### Next step\n'+sibling+'\n- Enter your password.'))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n### Next step\n#### Account access\n- Enter your password.'))
+
+    def test_pending_heading_uses_list_scope(self):
+        self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n  ### Next step\n  ### Account access\n  - You send this draft.'))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n  ### Next step\n    - You send this draft.'))
+
+    def test_empty_child_never_borrows_sibling_or_dedented_content(self):
+        prefix='## Next steps\n- Enter your password.\n  ### Next step\n'
+        for ending in ('- You send this draft.','You send this draft.','\nYou send this draft.','  - You send this draft.\n- Enter your password.'):
+            with self.subTest(ending=ending):
+                if ending.startswith('  -'):
+                    self.assertNotIn('next-steps-heading',check.find_violations(prefix+ending))
+                else:self.assertIn('next-steps-heading',check.find_violations(prefix+ending))
+
+    def test_same_scope_nested_notes_closes_personal_section(self):
+        for outer,indent in (('- ','  '),('1. ','   ')):
+            text=outer+'Account tasks\n'+indent+'## Next steps\n'+indent+'- Enter your password.\n'+indent+'## Notes\n'+indent+'Tests passed.'
+            self.assertNotIn('next-steps-heading',check.find_violations(text))
+        self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n  ## Notes\n  Run the tests.'))
+
+    def test_bold_lazy_continuations_keep_personal_section_scope(self):
+        for outer,indent in (('- ','  '),('1. ','   ')):
+            for br in ('','  ','\\'):
+                prefix=outer+'Account tasks\n'+indent+'## Next steps\n'+indent+'- Enter your password.'+br+'\n'
+                for work in ('**Then run the tests.**','**Remaining work**\nRun the tests.'):
+                    with self.subTest(outer=outer,br=br,work=work):
+                        self.assertIn('next-steps-heading',check.find_violations(prefix+work))
+                self.assertNotIn('next-steps-heading',check.find_violations(prefix+'**You send this draft.**'))
 
     def test_each_red_flag_is_caught(self):
         cases = {

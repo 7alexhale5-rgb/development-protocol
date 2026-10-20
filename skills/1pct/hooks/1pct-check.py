@@ -128,56 +128,98 @@ def _section_label(line: str) -> str:
 
 
 def _next_steps_all_human_only(text: str) -> bool:
-    """Inspect every complete section, including nested subsections and loose lists."""
-    lines = text.splitlines()
-    levels=[]
-    enclosing=1
-    for line in lines:
-        enclosing=_heading_level(line) or enclosing
-        levels.append(enclosing)
-    headings = [i for i, line in enumerate(lines) if _is_next_heading(line)]
-    if not headings:
-        return False
-    for index in headings:
-        level = levels[index]
-        items = []
-        continuation = False
-        for position in range(index + 1, len(lines)):
-            line = lines[position]
-            if not line.strip():
+    """Check sections once, retaining actual heading and list context."""
+    seen = active = pending_heading = False
+    pending_sections = []
+    outer_level = section_level = 1
+    section_depth = 0
+    items = []
+    list_columns = []
+    paragraph = continuation = False
+    labels = {"remaining work", "work", "human actions", "account access"}
+    for raw in text.expandtabs(4).splitlines():
+        if not raw.strip():
+            paragraph = continuation = False
+            continue
+        slash_break = (len(raw) - len(raw.rstrip("\\"))) % 2 == 1
+        hard_break = raw.endswith("  ") or slash_break
+        line = raw[:-1] if slash_break else raw
+        indent = len(line) - len(line.lstrip())
+        heading = _heading_level(line)
+        next_heading = _is_next_heading(line)
+        bold = bool(re.fullmatch(r"\*\*[^*]+\*\*:?", line.strip()))
+        if list_columns and indent < min(list_columns) and (not paragraph or heading or next_heading):
+            list_columns.clear()
+        if heading or next_heading or not paragraph:
+            while list_columns and indent < list_columns[-1]:
+                list_columns.pop()
+        nested = any(indent >= column for column in list_columns)
+        depth = sum(indent >= column for column in list_columns)
+        if paragraph and not (heading or next_heading or _BULLET.fullmatch(line)):
+            depth = len(list_columns)
+        # A child heading cannot borrow the next item's or dedented paragraph's
+        # content after its owning list scope has ended.
+        if any(depth < parent_depth for _, parent_depth in pending_sections):
+            return False
+        if heading:
+            if any(heading <= level and depth <= parent_depth for level, parent_depth in pending_sections):
+                return False
+        if active and depth < section_depth:
+            if pending_heading or not items or not all(_human_only_action(item) for item in items):
+                return False
+            active = False
+            items = []
+            continuation = False
+        if heading:
+            if active and heading <= section_level and depth <= section_depth:
+                if pending_heading or not items or not all(_human_only_action(item) for item in items):
+                    return False
+                active = False
+                items = []
                 continuation = False
-                continue
-            following_level = _heading_level(line)
-            if following_level:
-                if following_level <= level:
-                    break
-                continuation = False
-                if _is_next_heading(line):continue
-                label=_section_label(line)
-                if label.casefold() in {'remaining work','work','human actions','account access'}:continue
-                items.append(label)
-                continue
-            if _is_next_heading(line):
-                continuation = False
-                continue
-            if re.fullmatch(r"\*\*[^*]+\*\*:?", line.strip()):
-                continuation = False
-                label=_section_label(line)
-                if label.casefold() in {"remaining work","work","human actions","account access"}:continue
-                items.append(label)
-                continue
-            bullet = _BULLET.fullmatch(line)
+            if not nested:
+                outer_level = heading
+        if next_heading:
+            if heading:
+                pending_sections.append((heading, sum(indent >= column for column in list_columns)))
+            pending_heading = True
+            seen = True
+            if not active:
+                active = True
+                section_level = heading or outer_level
+                section_depth = depth
+                items = []
+            paragraph = continuation = False
+            continue
+        if heading or bold:
+            # Bold text can continue a paragraph; keep its owning list scope,
+            # while recording the action separately from the prior sentence.
+            paragraph = bold
+            continuation = False
+            if active:
+                label = _section_label(line)
+                if label.casefold() not in labels:
+                    items.append(label)
+                    pending_heading = False
+                    pending_sections.clear()
+            continue
+        bullet = _BULLET.fullmatch(line)
+        if bullet:
+            while list_columns and indent < list_columns[-1]:
+                list_columns.pop()
+            list_columns.append(bullet.start(1))
+        if active:
+            pending_sections.clear()
+            pending_heading = False
             if bullet:
                 items.append(bullet.group(1).strip())
-                continuation = not (line.endswith("  ") or line.endswith("\\"))
             elif items and continuation:
                 items[-1] += " " + line.strip()
             else:
                 items.append(line.strip())
-                continuation = not (line.endswith("  ") or line.endswith("\\"))
-        if not items or not all(_human_only_action(item) for item in items):
-            return False
-    return True
+        paragraph = True
+        continuation = not hard_break
+    return seen and (not active or not pending_heading and bool(items) and all(_human_only_action(item) for item in items))
 
 
 def find_violations(text: str) -> list[str]:

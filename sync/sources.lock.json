@@ -8,12 +8,12 @@
     "recorded": "2026-09-29"
   },
   "skill:1pct": {
-    "sha256": "d250749efd84bd4fa63506e6cf3107a6dc12c501988093b690ef56fa89b01d1f",
-    "recorded": "2026-09-29"
+    "sha256": "b2a48c4e3bc56155bda00c57b7316c0f14ea5829d3b173f5549a84adf7054773",
+    "recorded": "2026-10-20"
   },
   "skill:audit-setup": {
-    "sha256": "13d0d4a10ea1b83ec0c022eba880c52794320b335ee798b06801d71027b87da1",
-    "recorded": "2026-09-30"
+    "sha256": "4355d190c49849a81c62ed1da8dad0d04e172bcb4024488dddca201ad941091d",
+    "recorded": "2026-10-20"
   },
   "skill:brainstorm-stack": {
     "sha256": "a663e8d6b22db97d5c41f42a6fa91a3deadbdf22c4096eebfb8fa5089dedffce",
@@ -36,7 +36,7 @@
     "recorded": "2026-10-20"
   },
   "skill:design-stack": {
-    "sha256": "3b77f466de87f14e866266ddd69b2c4f525380f999ec7c1705ae81d514d6b1a8",
+    "sha256": "608ae51405cf1e85066510072cede07453b5a09b4b990eaf50733170c4d21682",
     "recorded": "2026-10-20"
   },
   "skill:development-protocol": {
@@ -60,8 +60,8 @@
     "recorded": "2026-09-29"
   },
   "skill:planning-stack": {
-    "sha256": "57656740c37beefba275dbd1d19a37eef4993ba5af6d8aa34db629f0e67d3d22",
-    "recorded": "2026-10-04"
+    "sha256": "397e0200518f0f50ca8a99f5df8a2a344d81d07d7ff31a536bb68d021442d4b8",
+    "recorded": "2026-10-20"
   },
   "skill:relentless": {
     "sha256": "cefec40b6c4d0f60147fbfc8213e4205020654ea4bc3ef30e0dd991a2e39a2b3",

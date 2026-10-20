@@ -325,6 +325,13 @@ next action and saved review path. Reuse the existing tab. Keep Markdown authori
 A failed render is a delivery gap, not successful visual review. Do not substitute Chrome,
 a source editor, empty cards or a text-only report for the requested visual plan.
 
+Before showing the plan, check that it contains the current focus, next action, an authored
+visual walkthrough and observable verification checks. A sequence or diagram shows structure;
+UI work also needs the affected screen through the Visual Spec Pack or a labelled real capture.
+Inspect the rendered pixels and saved edits. A structural content check alone does not prove
+usefulness or live behavior. Refuse incomplete replacements while retaining the prior draft.
+The private host renderer is not bundled here; verify equivalent checks on the actual host.
+
 ### Approval gate
 
 After presenting the plan, **stop and wait for explicit confirmation** before any implementation:
