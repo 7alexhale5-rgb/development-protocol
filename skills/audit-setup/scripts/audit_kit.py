@@ -365,7 +365,7 @@ def find_chrome(root: Path = None) -> str:
                 [
                     "node",
                     "-e",
-                    "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);",
+                    "const fs=require('fs');for (const m of ['playwright', '@playwright/test']) { try { const p=require(m).chromium.executablePath(); if(fs.statSync(p).isFile()){fs.accessSync(p,fs.constants.X_OK);console.log(p);process.exit(0);} } catch {} } process.exit(1);",
                 ],
                 cwd=root,
                 capture_output=True,

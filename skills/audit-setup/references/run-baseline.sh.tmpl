@@ -34,23 +34,18 @@ fi
 # audit-setup:publication-lock end
 
 if [ -z "${CHROME_PATH:-}" ]; then
-  # Prefer the separate testing browser so audits do not foreground a signed-in window.
-  CHROME_PATH="$(node -e "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);" 2>/dev/null || true)"
+  CHROME_PATH="$(node -e "const fs=require('fs');for (const m of ['playwright', '@playwright/test']) { try { const p=require(m).chromium.executablePath(); if(fs.statSync(p).isFile()){fs.accessSync(p,fs.constants.X_OK);console.log(p);process.exit(0);} } catch {} } process.exit(1);" 2>/dev/null || true)"
   if [ ! -f "$CHROME_PATH" ] || [ ! -x "$CHROME_PATH" ]; then
-  CHROME_PATH="$(python3 -c 'from pathlib import Path; import re, os; base=Path.home()/"Library/Caches/ms-playwright"; items=sorted(base.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"), key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(base)))]); print(next((str(p) for p in reversed(items) if p.is_file() and os.access(p, os.X_OK)), ""))')"
+    CHROME_PATH="$(node -e 'const fs=require("fs"),path=require("path");const base=path.join(require("os").homedir(),"Library/Caches/ms-playwright");let dirs=[];try{dirs=fs.readdirSync(base).filter(n=>/^chromium-[0-9]+$/.test(n)).sort((a,b)=>Number(b.slice(9))-Number(a.slice(9)));}catch{};for(const dir of dirs){let arches=[];try{arches=fs.readdirSync(path.join(base,dir)).filter(n=>n.startsWith("chrome-mac"));}catch{};for(const arch of arches){const p=path.join(base,dir,arch,"Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing");try{if(fs.statSync(p).isFile()){fs.accessSync(p,fs.constants.X_OK);console.log(p);process.exit(0);}}catch{}}}' 2>/dev/null || true)"
   fi
-  if [ -n "$CHROME_PATH" ]; then
-    :
+  if [ -n "$CHROME_PATH" ]; then :
   elif [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  elif command -v google-chrome >/dev/null 2>&1; then
-    CHROME_PATH="$(command -v google-chrome)"
-  elif command -v chromium >/dev/null 2>&1; then
-    CHROME_PATH="$(command -v chromium)"
-  elif command -v chromium-browser >/dev/null 2>&1; then
-    CHROME_PATH="$(command -v chromium-browser)"
+  elif command -v google-chrome >/dev/null 2>&1; then CHROME_PATH="$(command -v google-chrome)"
+  elif command -v chromium >/dev/null 2>&1; then CHROME_PATH="$(command -v chromium)"
+  elif command -v chromium-browser >/dev/null 2>&1; then CHROME_PATH="$(command -v chromium-browser)"
   fi
-  if [ -n "${CHROME_PATH:-}" ] && [ -f "$CHROME_PATH" ]; then export CHROME_PATH; fi
+  if [ -n "$CHROME_PATH" ]; then export CHROME_PATH; fi
 fi
 
 case "$RUNS" in ''|*[!0-9]*) echo "LH_RUNS must be a positive integer" >&2; exit 1;; esac

@@ -18,6 +18,28 @@ _spec.loader.exec_module(check)
 
 
 class Patterns(unittest.TestCase):
+    def test_context_labels_keep_action_case(self):
+        for label in ('### **Account access**:', '### Account access:', '**Account access**:'):
+            with self.subTest(label=label):
+                self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n'+label+'\n- Enter your password in the browser.'))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n### You send this draft to Alice'))
+
+    def test_subsection_boundaries_never_merge_work_into_recipient(self):
+        for heading in ('### Remaining work','**Remaining work**'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- You send this draft to Alice\n'+heading+'\nRun Tests'))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- Enter your password.\n### Next step\n- You send this draft.'))
+        self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- Run the tests.\n### Next step\n- You send this draft.'))
+
+    def test_blank_paragraph_and_bold_nested_container(self):
+        self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- You send this draft to Alice\n\nRun Tests'))
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n**Next step**\n- Enter your password.'))
+        self.assertIn('next-steps-heading',check.find_violations('## Next steps\n**Next step**\n- Enter your password.\n- Run Tests'))
+
+    def test_nested_label_sibling_and_markdown_hard_break(self):
+        self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n**Next step**\n- Enter your password.\n## Notes\nTests passed.'))
+        for br in ('  ', '\\'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n- You send this draft to Alice'+br+'\n  Run Tests'))
+
     def test_each_red_flag_is_caught(self):
         cases = {
             "ready-to-implement": "Plan is set. Ready to implement?",
@@ -79,6 +101,20 @@ class Patterns(unittest.TestCase):
         ):
             with self.subTest(action=action):
                 self.assertIn("next-steps-heading", check.find_violations("## Next steps\n- " + action))
+
+    def test_personal_actions_allow_context_but_not_extra_work(self):
+        for action in ('You send this draft to Alice.','You send this draft to Alice and Bob.','Please enter your password in the browser.','You must confirm the scope of the production change.'):
+            self.assertNotIn('next-steps-heading',check.find_violations('## Next steps\n- '+action))
+        for body in ('- Enter your password.\n  **Then run the tests.**','- Enter your password.\n### Run the tests','- Enter your password in the browser and run the tests.'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n'+body))
+
+    def test_qualified_personal_steps_do_not_hide_separate_actions(self):
+        for body in ('- Enter your password in the browser\n**Run the tests**','- Enter your password in the browser\n\n**Run the tests**','- Enter your password in the browser and you must run the tests','- You send this draft to Alice and **run** the tests.'):
+            self.assertIn('next-steps-heading',check.find_violations('## Next steps\n'+body))
+        for label in ('### Account access:','### **Account access**'):
+            text='## Next steps\n- You send this draft to Alice.\n'+label+'\n- Enter your password in the browser.'
+            self.assertNotIn('next-steps-heading',check.find_violations(text))
+            self.assertIn('next-steps-heading',check.find_violations(text+'\n- Run the tests.'))
 
     def test_nested_next_step_sections_do_not_hide_work(self):
         for body in (
@@ -170,15 +206,31 @@ class HookRun(unittest.TestCase):
                 self.assertIn("next-steps-heading", result.stderr)
                 self.assertIn("next-steps-heading", json.loads(self.log.read_text().splitlines()[-1])["flags"])
 
+    def test_strict_personal_context_does_not_block(self):
+        for action in ('You send this draft to Alice and Bob.','Please enter your password in the browser.','You must confirm the scope of the production change.'):
+            self.say('## Next steps\n- '+action)
+            result=self.run_hook(ONE_PCT_STRICT='1')
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_required_scope_approval_is_diagnostic_only(self):
         for text in (
             "Stop sign: this production change is outside the approved scope. Waiting for your approval.",
-            "Waiting for your approval.",
         ):
             self.say(text)
             result = self.run_hook(ONE_PCT_STRICT="1")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("waiting-on-go", json.loads(self.log.read_text().splitlines()[-1])["flags"])
+
+    def test_already_approved_work_wait_remains_blocking(self):
+        for text in ('Waiting for your approval.', 'Once you approve, I will run the already-authorized tests.', 'I will run the already-approved tests once you confirm.'):
+            self.say(text)
+            self.assertEqual(self.run_hook(ONE_PCT_STRICT='1').returncode,2)
+
+    def test_required_wait_code_does_not_expand_exact_exception(self):
+        wait='Stop sign: this production change is outside the approved scope. Waiting for your approval.'
+        for text in (wait+'\n```\nRun Tests\n```','```\nRun Tests\n```\n'+wait):
+            self.say(text)
+            self.assertEqual(self.run_hook(ONE_PCT_STRICT='1').returncode,2)
 
     def test_stop_hook_active_does_not_block_or_log_twice(self):
         r = self.run_hook({"transcript_path": str(self.transcript), "stop_hook_active": True}, ONE_PCT_STRICT="1")

@@ -107,36 +107,75 @@ def _is_next_heading(line: str) -> bool:
     return bool(re.fullmatch(r"next steps?|what'?s next", line, re.I))
 
 
+def _human_only_action(item: str) -> bool:
+    # Complete, bounded contextual forms; never grant an exemption by avoiding keywords.
+    item=re.sub(r"\*\*([^*]+)\*\*",r"\1",item).strip()
+    match=_HUMAN_ACTION.match(item)
+    if match is None:return False
+    tail=item[match.end():].strip().rstrip('.!?').strip()
+    if not tail:return True
+    action=match.group(0).casefold()
+    if 'send ' in action:
+        recipient=r"(?:[A-Z][\w'’-]*(?: [A-Z][\w'’-]*){0,3}|[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:the|your|our) (?:team|client)|them|her|him)"
+        return bool(re.fullmatch(r"(?i:to) "+recipient+r"(?:(?:, | and | & )"+recipient+r")*",tail))
+    if 'confirm ' in action or 'choose ' in action or 'set ' in action:
+        return bool(re.fullmatch(r"of (?:the |your |this |that )?(?:production change|project|plan|work|release|budget)",tail,re.I))
+    return bool(re.fullmatch(r"(?:in|into|on|using|for) (?:the |your |same |this |that )?(?:browser|Chrome(?: profile)?|Safari|Firefox|desktop app|app|sign[- ]in (?:page|form)|login (?:page|form)|account|website|profile)",tail,re.I))
+
+
+def _section_label(line: str) -> str:
+    return line.strip().lstrip('#').replace('**', '').strip().rstrip(':').strip()
+
+
 def _next_steps_all_human_only(text: str) -> bool:
     """Inspect every complete section, including nested subsections and loose lists."""
     lines = text.splitlines()
+    levels=[]
+    enclosing=1
+    for line in lines:
+        enclosing=_heading_level(line) or enclosing
+        levels.append(enclosing)
     headings = [i for i, line in enumerate(lines) if _is_next_heading(line)]
     if not headings:
         return False
     for index in headings:
-        level = _heading_level(lines[index]) or 1
+        level = levels[index]
         items = []
+        continuation = False
         for position in range(index + 1, len(lines)):
             line = lines[position]
             if not line.strip():
+                continuation = False
                 continue
             following_level = _heading_level(line)
             if following_level:
                 if following_level <= level:
                     break
+                continuation = False
+                if _is_next_heading(line):continue
+                label=_section_label(line)
+                if label.casefold() in {'remaining work','work','human actions','account access'}:continue
+                items.append(label)
                 continue
             if _is_next_heading(line):
-                break
+                continuation = False
+                continue
             if re.fullmatch(r"\*\*[^*]+\*\*:?", line.strip()):
+                continuation = False
+                label=_section_label(line)
+                if label.casefold() in {"remaining work","work","human actions","account access"}:continue
+                items.append(label)
                 continue
             bullet = _BULLET.fullmatch(line)
             if bullet:
                 items.append(bullet.group(1).strip())
-            elif items:
+                continuation = not (line.endswith("  ") or line.endswith("\\"))
+            elif items and continuation:
                 items[-1] += " " + line.strip()
             else:
-                return False
-        if not items or not all(_HUMAN_ACTION.fullmatch(item) for item in items):
+                items.append(line.strip())
+                continuation = not (line.endswith("  ") or line.endswith("\\"))
+        if not items or not all(_human_only_action(item) for item in items):
             return False
     return True
 
@@ -275,7 +314,10 @@ def main() -> None:
 
     strict = os.environ.get("ONE_PCT_STRICT") == "1"
     # Approval language alone cannot establish authorization to execute.
-    blocking_hits = [hit for hit in hits if hit != "waiting-on-go"]
+    required_scope_wait = bool(re.fullmatch(
+        r"Stop sign: this production change is outside the approved scope\. Waiting for your approval\.",
+        text.strip(), re.I))
+    blocking_hits = [hit for hit in hits if not (hit == "waiting-on-go" and required_scope_wait)]
     if strict and blocking_hits:
         msg = (
             "[1pct] Red-flag phrases detected in response: "

@@ -8,6 +8,8 @@ import io
 import json
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1004,7 +1006,7 @@ class ReviewRegressionTest(Base):
 
     def test_standalone_testing_resolution_precedes_interactive_and_skips_nonexec(self):
         binary = self.root / "bin"; binary.mkdir()
-        for name, content in (("node", '#!/bin/sh\nprintf "%s\\n" "$TEST_BROWSER"\n'), ("google-chrome", "#!/bin/sh\nexit 0\n")):
+        for name, content in (("node", '#!/bin/sh\ncase "$2" in *Library/Caches/ms-playwright*) exec '+shlex.quote(shutil.which('node'))+' "$@";; esac\nprintf "%s\\n" "$TEST_BROWSER"\n'), ("google-chrome", "#!/bin/sh\nexit 0\n")):
             path = binary / name; path.write_text(content); path.chmod(0o755)
         custom = self.root / "custom-browser"; custom.write_text("fixture"); custom.chmod(0o755)
         cached = []
@@ -1021,6 +1023,17 @@ class ReviewRegressionTest(Base):
             result = subprocess.run(['sh', '-c', block+'\nprintf "%s" "$CHROME_PATH"'], cwd=self.root, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
+
+    def test_actual_node_continues_after_uninstalled_first_package(self):
+        if not shutil.which('node'):self.skipTest('Node unavailable')
+        browser=self.root/'second-browser';browser.write_text('fixture');browser.chmod(0o755)
+        for name,value in [('playwright','/uninstalled/browser'),('@playwright/test',str(browser))]:
+            pkg=self.root/'node_modules'/name;pkg.mkdir(parents=True)
+            (pkg/'index.js').write_text('module.exports={chromium:{executablePath:()=>'+json.dumps(value)+'}};')
+        with patch.dict(os.environ,{'CHROME_PATH':''}):self.assertEqual(audit_kit.find_chrome(self.root),str(browser))
+        template=(SKILL/'references/run-baseline.sh.tmpl').read_text();start=template.index('if [ -z "${CHROME_PATH:-}" ]; then');block=template[start:template.index('case "$RUNS"',start)]
+        result=subprocess.run(['sh','-ec',block+'\nprintf "%s" "$CHROME_PATH"'],cwd=self.root,env=dict(os.environ,HOME=str(self.root),CHROME_PATH=''),capture_output=True,text=True,timeout=5)
+        self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(result.stdout,str(browser))
 
     def test_preserved_baseline_is_not_fresh_capture_proof(self):
         self.pkg()
