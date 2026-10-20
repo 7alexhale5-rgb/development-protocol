@@ -6,7 +6,7 @@
 # Override with env vars: LH_TARGET_URL, LH_ROUTES ("/ /about"), LH_RUNS, CHROME_PATH.
 #
 # Each route runs LH_RUNS times (default 3) and the median run is kept. Single
-# runs swing by about 3 points on a cold start; the median of 3 removes most of it.
+# runs vary. Three runs are exploratory; use five for a decision and retain all runs.
 
 set -eu
 
@@ -34,7 +34,11 @@ fi
 # audit-setup:publication-lock end
 
 if [ -z "${CHROME_PATH:-}" ]; then
-  if [ -d "/Applications/Google Chrome.app" ]; then
+  # Prefer the separate testing browser so audits do not foreground a signed-in window.
+  CHROME_PATH="$(python3 -c 'from pathlib import Path; import re; base=Path.home()/"Library/Caches/ms-playwright"; items=sorted(base.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"), key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(base)))]); print(next((str(p) for p in reversed(items) if p.is_file()), ""))')"
+  if [ -n "$CHROME_PATH" ]; then
+    :
+  elif [ -d "/Applications/Google Chrome.app" ]; then
     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
   elif command -v google-chrome >/dev/null 2>&1; then
     CHROME_PATH="$(command -v google-chrome)"

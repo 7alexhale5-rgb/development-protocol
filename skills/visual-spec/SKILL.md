@@ -54,6 +54,20 @@ A changed asset fails the gate; updating its hash changes the proof instrument a
 
 ---
 
+## Visual-first delivery
+
+Follow **Working plan before execution** and **Source names and dates** in
+`../development-protocol/reference.md`. Lead with rendered screens, a compact workflow,
+realistic labelled example data, important failure states and the next decision. Hide long
+builder maps behind accessible disclosures while keeping material risks visible.
+
+Use the active desktop app's embedded browser at delivery and reuse its tab. Do not send the
+user to an external browser or an HTML source editor for planning. Test a useful journey,
+keyboard operation, narrow pane, loaded assets, no clipping and reload. Preserve saved edits.
+Record the actual host, exact source revision and screenshot. The structural pack checker
+proves required files and hashes only; it does not prove rendered quality, interaction or
+that the user reviewed the result. Missing host rendering remains incomplete.
+
 ## What a pack is
 
 One folder, `<project>/.planning/visual-pack/` unless the project has its own place, holding

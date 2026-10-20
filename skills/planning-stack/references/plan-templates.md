@@ -26,6 +26,19 @@ mode: <TECH|FEATURE>
 done_tier: <Demoable|Live|Production-secure>
 ---
 
+### Current focus
+
+<Who needs what outcome, what is verified now, and what remains unknown.>
+
+### Visual walkthrough
+
+<Authored workflow or before/after diagram. UI plans include real screens, labelled example
+records, one useful interaction and an important failure state. Link existing artboards.>
+
+### Next action
+
+<One concrete action and the observable acceptance check.>
+
 ### Scope
 
 - **In scope**: <list>
@@ -388,3 +401,20 @@ status: accepted
 
 <list, each with the reason>
 ```
+
+## Safe task preview boundary
+
+Keep one task's preview in its existing artifact room. Serve only that preview root, never a
+whole project, home folder or shared planning cache. Package explicitly listed artboards and
+images with unique names. Keep the authoritative Markdown where the project map places it;
+if previewing a derived copy, verify byte equality and retain its source hash.
+
+All local links and images must resolve beneath the served preview root. Reject traversal,
+outside-root files, remote file authorities and scheme-relative URLs. Remote research links use
+explicit HTTPS. Do not copy arbitrary project files to make a broken link work. Keep source
+backlinks inside the narrow preview room. A snapshot's source hash or edit time identifies its
+bytes; it does not verify its claims. Reuse the active app's tab and test the packaged assets.
+
+The public package does not bundle the private renderer, preview server, hourly cache backfill
+or host launch helpers. Use the host's supported rendering and saved-edit tools and record the
+actual check. Missing rendering is a delivery gap, never a reason to claim visual review.

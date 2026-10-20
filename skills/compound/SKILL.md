@@ -443,3 +443,25 @@ acceptance checks. Keep unauthorized boundary changes and external reports as lo
 The structural command above proves a retained unproved report only. This package supplies
 no pass command for a proved heading; measured adoption needs the reviewed adapter's own
 verifier and the full comparison evidence.
+
+### Measurement adapter requirements
+
+A team's adapter must seal one immutable freeze and every attempt in the existing work record,
+with source hashes retained before scored trials. Enrollment is not a gain. Bind tests, grader,
+rubric, observed models, tools, scorer, worker validator and settlement validator, including their
+executable dependencies. Unsupported dynamic or third-party closures remain unmeasured.
+
+Each worker record retains case, arm, run, candidate and freeze hashes, observed model,
+start/end time, raw output, grade, execution identity, account, currency, settled cost, duration
+and failures. Grades bind those exact bytes. Semantic calibration and trial judgments must use
+the same observed judge, rubric and complete judgment configuration. Do not transfer calibration
+between different judges. Reconcile every revision, critic and failed call once, without reused
+or omitted charges. A fresh balance snapshot may reconcile the same charges without changing
+sealed experiments. An unknown settlement stays unmeasured and cannot trigger repeat spending.
+
+Keep ordered candidate, rollback and restoration observations on one isolated target, with
+executed output bound to retained proof. Preserve separate prior-version, rollback-readback and
+restored-candidate artifacts. Verify the installed acceptance check before deriving consumers;
+restore and prove the baseline if it fails. A structural report check cannot supply any of these
+bindings. This portable package still requires the independently reviewed measurement adapter;
+it does not silently install private validators, host helpers or a second ledger.

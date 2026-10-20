@@ -48,7 +48,8 @@ KIT lighthouse-ci [--enforce] [--regen-assertions-only] [--uninstall] [--allow-h
 KIT routes                          print detected routes
 ```
 
-Exit codes: 0 done or nothing to do, 1 a setup or check failed, 2 cannot run here.
+Exit codes: 0 setup done or nothing to do, 1 a setup or check failed, 2 cannot run here
+or a direct Lighthouse capture preserved prior proof without running again.
 
 ---
 
@@ -474,3 +475,17 @@ Use these to check the skill behaves as written:
 
 Before installing, check the project does not already have its own audit scripts under another
 name (`scripts/lighthouse.sh`, a custom axe runner). Reuse them instead of adding a second copy.
+
+## Fresh captures and the browser used
+
+An existing valid baseline is preserved unless explicit recapture is requested. The capture
+command exits 2 in that case: prior file presence is not proof of a fresh run. Re-run with an
+explicit target and routes plus `--force` after inspecting retained work. An unfinished publication
+lock refuses both preservation and capture. Never delete locks or backups to claim completion.
+
+Prefer a separate Chrome for Testing bundle when available; an explicit CHROME_PATH still wins.
+This avoids foregrounding the operator's signed-in browser during headless audits. The generated
+standalone rerun follows the same preference. Record the actual browser and engine versions.
+Use five fresh captures for decisions, three as an exploratory minimum. Keep raw captures,
+settings, route and environment identity. Local, preview and production targets differ; navigation
+TBT is a lab proxy and does not prove field INP or manual accessibility.

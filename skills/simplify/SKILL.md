@@ -166,3 +166,7 @@ of the goal), as distilled into four principles by
 [forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills).
 This skill keeps the parts you can fail (the surgical-changes test, the 200-to-50 rewrite test,
 dead-code restraint) and runs them inside the build flow instead of as a separate plugin.
+
+The protocol row order remains review, simplify, commit, ship. A material simplification after
+final review needs independent review of the changed scope bound to the updated full diff.
+Passing tests alone does not renew a previous review. Preserve pre-existing unrelated work.

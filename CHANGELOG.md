@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.0 - 2026-10-20
+
+- Port the current working-plan, source-currency, routing and review contracts across the stack.
+- Add optional connected design-reference research with explicit rights and account boundaries.
+- Prefer a separate testing browser for Lighthouse. Preserving a prior baseline exits 2 rather
+  than reporting a fresh capture. Keep stronger public proof, citation and installer checks.
+
 ## 2.5.5 (2026-10-13)
 
 - Research validation accepts two valid metadata forms it used to refuse: a plain value starting with a dash then a comma or bracket, and a quoted list item holding an escaped quote then a colon. Complete escaped keys and dash indicators inside flow collections are still refused.
@@ -25,7 +32,7 @@
   loses lenses to blank or comment rows, YAML block lists, inline comments, CRLF files or `- #tag`
   null items, and `validate_report.py` fails any `focus:` spelling it cannot read (a wrapped flow
   list, a value on a later line) instead of skipping every focus check. The focus manifest note now
-  names pathway-operating-layer as a mirror, so the shared-standards focus-tags check agrees again.
+  names the workflow consumer as a mirror, so the shared-standards focus-tags check agrees again.
 
 ## 2.5.0 (2026-10-04)
 

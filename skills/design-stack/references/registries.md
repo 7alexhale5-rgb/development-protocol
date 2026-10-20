@@ -83,8 +83,9 @@ npx shadcn add @animate/menu
 ## Sites without a registry endpoint
 
 Some component sites (for example hover.dev, Eldora UI, Syntax UI) publish no registry JSON. Browse
-them with browser automation when needed, copy the component source by hand, and record the source
-URL and license in the Step 9 report.
+them with browser automation when needed. Inspect the applicable license before copying any
+component code and record the source URL, terms date and client-work grant in the Step 9 report.
+If the grant is missing, use the visual idea as a reference and build an original implementation.
 
 ## Registry health check
 
@@ -116,3 +117,15 @@ A steady 404 or 500 means the endpoint moved: update the template above before u
 2. Add it to the `registries` map above.
 3. Add a row to the "when to use which" table.
 4. Add its probe URL to the health check.
+
+## Reference and production rights
+
+A marketplace listing, paid membership or free download is not a client-work license. Check
+copyright, redistribution, attribution and commercial-use terms before adopting code or assets.
+Prompt text, generated output and tool access can have different rights. Record each separately.
+A reference corpus or aesthetic score is advisory, not a quality judge. An owned web subscription
+may exclude metered API, CLI or connector calls; verify the current channel and shared budget.
+
+When studying motion, recover sequence, timing, easing, assets and production inputs. Build a
+small working slice, compare actual frames, and test reduced-motion, keyboard and failure paths.
+A screenshot covers one frame; it does not prove an animation or its editable source.

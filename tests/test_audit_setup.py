@@ -722,7 +722,8 @@ class ReviewRegressionTest(Base):
         helper.parent.mkdir(parents=True, exist_ok=True)
         helper.write_bytes((SKILL / "scripts/lh_baseline.py").read_bytes())
         with patch.object(audit_kit, "require_node18"):
-            self.assertIsNone(self.quiet(audit_kit.setup_lighthouse, self.root)[0])
+            with self.assertRaises(audit_kit.BaselinePreserved):
+                self.quiet(audit_kit.setup_lighthouse, self.root)
             helper.write_text("stale helper")
             with self.assertRaises(audit_kit.SetupError):
                 self.quiet(audit_kit.setup_lighthouse, self.root)
@@ -961,9 +962,41 @@ class ReviewRegressionTest(Base):
              patch.object(audit_kit.subprocess, 'run', side_effect=capture):
             self.quiet(audit_kit.setup_lighthouse, self.root, 'https://staging.test', '/chosen', 2)
 
+    def test_chrome_for_testing_precedes_interactive_chrome(self):
+        executable = self.root / "Library/Caches/ms-playwright/chromium-1200/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+        executable.parent.mkdir(parents=True)
+        executable.write_text("fixture")
+        with patch.dict(os.environ, {"CHROME_PATH": ""}), patch.object(Path, "home", return_value=self.root):
+            self.assertEqual(audit_kit.find_chrome(self.root), str(executable))
+
+    def test_explicit_browser_wins_over_testing_bundle(self):
+        with patch.dict(os.environ, {"CHROME_PATH": "/chosen/browser"}):
+            self.assertEqual(audit_kit.find_chrome(self.root), "/chosen/browser")
+
+    def test_testing_browser_uses_numeric_version_order_and_skips_directories(self):
+        cache = self.root / "Library/Caches/ms-playwright"
+        for version in (99, 100):
+            executable = cache / f"chromium-{version}/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("fixture")
+        directory = cache / "chromium-101/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+        directory.mkdir(parents=True)
+        with patch.dict(os.environ, {"CHROME_PATH": ""}), patch.object(Path, "home", return_value=self.root):
+            self.assertIn("chromium-100/", audit_kit.find_chrome(self.root))
+
+    def test_preserved_baseline_is_not_fresh_capture_proof(self):
+        self.pkg()
+        self.baseline()
+        audit_kit.write_baseline_files(self.root, "https://preview.vercel.app", "/", 3)
+        with patch.object(audit_kit, "require_node18"):
+            code, output = self.quiet(audit_kit.main, ["lighthouse", "--project-dir", str(self.root)])
+        self.assertEqual(code, 2, output)
+        self.assertIn("preserved", output.lower())
+        self.assertTrue(lh_baseline.published_baseline_valid(self.root / "ops/lighthouse/baseline"))
+
     def test_playwright_managed_chromium_is_found(self):
         executable = self.root / 'chromium'; executable.write_text('fixture')
-        with patch.dict(os.environ, {'CHROME_PATH': ''}), patch.object(Path, 'exists', return_value=False), \
+        with patch.dict(os.environ, {'CHROME_PATH': ''}), patch.object(Path, 'home', return_value=self.root), patch.object(Path, 'exists', return_value=False), \
              patch.object(audit_kit.shutil, 'which', return_value=None), \
              patch.object(audit_kit.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, str(executable)+'\n')):
             self.assertEqual(audit_kit.find_chrome(self.root), str(executable))

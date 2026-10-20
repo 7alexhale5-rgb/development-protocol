@@ -9,6 +9,8 @@ each violation as one JSON line to <home>/.devproto-stack/logs/1pct-violations.l
 By default this hook is NON-BLOCKING (exit 0): it measures, it does not enforce.
 Set ONE_PCT_STRICT=1 to enable blocking mode (exit 2 with feedback), which asks
 the agent to rewrite the offending turn before it is finalized.
+Use strict mode only for already-authorized execution; new scope or required human
+approval is not stalling. A second active Stop-hook pass is allowed through.
 
 Install it as a Stop hook in your agent's settings, for example in Claude Code:
   {
@@ -55,6 +57,13 @@ _FLAGS: list[tuple[str, re.Pattern]] = [
     ("fresh-session",      re.compile(r"\bin a fresh session\b", re.I)),
     ("whats-next-summary", re.compile(r"\b(?:committed|shipped|done|complete[d]?)\s+(?:at|@)\s*[A-Za-z0-9]+\.?\s*(?:what'?s next|next\??)\b", re.I)),
     ("context-as-question",re.compile(r"\bcontext\s+is\s+(?:MODERATE|DEPLETED|CRITICAL)\b[^.]*\?", re.I)),
+    ("want-me-to",         re.compile(r"\b(?:do you )?want me to\b", re.I)),
+    ("should-i",           re.compile(r"\bshould I (?:go ahead|proceed|continue|start|run|merge|deploy|apply|do|open|fix|build)\b", re.I)),
+    ("let-me-know",        re.compile(r"\blet me know (?:if|when|whether) you(?:'d| would)? (?:like|want)\b", re.I)),
+    ("say-the-word",       re.compile(r"\b(?:say the word|just say (?:go|yes|the word))\b", re.I)),
+    ("i-can-if-you-like",  re.compile(r"\bif you(?:'d| would)? like,? I (?:can|could|will)\b", re.I)),
+    ("waiting-on-go",      re.compile(r"\b(?:once|when) you (?:approve|confirm|say go)\b|\bwaiting (?:on|for) your (?:go|ok|okay|approval|confirmation)\b", re.I)),
+    ("next-steps-heading", re.compile(r"(?im)^\s*(?:#{1,6}\s*|\*\*)?(?:next steps?|what'?s next)\s*(?:\*\*)?\s*:?\s*(?:\*\*)?\s*$")),
 ]
 
 # Code-fence / inline-code blocks are excluded so the skill can QUOTE its own banned
@@ -70,6 +79,31 @@ def _strip_code_blocks(text: str) -> str:
     return text
 
 
+# Human-only next steps do not require another execution turn.
+_HUMAN_ONLY = re.compile(
+    r"\b(2fa|two-step|password|passcode|captcha|sign(?:ed)? in|log ?in|oauth|consent"
+    r"|you send|send (?:it|this|them)|draft|your (?:call|decision|choice)|price|pricing)\b",
+    re.I,
+)
+
+
+def _next_steps_all_human_only(text: str) -> bool:
+    """True when every bullet under the last next-steps heading is a step only a person can take."""
+    heading = next(reversed(list(re.finditer(_FLAGS[-1][1], text))), None)
+    if heading is None:
+        return False
+    bullets = []
+    for line in text[heading.end():].splitlines():
+        if not line.strip():
+            if bullets:
+                break
+            continue
+        if not re.match(r"\s*(?:[-*\u2022]|\d+[.)])\s+", line):
+            break
+        bullets.append(line)
+    return bool(bullets) and all(_HUMAN_ONLY.search(b) for b in bullets)
+
+
 def find_violations(text: str) -> list[str]:
     """Return list of red-flag labels that match in `text`."""
     if not text:
@@ -79,6 +113,8 @@ def find_violations(text: str) -> list[str]:
     for label, pat in _FLAGS:
         if pat.search(stripped):
             hits.append(label)
+    if "next-steps-heading" in hits and _next_steps_all_human_only(stripped):
+        hits.remove("next-steps-heading")
     return hits
 
 
@@ -175,6 +211,9 @@ def main() -> None:
     try:
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
+        sys.exit(0)
+
+    if data.get("stop_hook_active"):
         sys.exit(0)
 
     path_str = data.get("transcript_path") or ""

@@ -33,6 +33,22 @@ class Patterns(unittest.TestCase):
             with self.subTest(label):
                 self.assertIn(label, check.find_violations(text))
 
+    def test_additional_stall_signals_and_human_only_controls(self):
+        cases = {
+            "want-me-to": "Do you want me to continue?",
+            "should-i": "Should I run the next check?",
+            "let-me-know": "Let me know if you would like me to continue.",
+            "say-the-word": "Just say the word.",
+            "i-can-if-you-like": "If you would like, I can run it.",
+            "waiting-on-go": "Waiting for your approval.",
+            "next-steps-heading": "## Next steps\n- Run the tests.\n- Merge the approved change.",
+        }
+        for label, text in cases.items():
+            with self.subTest(label):
+                self.assertIn(label, check.find_violations(text))
+        self.assertNotIn("next-steps-heading", check.find_violations("## Next steps\n- Enter your password.\n- You send this draft."))
+        self.assertIn("next-steps-heading", check.find_violations("## Next steps\n- Enter your password.\n- Run the tests."))
+
     def test_quoted_phrases_in_code_are_not_flagged(self):
         text = "The skill bans `Would you like me to` and\n```\nReady to proceed?\n```\nDone."
         self.assertEqual(check.find_violations(text), [])
@@ -97,6 +113,11 @@ class HookRun(unittest.TestCase):
         r = self.run_hook(ONE_PCT_STRICT="1")
         self.assertEqual(r.returncode, 2)
         self.assertIn("would-you-like", r.stderr)
+
+    def test_stop_hook_active_does_not_block_or_log_twice(self):
+        r = self.run_hook({"transcript_path": str(self.transcript), "stop_hook_active": True}, ONE_PCT_STRICT="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(self.log.exists())
 
     def test_clean_turn_is_not_logged(self):
         self.say("Step 4 done. Running step 5.")

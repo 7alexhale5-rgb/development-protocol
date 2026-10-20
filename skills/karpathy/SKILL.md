@@ -109,8 +109,10 @@ Add the verifier layer to: $TASK.
    change, with the before-run saved as the baseline.
 
 2. SECOND-MODEL CRITIC. Run the diff (or the plan) past a critic from a DIFFERENT model family
-   than the one that wrote it, with a written brief. If you can reach two other families, run
-   both on the SAME diff with the SAME brief, in parallel. The builder then ADJUDICATES the union
+   than the one that wrote it, with a written brief. Run BOTH best-available model families
+   on the SAME complete baseline-to-candidate diff with the SAME brief. Use an authorized
+   independent fallback when a family is unavailable and state the family gap. Optional
+   additional families may run concurrently within the child and spending limits. The builder then ADJUDICATES the union
    of their findings on the real artifact: dedupe, judge each finding on its merits (not on the
    critic's say-so), fix confirmed ones test-first, and dismiss false positives with a one-line
    reason each. Critics are critics, not gates. The builder owns the fix.
@@ -148,6 +150,16 @@ If not, check by hand and write what you saw into `.devproto/evidence/verify.md`
    inconsistent and does not count.
 4. **The claim cites the run.** Name the run id, log file or saved output. Or say plainly that the
    review did not happen.
+
+### Provider boundaries
+
+Before a review, verify current route permission, repository data scope, observed answering
+model, endpoint and account budget. A command name or historic pin does not prove any of these.
+A path or content refusal is not permission to retry through another endpoint. Keep host defaults
+and credentials unchanged. Check CLI compatibility before changing a model pin after a rejected
+model argument. Missing, refused, empty or unfinished review output never counts as approval.
+Distinguish an enforced filesystem fence from a text-only instruction to stay inside a repo;
+report the actual scope of file access rather than claiming sandboxing from a prompt.
 
 ### The critic brief
 

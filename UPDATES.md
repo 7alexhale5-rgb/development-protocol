@@ -2,6 +2,66 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+
+## 2026-10-20
+
+Sixteen mapped sources compared and ported at the recorded private source snapshot. This is
+release 2.6.0. The source fingerprints are deliberately left unchanged until full verification
+and exact-candidate release review. No private installation, model default or permission changes.
+
+- doc:STANDARD: every task has a compact or full rendered working plan in the active app;
+  preserve edits and check them at phase boundaries. The existing row order remains.
+- skill:development-protocol: canonical working-plan and source-currency contracts, shared by
+  its consumers; all 15 optional Superpowers methods, proof gates and bounded lineage retained.
+  Replaced the historical vendor-version recommendation with a current-version check.
+- skill:planning-stack: mandatory rendered review, meaningful walkthrough and next action,
+  safe task-only preview boundaries and truthful gaps. Private renderer and host/cache helpers
+  are not bundled. Existing exact-byte approval and amendment checks remain.
+- skill:build-stack: consumes the shared working-plan rule; the handoff no longer calls a build
+  complete with open verification defects. Existing test-first paths and missing-proof gates stay.
+- skill:visual-spec: visual-first host delivery and source-date provenance, loaded assets,
+  narrow pane, useful interaction, keyboard and reload checks. Structural hashes are not UI proof.
+- skill:design-stack: shared plan delivery, optional scoped connected-reference research,
+  membership versus API/transport proof, rights, credits and editable production inputs. Private
+  client study corpus, host account records and private media helpers remain outside the package.
+- skill:icm: explicit task/input/skip/output routing, fresh-task positive and negative controls,
+  large-input ranges and source naming. Public checker read-error and directory-link repairs
+  are stronger than source and retained; private project-family discovery and hooks are omitted.
+- skill:karpathy: both best-available families on the same full diff, explicit fallback gap,
+  route/account/data checks and actual enforced fence scope. Private routes/model pins are omitted.
+- skill:review-stack: requested rendered findings stay incomplete when preview fails. Existing
+  independent review, empty-verdict refusal, runtime proof and no-findings validity remain.
+- skill:devilsadvocate: source delta already present: visual prototyping routes to the bundled
+  design skill. The full triage, hallucination taxonomy and premortem remain faithful. No duplicate
+  rule is added. Private model routing is not imported.
+- skill:1pct: reject future-dated or stale failures before replanning. Ported the additional
+  stalling phrases, human-only next-step control and single Stop-hook retry, with observed
+  red/green tests. The portable hook stays nonblocking by default; private global strict-mode
+  settings, approval grants and local pain-log implementation are omitted.
+- skill:simplify: bind material post-review changes to renewed independent review; keep the
+  existing review, simplify, commit, ship sequence and pre-existing-work restraint.
+- skill:compound: immutable enrollment, eight instrument bindings, raw worker/grade/cost
+  reconciliation, matching semantic calibration and executed rollback/restoration. Private
+  measurement validator and ledger helpers are not shipped. Adoption stays unproved without a
+  separately reviewed compatible adapter; a structural report cannot prove an improvement.
+- skill:relentless: source requirements already present and tested: missing target/transcript,
+  changed session, removed opt-in, explicit non-file items and unverified legacy evidence. No
+  duplicate rule is added. Public successful-result checks and portable storage are stronger
+  than source and retained; private global storage and host hooks are not imported.
+- skill:research-stack: dated primary release/activity/channel tracking, scoped authenticated
+  research and downloaded-instruction boundaries. Existing public parser and stronger citation
+  classification/aggregation remain. Focus manifests and lenses keep their current public shape;
+  private overlays, provider credentials and local routing stay excluded. A full-suite stress
+  failure was reproduced on the unchanged baseline and candidate at the same 10-second cap.
+  The metadata entrypoint now proves its immutable root once and shares that result internally;
+  standalone consumers retain their validation. The existing large-input acceptance cap is unchanged.
+- skill:audit-setup: observed red tests proved that preserved baselines returned success and
+  that an available testing browser lost to interactive Chrome. The capture command now exits 2
+  when preserving prior proof, and both initial and standalone capture prefer Chrome for Testing.
+  Explicit browser overrides still win. Existing Bun detection, raw-output validation,
+  publication locks, rollback and custom CI configuration preservation stay. Private shell/Node
+  helpers are represented by the already bundled Python standard-library kit, not copied in.
+
 ## 2026-10-13
 
 - skill:research-stack: stop refusing two valid metadata forms. A dash before a comma or closing bracket is now special only inside flow collections, so `title: -,5` is accepted. A quoted value containing an escaped quote followed by a colon, such as `- "a\": b"`, is no longer read as an escaped key. Complete escaped keys remain refused.

@@ -28,6 +28,52 @@ Skip a row the checklist marks conditional (see the 17-row table in `SKILL.md`) 
 running it out of habit. This block is a fast-recall aid; `SKILL.md`'s "Invoke" section and the
 17-row table are the source of truth for when each row is required.
 
+## Working plan before execution
+
+Every work task starts or resumes with its current plan shown in the active desktop app's
+rendered browser. Small work uses a compact view; size changes the detail, not this requirement.
+Use the host's supported embedded Browser or Preview pane, and reuse the existing task tab.
+Do not launch an external browser or show HTML source as the planning surface. If the host
+cannot render, name the delivery gap and retain the source. A successful HTML build alone
+cannot establish that the user saw or could review the plan.
+
+Keep the existing Markdown, manifest and checklist as the source of truth. Provide a saved
+edit or review path, preserve the user's saved edits, and read them before every phase.
+Approved plan bytes remain frozen; progress goes to STATE.md and changed scope follows the
+existing amendment and approval process. Existing authorization of unchanged scope remains valid.
+
+Before delivery or accepting a saved plan edit, require a title, current focus, next action,
+authored visual body and observable verification. Reject incomplete edits while retaining the
+previous valid source; do not publish an empty placeholder as reviewable work. Read-only source
+references are distinct from the current working plan. Record an unavailable validator honestly.
+
+The first view answers: what changes, why it helps, what happens next, what could fail and
+what decision is needed. Show an authored workflow, dependency diagram or before/after view.
+For UI work, lead with real rendered screens at the user's working width, realistic labelled
+sample data, the main journey and an important failure state. A diagram of an action is not
+proof that the action works. Text cards without that visual body are not a completed visual plan.
+
+Keep material risks, unknowns and blocked work visible. Put build details, long evidence and
+source notes behind accessible disclosure controls. Remove empty sections and navigation to
+missing sections. Include an observable acceptance check and the next action. Do not let a
+polished snapshot imply live status, deployed behavior or measured improvement.
+
+Before delivery, test one useful interaction, keyboard access, narrow pane width, loaded assets,
+no clipping, edit/save/readback and reload. Record source revision, screenshot, host and result.
+A local render proves that local artifact only. A requested visual remains incomplete when
+rendering or its review path is unavailable. Authenticated research and account administration
+may use their existing browser session; planning delivery stays in the active desktop app.
+
+### Source names and dates
+
+Use the project's ICM naming convention. Preserve established project identity and original
+source names, publication dates and event dates. Capture time, modification time, verification
+time and deadline are separate fields. Never treat a new download as a fresh underlying claim.
+Store source URL or path, revision or hash, observed time and supported scope in existing
+source rows. Unknown dates stay unknown. Correct names with provenance and retain originals.
+Use explicit timezone offsets for timestamps; convert into the project's reporting timezone
+before assigning a day. Recheck volatile claims at use. A static view never promises live data.
+
 ## The interval loop
 
 | Interval    | Required action                                                                                                                                       | Proof to keep                                                 |
@@ -56,7 +102,7 @@ work and where a person looks.
 
 | Lane                                                         | Rows that carry work                                                                                                | Where a person looks                                                                 |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Small (Trivial, Bug fix)                                     | The always-required rows (pathway, build, review, commit, ship, closeout), with verify done by the repo's own CI on the pull request | Nowhere extra. The pull request merges when CI is green and the rows pass.           |
+| Small (Trivial, Bug fix)                                     | The always-required rows (pathway, build, review, commit, ship, closeout), with verify done by the repo's own CI on the pull request | The compact current plan in the active app browser, then the pull request evidence.           |
 | Normal (Feature, UI or UX)                                   | Small, plus spec, planning, visual spec and design for UI, and one independent reviewer                             | The spec before build and the pull request evidence at merge.                        |
 | Irreversible (Big or architecture, or any irreversible step) | Every row                                                                                                           | The spec, the pull request evidence, and a named go-ahead for the irreversible step. |
 
@@ -201,8 +247,10 @@ Use vendor task-brief, review-package and progress helpers only when installed a
 they are not bundled here. Record the actual task baseline, not HEAD~1 for a multi-commit task.
 Retain complete test receipts and resume state. Helper output supports the existing checklist.
 Inspect duplicate plugin identities before changing either; evaluate vendor updates in isolation
-and use supported installation mechanisms, never cache edits. Evaluate Superpowers 6.4.2's lean
-plans without implementation code; availability and reported benchmarks do not prove local benefit.
+and use supported installation mechanisms, never cache edits. Check the current installed and
+upstream releases rather than relying on an old version note. Plans record interfaces, decisions
+and test assertions without prewriting implementation. Availability and reported benchmarks
+do not prove local benefit.
 
 Behavior changes and bug fixes require red-green-refactor. Start behavior-preserving refactors
 with characterization checks. Copy, generated output, nonbehavioral configuration and throwaway

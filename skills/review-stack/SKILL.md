@@ -647,3 +647,11 @@ tiers, the default high effort is enough.
 The snapshot uses the repository root. For a monorepo package, pass its Git root as
 --project and name the package in the scope. Local-only or abandoned open work retains
 its required scope gap; use its work-id rather than silently issuing an ad-hoc pass.
+
+## Rendered review delivery
+
+When a visual review is requested, keep the Markdown report authoritative and follow the
+working-plan delivery contract in `../development-protocol/reference.md`. Show severity,
+material unknowns and the before/after evidence in the active desktop app browser. Preserve
+full evidence behind accessible disclosures and reuse the task tab. A rendering failure leaves
+the requested visual incomplete; retain inline findings and name the delivery gap.
