@@ -9,9 +9,9 @@ each violation as one JSON line to <home>/.devproto-stack/logs/1pct-violations.l
 By default this hook is NON-BLOCKING (exit 0): it measures, it does not enforce.
 Set ONE_PCT_STRICT=1 to enable blocking mode (exit 2 with feedback), which asks
 the agent to rewrite the offending turn before it is finalized.
-Use strict mode only for already-authorized execution; new scope or required human
-approval is not stalling. Ambiguous approval language is diagnostic-only, even in
-strict mode. A second active Stop-hook pass is allowed through.
+Approval waits are always diagnostic-only, including in strict mode: assistant
+wording cannot prove trusted authorization. Other strict flags remain blocking.
+A second active Stop-hook pass is allowed through.
 
 Install it as a Stop hook in your agent's settings, for example in Claude Code:
   {
@@ -355,11 +355,9 @@ def main() -> None:
     _log_violation(transcript_path, hits)
 
     strict = os.environ.get("ONE_PCT_STRICT") == "1"
-    # Approval language alone cannot establish authorization to execute.
-    required_scope_wait = bool(re.fullmatch(
-        r"Stop sign: this production change is outside the approved scope\. Waiting for your approval\.",
-        text.strip(), re.I))
-    blocking_hits = [hit for hit in hits if not (hit == "waiting-on-go" and required_scope_wait)]
+    # Assistant words are not trusted authorization state. Keep approval waits
+    # observable without forcing an action that may still require human consent.
+    blocking_hits = [hit for hit in hits if hit != "waiting-on-go"]
     if strict and blocking_hits:
         msg = (
             "[1pct] Red-flag phrases detected in response: "

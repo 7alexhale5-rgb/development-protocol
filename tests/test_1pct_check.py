@@ -328,25 +328,41 @@ class HookRun(unittest.TestCase):
             result=self.run_hook(ONE_PCT_STRICT='1')
             self.assertEqual(result.returncode,0,result.stderr)
 
-    def test_required_scope_approval_is_diagnostic_only(self):
+    def test_required_approval_is_diagnostic_only_without_authorization_state(self):
         for text in (
+            "Stop sign: sending this email requires your approval. Waiting for your approval.",
+            "Stop sign: deleting the customer records requires your approval. Waiting for your approval.",
             "Stop sign: this production change is outside the approved scope. Waiting for your approval.",
+            "The recipient and price are unsettled. Once you approve, I will prepare the final draft.",
         ):
-            self.say(text)
-            result = self.run_hook(ONE_PCT_STRICT="1")
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("waiting-on-go", json.loads(self.log.read_text().splitlines()[-1])["flags"])
+            with self.subTest(text=text):
+                self.say(text)
+                result = self.run_hook(ONE_PCT_STRICT="1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("waiting-on-go", json.loads(self.log.read_text().splitlines()[-1])["flags"])
 
-    def test_already_approved_work_wait_remains_blocking(self):
+    def test_assistant_claims_of_prior_approval_are_also_diagnostic(self):
+        # Assistant wording is not trusted authorization state. The old blocking
+        # expectation incorrectly treated "already-approved" as permission proof.
         for text in ('Waiting for your approval.', 'Once you approve, I will run the already-authorized tests.', 'I will run the already-approved tests once you confirm.'):
-            self.say(text)
-            self.assertEqual(self.run_hook(ONE_PCT_STRICT='1').returncode,2)
+            with self.subTest(text=text):
+                self.say(text)
+                self.assertEqual(self.run_hook(ONE_PCT_STRICT='1').returncode,0)
+                self.assertIn('waiting-on-go',json.loads(self.log.read_text().splitlines()[-1])['flags'])
 
-    def test_required_wait_code_does_not_expand_exact_exception(self):
-        wait='Stop sign: this production change is outside the approved scope. Waiting for your approval.'
-        for text in (wait+'\n```\nRun Tests\n```','```\nRun Tests\n```\n'+wait):
+    def test_code_and_explanations_do_not_change_diagnostic_wait(self):
+        wait='Stop sign: sending this email requires your approval. Waiting for your approval.'
+        for text in (wait+'\n```\nRun Tests\n```','```\nRun Tests\n```\n'+wait,wait+' The action would send a message from your account.'):
             self.say(text)
-            self.assertEqual(self.run_hook(ONE_PCT_STRICT='1').returncode,2)
+            self.assertEqual(self.run_hook(ONE_PCT_STRICT='1').returncode,0)
+
+    def test_diagnostic_wait_does_not_exempt_other_strict_flags(self):
+        self.say('Waiting for your approval. Would you like me to run the tests?')
+        result=self.run_hook(ONE_PCT_STRICT='1')
+        self.assertEqual(result.returncode,2)
+        self.assertIn('would-you-like',result.stderr)
+        self.assertNotIn('waiting-on-go',result.stderr)
+        self.assertIn('waiting-on-go',json.loads(self.log.read_text().splitlines()[-1])['flags'])
 
     def test_stop_hook_active_does_not_block_or_log_twice(self):
         r = self.run_hook({"transcript_path": str(self.transcript), "stop_hook_active": True}, ONE_PCT_STRICT="1")
