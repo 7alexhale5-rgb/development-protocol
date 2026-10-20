@@ -80,6 +80,19 @@ class Patterns(unittest.TestCase):
             with self.subTest(action=action):
                 self.assertIn("next-steps-heading", check.find_violations("## Next steps\n- " + action))
 
+    def test_nested_next_step_sections_do_not_hide_work(self):
+        for body in (
+            "- Enter your password.\n### Remaining work\n- Run the tests.",
+            "- Enter your password.\n#### Work\n- Run the tests.",
+            "- Enter your password.\n**Remaining work**\n- Run the tests.",
+        ):
+            self.assertIn("next-steps-heading", check.find_violations("## Next steps\n" + body))
+
+    def test_long_heading_near_match_is_bounded(self):
+        code = "import importlib.util; s=importlib.util.spec_from_file_location('hook'," + repr(str(HOOK)) + "); m=importlib.util.module_from_spec(s);s.loader.exec_module(m);assert m.find_violations('Next steps'+' '*2000+'x')==[]"
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=2)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_quoted_phrases_in_code_are_not_flagged(self):
         text = "The skill bans `Would you like me to` and\n```\nReady to proceed?\n```\nDone."
         self.assertEqual(check.find_violations(text), [])
@@ -156,6 +169,16 @@ class HookRun(unittest.TestCase):
                 self.assertEqual(result.returncode, 2)
                 self.assertIn("next-steps-heading", result.stderr)
                 self.assertIn("next-steps-heading", json.loads(self.log.read_text().splitlines()[-1])["flags"])
+
+    def test_required_scope_approval_is_diagnostic_only(self):
+        for text in (
+            "Stop sign: this production change is outside the approved scope. Waiting for your approval.",
+            "Waiting for your approval.",
+        ):
+            self.say(text)
+            result = self.run_hook(ONE_PCT_STRICT="1")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("waiting-on-go", json.loads(self.log.read_text().splitlines()[-1])["flags"])
 
     def test_stop_hook_active_does_not_block_or_log_twice(self):
         r = self.run_hook({"transcript_path": str(self.transcript), "stop_hook_active": True}, ONE_PCT_STRICT="1")

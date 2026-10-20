@@ -10,7 +10,8 @@ By default this hook is NON-BLOCKING (exit 0): it measures, it does not enforce.
 Set ONE_PCT_STRICT=1 to enable blocking mode (exit 2 with feedback), which asks
 the agent to rewrite the offending turn before it is finalized.
 Use strict mode only for already-authorized execution; new scope or required human
-approval is not stalling. A second active Stop-hook pass is allowed through.
+approval is not stalling. Ambiguous approval language is diagnostic-only, even in
+strict mode. A second active Stop-hook pass is allowed through.
 
 Install it as a Stop hook in your agent's settings, for example in Claude Code:
   {
@@ -63,7 +64,6 @@ _FLAGS: list[tuple[str, re.Pattern]] = [
     ("say-the-word",       re.compile(r"\b(?:say the word|just say (?:go|yes|the word))\b", re.I)),
     ("i-can-if-you-like",  re.compile(r"\bif you(?:'d| would)? like,? I (?:can|could|will)\b", re.I)),
     ("waiting-on-go",      re.compile(r"\b(?:once|when) you (?:approve|confirm|say go)\b|\bwaiting (?:on|for) your (?:go|ok|okay|approval|confirmation)\b", re.I)),
-    ("next-steps-heading", re.compile(r"(?im)^\s*(?:#{1,6}\s*|\*\*)?(?:next steps?|what'?s next)\s*(?:\*\*)?\s*:?\s*(?:\*\*)?\s*$")),
 ]
 
 # Code-fence / inline-code blocks are excluded so the skill can QUOTE its own banned
@@ -88,21 +88,46 @@ _HUMAN_ACTION = re.compile(
     r"|(?:you (?:must |need to )?)?(?:sign|log) in to your account)[.!]?",
     re.I,
 )
-_SECTION_HEADING = re.compile(r"(?m)^\s*(?:#{1,6} +\S.*|\*\*[^*]+\*\*\s*:?\s*)$")
 _BULLET = re.compile(r"\s*(?:[-*\u2022]|\d+[.)])\s+(.+)")
 
 
+def _heading_level(line: str) -> int:
+    match = re.match(r"^(#{1,6})[ \t]+\S", line.strip())
+    return len(match.group(1)) if match else 0
+
+
+def _is_next_heading(line: str) -> bool:
+    """Normalize one line without overlapping optional whitespace repeats."""
+    line = line.strip()
+    if _heading_level(line):
+        line = line.lstrip("#").strip()
+    line = line.removesuffix(":").strip()
+    if line.startswith("**") and line.endswith("**"):
+        line = line[2:-2].strip().removesuffix(":").strip()
+    return bool(re.fullmatch(r"next steps?|what'?s next", line, re.I))
+
+
 def _next_steps_all_human_only(text: str) -> bool:
-    """Inspect every complete next-step section; ambiguous ownership is actionable."""
-    headings = list(_FLAGS[-1][1].finditer(text))
+    """Inspect every complete section, including nested subsections and loose lists."""
+    lines = text.splitlines()
+    headings = [i for i, line in enumerate(lines) if _is_next_heading(line)]
     if not headings:
         return False
-    for heading in headings:
-        following = _SECTION_HEADING.search(text, heading.end())
-        body = text[heading.end():following.start() if following else len(text)]
+    for index in headings:
+        level = _heading_level(lines[index]) or 1
         items = []
-        for line in body.splitlines():
+        for position in range(index + 1, len(lines)):
+            line = lines[position]
             if not line.strip():
+                continue
+            following_level = _heading_level(line)
+            if following_level:
+                if following_level <= level:
+                    break
+                continue
+            if _is_next_heading(line):
+                break
+            if re.fullmatch(r"\*\*[^*]+\*\*:?", line.strip()):
                 continue
             bullet = _BULLET.fullmatch(line)
             if bullet:
@@ -125,8 +150,8 @@ def find_violations(text: str) -> list[str]:
     for label, pat in _FLAGS:
         if pat.search(stripped):
             hits.append(label)
-    if "next-steps-heading" in hits and _next_steps_all_human_only(stripped):
-        hits.remove("next-steps-heading")
+    if any(_is_next_heading(line) for line in stripped.splitlines()) and not _next_steps_all_human_only(stripped):
+        hits.append("next-steps-heading")
     return hits
 
 
@@ -249,10 +274,12 @@ def main() -> None:
     _log_violation(transcript_path, hits)
 
     strict = os.environ.get("ONE_PCT_STRICT") == "1"
-    if strict:
+    # Approval language alone cannot establish authorization to execute.
+    blocking_hits = [hit for hit in hits if hit != "waiting-on-go"]
+    if strict and blocking_hits:
         msg = (
             "[1pct] Red-flag phrases detected in response: "
-            + ", ".join(hits)
+            + ", ".join(blocking_hits)
             + ".\nRewrite the turn to execute the next documented plan step decisively "
             + "instead of re-asking for permission. See SKILL.md 'Red flags' section. "
             + "If a genuine stop-sign applies, name it explicitly."

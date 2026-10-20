@@ -35,10 +35,13 @@ fi
 
 if [ -z "${CHROME_PATH:-}" ]; then
   # Prefer the separate testing browser so audits do not foreground a signed-in window.
-  CHROME_PATH="$(python3 -c 'from pathlib import Path; import re; base=Path.home()/"Library/Caches/ms-playwright"; items=sorted(base.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"), key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(base)))]); print(next((str(p) for p in reversed(items) if p.is_file()), ""))')"
+  CHROME_PATH="$(node -e "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);" 2>/dev/null || true)"
+  if [ ! -f "$CHROME_PATH" ] || [ ! -x "$CHROME_PATH" ]; then
+  CHROME_PATH="$(python3 -c 'from pathlib import Path; import re, os; base=Path.home()/"Library/Caches/ms-playwright"; items=sorted(base.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"), key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(base)))]); print(next((str(p) for p in reversed(items) if p.is_file() and os.access(p, os.X_OK)), ""))')"
+  fi
   if [ -n "$CHROME_PATH" ]; then
     :
-  elif [ -d "/Applications/Google Chrome.app" ]; then
+  elif [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
   elif command -v google-chrome >/dev/null 2>&1; then
     CHROME_PATH="$(command -v google-chrome)"
@@ -46,9 +49,6 @@ if [ -z "${CHROME_PATH:-}" ]; then
     CHROME_PATH="$(command -v chromium)"
   elif command -v chromium-browser >/dev/null 2>&1; then
     CHROME_PATH="$(command -v chromium-browser)"
-  fi
-  if [ -z "${CHROME_PATH:-}" ]; then
-    CHROME_PATH="$(node -e "for (const m of ['playwright', '@playwright/test']) { try { console.log(require(m).chromium.executablePath()); process.exit(0); } catch {} } process.exit(1);" 2>/dev/null || true)"
   fi
   if [ -n "${CHROME_PATH:-}" ] && [ -f "$CHROME_PATH" ]; then export CHROME_PATH; fi
 fi

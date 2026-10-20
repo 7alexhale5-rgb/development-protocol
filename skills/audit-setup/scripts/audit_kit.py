@@ -359,20 +359,6 @@ def require_node18() -> None:
 def find_chrome(root: Path = None) -> str:
     if os.environ.get("CHROME_PATH"):
         return os.environ["CHROME_PATH"]
-    # Use the separate testing bundle before the signed-in interactive browser.
-    testing = Path.home() / "Library/Caches/ms-playwright"
-    candidates = testing.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
-    candidates = sorted(candidates, key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(testing)))])
-    for candidate in reversed(candidates):
-        if candidate.is_file():
-            return str(candidate)
-    mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    if Path(mac).exists():
-        return mac
-    for name in ("google-chrome", "chromium", "chromium-browser"):
-        found = shutil.which(name)
-        if found:
-            return found
     if root is not None:
         try:
             probe = subprocess.run(
@@ -387,10 +373,24 @@ def find_chrome(root: Path = None) -> str:
                 timeout=10,
             )
             candidate = probe.stdout.strip()
-            if probe.returncode == 0 and candidate and Path(candidate).is_file():
+            if probe.returncode == 0 and candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
                 return candidate
         except (OSError, subprocess.TimeoutExpired):
             pass
+    # Use the separate testing bundle before the signed-in interactive browser.
+    testing = Path.home() / "Library/Caches/ms-playwright"
+    candidates = testing.glob("chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
+    candidates = sorted(candidates, key=lambda p: [int(x) for x in re.findall(r"\d+", str(p.relative_to(testing)))])
+    for candidate in reversed(candidates):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if Path(mac).is_file() and os.access(mac, os.X_OK):
+        return mac
+    for name in ("google-chrome", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
     raise SetupError(
         "Chrome or Chromium not found. Set CHROME_PATH, or install one (npx playwright install chromium works)."
     )
