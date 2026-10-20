@@ -85,7 +85,12 @@ _HUMAN_ACTION = re.compile(
     r"(?:enter|provide) your (?:password|passcode|2fa code|two-factor code|captcha)"
     r"|you (?:must )?send (?:this|the|your) (?:draft|message|email|reply)"
     r"|you (?:must )?(?:choose|set|confirm) (?:the|your) (?:price|scope|recipients?)"
-    r"|(?:you (?:must |need to )?)?(?:sign|log) in to your account)[.!]?",
+    r"|(?:you (?:must |need to )?)?(?:sign|log) in to your account"
+    # These complete personal actions cannot take an arbitrary continuation.
+    r"|complete the oauth consent screen in your browser(?=[.!]?$)"
+    r"|your decision: approve the new paid plan(?=[.!]?$)"
+    r"|(?:your decision: approve|you must approve) deleting (?:these records|the old database)(?=[.!]?$)"
+    r"|your approval is required before deleting these records(?=[.!]?$))[.!]?",
     re.I,
 )
 _BULLET = re.compile(r"\s*(?:[-*\u2022]|\d+[.)])\s+(.+)")
@@ -362,8 +367,8 @@ def main() -> None:
         msg = (
             "[1pct] Red-flag phrases detected in response: "
             + ", ".join(blocking_hits)
-            + ".\nRewrite the turn to execute the next documented plan step decisively "
-            + "instead of re-asking for permission. See SKILL.md 'Red flags' section. "
+            + ".\nRecheck these phrases against the approved plan; execute only authorized work "
+            + "and preserve required human consent. These flags grant no permission. See SKILL.md 'Red flags' section. "
             + "If a genuine stop-sign applies, name it explicitly."
         )
         print(msg, file=sys.stderr)

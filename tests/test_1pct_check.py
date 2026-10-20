@@ -364,6 +364,35 @@ class HookRun(unittest.TestCase):
         self.assertNotIn('waiting-on-go',result.stderr)
         self.assertIn('waiting-on-go',json.loads(self.log.read_text().splitlines()[-1])['flags'])
 
+    def test_explicit_personal_consent_decisions_and_destructive_approval(self):
+        for action in ('Complete the OAuth consent screen in your browser.', 'Your decision: approve the new paid plan.', 'Your decision: approve deleting the old database.', 'You must approve deleting these records.', 'Your approval is required before deleting these records.'):
+            for codex in (False,True):
+                with self.subTest(action=action,codex=codex):
+                    text='## Next steps\n- '+action
+                    if codex:
+                        self.transcript.write_text(json.dumps({'type':'response_item','payload':{'role':'assistant','content':[{'type':'output_text','text':text}]}})+'\n')
+                    else:self.say(text)
+                    result=self.run_hook(ONE_PCT_STRICT='1')
+                    self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_personal_consent_does_not_exempt_agent_actions_or_topic_words(self):
+        for text in (
+            '## Next steps\n- Complete the OAuth consent screen in your browser.\n- Run the tests.',
+            '## Next steps\n- Your decision: approve the new paid plan.\n- Deploy the application.',
+            '## Next steps\n- You must approve deleting these records.\n- Build the migration.',
+            '## Next steps\n- Complete the OAuth consent screen in your browser and run the tests.',
+            '## Next steps\n- Your decision: approve the new paid plan and deploy the application.',
+            '## Next steps\n- Implement the OAuth consent screen.',
+            '## Next steps\n- Build the new paid plan page.',
+            '## Next steps\n- Write destructive deletion tests.',
+        ):
+            for codex in (False,True):
+                if codex:self.transcript.write_text(json.dumps({'type':'response_item','payload':{'role':'assistant','content':[{'type':'output_text','text':text}]}})+'\n')
+                else:self.say(text)
+                result=self.run_hook(ONE_PCT_STRICT='1')
+                self.assertEqual(result.returncode,2,text)
+                self.assertIn('next-steps-heading',result.stderr)
+
     def test_stop_hook_active_does_not_block_or_log_twice(self):
         r = self.run_hook({"transcript_path": str(self.transcript), "stop_hook_active": True}, ONE_PCT_STRICT="1")
         self.assertEqual(r.returncode, 0, r.stderr)
