@@ -112,8 +112,9 @@ written reason.
 
 ## Gates that apply to every lane above trivial
 
-- **A working plan before every task.** Show the current plan in the active desktop app's
-  rendered browser before starting or resuming. Small work uses a compact view. Preserve saved
+- **A working plan before every task.** Before starting or resuming, show the current plan in
+  the desktop app's rendered browser or the terminal-only Markdown fallback defined below.
+  Requested rendered delivery remains incomplete without rendering. Small work uses a compact view. Preserve saved
   edits and read them before each phase. Follow the working-plan contract in
   `skills/development-protocol/reference.md`. Once scope is approved, execute it without asking
   again at each phase boundary.

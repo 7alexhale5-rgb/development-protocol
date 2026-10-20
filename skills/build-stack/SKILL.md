@@ -6,7 +6,7 @@ description: Runs the build phase of an approved plan with small verified slices
 # Build Stack: build-phase orchestrator
 
 Before implementation or resumed execution, follow **Working plan before execution** in
-`../development-protocol/reference.md`: show the current plan in the active app browser,
+`../development-protocol/reference.md`: show the current plan on the supported host surface,
 preserve saved edits and read them before each phase. This applies to every work task.
 
 You are running a structured build phase. It takes a plan from any source, sequences the work in

@@ -49,6 +49,37 @@ class Patterns(unittest.TestCase):
         self.assertNotIn("next-steps-heading", check.find_violations("## Next steps\n- Enter your password.\n- You send this draft."))
         self.assertIn("next-steps-heading", check.find_violations("## Next steps\n- Enter your password.\n- Run the tests."))
 
+    def test_human_exemption_checks_complete_sections(self):
+        cases = (
+            "## Next steps\n- Enter your password.\n\n- Run the tests.",
+            "## Next steps\n- Run the tests.\n## Next steps\n- You send this draft.",
+            "## Next steps\n- Enter your password.\n  Then run the tests.",
+            "## Next steps\n- Enter your password.\n\nRun the tests.",
+            "## Next steps\n- Enter your password.\n\n  Run the tests.",
+            "## Next steps\n- Enter your password and run tests.",
+            "## Next steps\n- Send the migration to production.",
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.assertIn("next-steps-heading", check.find_violations(text))
+        for text in (
+            "## Next steps\n- Enter your password.\n\n- You send this draft.",
+            "## Next steps\n- Enter your password.\n## Other notes\nTests passed.",
+            "## Next steps\n- Enter your password.\n## Next steps\n- You send this draft.",
+        ):
+            with self.subTest(text=text):
+                self.assertNotIn("next-steps-heading", check.find_violations(text))
+
+    def test_human_exemption_rejects_topic_words_and_ambiguity(self):
+        for action in (
+            "Fix the OAuth callback.", "Add password validation.",
+            "Implement the pricing page.", "Draft regression tests.",
+            "Review the draft.", "OAuth consent needs work.",
+            "Decide whether to use the existing parser.",
+        ):
+            with self.subTest(action=action):
+                self.assertIn("next-steps-heading", check.find_violations("## Next steps\n- " + action))
+
     def test_quoted_phrases_in_code_are_not_flagged(self):
         text = "The skill bans `Would you like me to` and\n```\nReady to proceed?\n```\nDone."
         self.assertEqual(check.find_violations(text), [])
@@ -113,6 +144,18 @@ class HookRun(unittest.TestCase):
         r = self.run_hook(ONE_PCT_STRICT="1")
         self.assertEqual(r.returncode, 2)
         self.assertIn("would-you-like", r.stderr)
+
+    def test_strict_mode_blocks_loose_mixed_lists_and_topic_exemptions(self):
+        for text in (
+            "## Next steps\n- Enter your password.\n\n- Run the tests.",
+            "## Next steps\n- Implement the pricing page.\n- Draft regression tests.",
+        ):
+            with self.subTest(text=text):
+                self.say(text)
+                result = self.run_hook(ONE_PCT_STRICT="1")
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("next-steps-heading", result.stderr)
+                self.assertIn("next-steps-heading", json.loads(self.log.read_text().splitlines()[-1])["flags"])
 
     def test_stop_hook_active_does_not_block_or_log_twice(self):
         r = self.run_hook({"transcript_path": str(self.transcript), "stop_hook_active": True}, ONE_PCT_STRICT="1")

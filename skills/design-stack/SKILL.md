@@ -6,7 +6,7 @@ description: Runs UI and UX design work through one pipeline, from intent interv
 # Design Stack
 
 Before implementation or resumed execution, follow **Working plan before execution** in
-`../development-protocol/reference.md`: show the current plan in the active app browser,
+`../development-protocol/reference.md`: show the current plan on the supported host surface,
 preserve saved edits and read them before each phase. This applies to every work task.
 
 A multi-step design pipeline, the design counterpart of `/planning-stack`. It turns a goal into a

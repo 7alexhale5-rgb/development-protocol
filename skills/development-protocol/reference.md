@@ -30,12 +30,17 @@ running it out of habit. This block is a fast-recall aid; `SKILL.md`'s "Invoke" 
 
 ## Working plan before execution
 
-Every work task starts or resumes with its current plan shown in the active desktop app's
-rendered browser. Small work uses a compact view; size changes the detail, not this requirement.
-Use the host's supported embedded Browser or Preview pane, and reuse the existing task tab.
-Do not launch an external browser or show HTML source as the planning surface. If the host
-cannot render, name the delivery gap and retain the source. A successful HTML build alone
-cannot establish that the user saw or could review the plan.
+Every work task starts or resumes with its current plan available for review. On a desktop
+host with embedded rendering, show it in that app's Browser or Preview pane and reuse the
+existing task tab. Small work uses a compact view. Do not launch an external browser or show
+HTML source as the planning surface.
+
+A terminal-only host uses an explicit Markdown review fallback: show the current outcome,
+steps, risks, next action and acceptance checks, retain the editable source and read saved
+changes before each phase. Record that embedded rendering is unavailable. For this fallback,
+replace visual-body and browser-interaction checks with review of that complete Markdown plan.
+If the user requires rendered delivery, that delivery remains incomplete until proved in the
+requested host; Markdown or a successful HTML build cannot establish rendered review.
 
 Keep the existing Markdown, manifest and checklist as the source of truth. Provide a saved
 edit or review path, preserve the user's saved edits, and read them before every phase.

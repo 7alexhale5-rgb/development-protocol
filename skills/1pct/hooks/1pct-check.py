@@ -79,29 +79,41 @@ def _strip_code_blocks(text: str) -> str:
     return text
 
 
-# Human-only next steps do not require another execution turn.
-_HUMAN_ONLY = re.compile(
-    r"\b(2fa|two-step|password|passcode|captcha|sign(?:ed)? in|log ?in|oauth|consent"
-    r"|you send|send (?:it|this|them)|draft|your (?:call|decision|choice)|price|pricing)\b",
+# Exempt explicit personal actions, never authentication/pricing topic words.
+_HUMAN_ACTION = re.compile(
+    r"(?:please )?(?:(?:you (?:must |need to )?)?"
+    r"(?:enter|provide) your (?:password|passcode|2fa code|two-factor code|captcha)"
+    r"|you (?:must )?send (?:this|the|your) (?:draft|message|email|reply)"
+    r"|you (?:must )?(?:choose|set|confirm) (?:the|your) (?:price|scope|recipients?)"
+    r"|(?:you (?:must |need to )?)?(?:sign|log) in to your account)[.!]?",
     re.I,
 )
+_SECTION_HEADING = re.compile(r"(?m)^\s*(?:#{1,6} +\S.*|\*\*[^*]+\*\*\s*:?\s*)$")
+_BULLET = re.compile(r"\s*(?:[-*\u2022]|\d+[.)])\s+(.+)")
 
 
 def _next_steps_all_human_only(text: str) -> bool:
-    """True when every bullet under the last next-steps heading is a step only a person can take."""
-    heading = next(reversed(list(re.finditer(_FLAGS[-1][1], text))), None)
-    if heading is None:
+    """Inspect every complete next-step section; ambiguous ownership is actionable."""
+    headings = list(_FLAGS[-1][1].finditer(text))
+    if not headings:
         return False
-    bullets = []
-    for line in text[heading.end():].splitlines():
-        if not line.strip():
-            if bullets:
-                break
-            continue
-        if not re.match(r"\s*(?:[-*\u2022]|\d+[.)])\s+", line):
-            break
-        bullets.append(line)
-    return bool(bullets) and all(_HUMAN_ONLY.search(b) for b in bullets)
+    for heading in headings:
+        following = _SECTION_HEADING.search(text, heading.end())
+        body = text[heading.end():following.start() if following else len(text)]
+        items = []
+        for line in body.splitlines():
+            if not line.strip():
+                continue
+            bullet = _BULLET.fullmatch(line)
+            if bullet:
+                items.append(bullet.group(1).strip())
+            elif items:
+                items[-1] += " " + line.strip()
+            else:
+                return False
+        if not items or not all(_HUMAN_ACTION.fullmatch(item) for item in items):
+            return False
+    return True
 
 
 def find_violations(text: str) -> list[str]:

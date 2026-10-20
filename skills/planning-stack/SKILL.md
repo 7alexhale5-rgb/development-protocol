@@ -6,7 +6,7 @@ description: Builds a deep, confirmable implementation plan by interviewing the 
 # Planning Stack
 
 Before implementation or resumed execution, follow **Working plan before execution** in
-`../development-protocol/reference.md`: show the current plan in the active app browser,
+`../development-protocol/reference.md`: show the current plan on the supported host surface,
 preserve saved edits and read them before each phase. This applies to every work task.
 
 A multi-phase planning pipeline. It combines the codebase, prior plans and decisions, research
@@ -318,7 +318,8 @@ Edits here happen before approval. After approval the plan file is frozen.
 Present the plan, then append the Planning Stack Report (`references/plan-templates.md`,
 "Report"). Include the path to `plan-review.md` and a one-line summary of rounds and outcomes.
 
-Render the plan using the host's supported embedded browser. Follow the working-plan contract
+On desktop hosts, render the plan using the supported embedded browser. Terminal-only hosts
+use the canonical Markdown review fallback unless rendered delivery was requested. Follow the working-plan contract
 in `../development-protocol/reference.md`: outcome, authored visual body, material risks,
 next action and saved review path. Reuse the existing tab. Keep Markdown authoritative.
 A failed render is a delivery gap, not successful visual review. Do not substitute Chrome,

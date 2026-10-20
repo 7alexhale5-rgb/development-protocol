@@ -6,7 +6,7 @@ description: Run any software work through one proof loop that sequences the who
 # Development Protocol
 
 Before implementation or resumed execution, follow **Working plan before execution** in
-`reference.md`: show the current plan in the active app browser,
+`reference.md`: show the current plan on the supported host surface,
 preserve saved edits and read them before each phase. This applies to every work task.
 
 One rule runs through every row: **a row is done when its result is readable, repeatable, and tied
