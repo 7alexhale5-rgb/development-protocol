@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.1 - 2026-10-26
+
+- `/development-protocol` sends multi-stream and chief-of-staff work to a chief of staff who directs
+  one specialist session per stream, each using subagent-driven development with specialist agent
+  types. Context gathering also searches the knowledge vault and encrypted cloud archive, where
+  configured, read only, and records what it found in the work brief.
+
 ## 2.6.0 - 2026-10-20
 
 - Port the current working-plan, source-currency, routing and review contracts across the stack.
