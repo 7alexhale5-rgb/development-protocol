@@ -42,7 +42,10 @@ names who it is for and what "done" looks like.
 
 Most of the result comes from preparation. Before `start`:
 
-1. Gather context: what exists, what was tried, links, constraints, who it is for.
+1. Gather context: what exists, what was tried, links, constraints, who it is for. Also search the
+   knowledge vault and the encrypted cloud archive, where configured, for prior work on the goal.
+   Read only; change nothing there. Name what you found, or "nothing found", in the pathway work
+   brief (row 1).
 2. If the goal depends on facts you do not hold, say so. The research row will run.
 3. Survey git: `git status`, `git log --oneline -20`, the target files. Another session may have
    changed them.
@@ -150,7 +153,10 @@ proves the real thing happened" means. Push a branch and open a pull request to 
    delegation. Each brief states goal, inputs, ownership, done condition, output format and
    return budget. Verify available tools and actual model settings before dispatch. The root
    reads real diffs and runs aggregate checks; worker reports are claims. Interrupt finished
-   children. Preserve resume evidence in the existing checklist.
+   children. Preserve resume evidence in the existing checklist. Work that spans several streams
+   or a chief-of-staff room runs under a chief of staff who directs one specialist session per
+   stream, each using subagent-driven development: see `reference.md`, "Chief of staff and
+   multi-stream work".
 
 5. Rows 11 and 12 need a reviewer that did not write the code: a different model family, a fresh
    session with only the diff and spec, or a person. Record which one reviewed.

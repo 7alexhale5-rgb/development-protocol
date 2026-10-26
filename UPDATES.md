@@ -2,6 +2,13 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-26T09:36:14-05:00
+
+- skill:development-protocol: added the "Chief of staff and multi-stream work" subsection to
+  `reference.md`, a matching line in "How to run it" step 4, and a read-only vault and archive
+  search in "Before the first row: prepare" step 1. Public maintenance change, not a re-port:
+  the source fingerprint is left unchanged.
+
 ## 2026-10-20T16:05:01-05:00
 
 - skill:design-stack: source fingerprint recorded for drift monitoring; this is not a re-port

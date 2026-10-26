@@ -263,6 +263,17 @@ probes use the smallest meaningful validator, with a reason. Preserve existing w
 evidence. Missing tools stay unmeasured. After three failed debugging attempts, reassess the
 cause; ask the owner only for missing access or decisions.
 
+### Chief of staff and multi-stream work
+
+When the work spans several streams, or lives in a business's chief-of-staff room, the conductor
+is a chief of staff (CoS), not a builder. The CoS directs one specialist Claude session per
+stream. Each session runs `superpowers:subagent-driven-development` and hands every task to the
+narrowest specialist agent type that fits (implementer, tester, reviewer, database, scout); a
+general-purpose agent is allowed only when nothing fits, and the task note says why. Sessions are
+separate from the CoS, so the two-child limit, no nesting and bounded briefs above apply inside
+each session. If your setup keeps a chief-of-staff operating-model reference, read it before
+dispatching and follow it; this file does not restate it.
+
 ## Bounded improvement contract
 
 Use one candidate lineage per cycle, at most three revisions, in isolation. Retain rejected
