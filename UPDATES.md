@@ -2,6 +2,12 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-26T19:59:10-05:00
+
+- skill:relentless: fingerprint re-recorded, not a re-port. The source did not change. The drift
+  check now skips tool caches (`.ruff_cache`, `.pytest_cache`, `.mypy_cache`), and the old
+  fingerprint had a `.ruff_cache` folder inside it, so it would have read as drift.
+
 ## 2026-10-26T09:36:14-05:00
 
 - skill:development-protocol: added the "Chief of staff and multi-stream work" subsection to
