@@ -2,6 +2,20 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-10-28T12:10:53-05:00
+
+- skill:design-stack: selectively ported the product-interface and craft/performance
+  sections into the existing canonical quality floor. Updated critique and pipeline
+  guidance. Split the existing verification row into separate visual, accessibility,
+  performance and type-check results with regression fixtures. Private examples, home
+  paths, tool wrappers and provider names were omitted.
+- skill:build-stack, skill:review-stack, skill:development-protocol, skill:visual-spec,
+  skill:karpathy, skill:planning-stack, skill:pathway: added the canonical installed
+  contract link. The protocol reference routes to the same source.
+- Public maintenance: added seeded routing-drift tests and bumped the plugin to 2.7.0.
+  Source fingerprints remain unchanged: this is a selective section port, not a full
+  re-port of each private skill. Existing drift remains visible for the next full port.
+
 ## 2026-10-26T19:59:10-05:00
 
 - skill:relentless: fingerprint re-recorded, not a re-port. The source did not change. The drift

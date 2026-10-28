@@ -181,6 +181,10 @@ ranking, an agent loop).
 
 ## Design and UI proof
 
+Follow [the shared UI contract](../design-stack/references/quality-floor.md#product-interfaces-tasks-records-controls)
+for operational screens. Visual craft, full task behavior and measured performance
+remain separate requirements. The installed reference is canonical across these skills.
+
 Scale this to the task. A small visual edit needs the intended improvement and the affected
 screens checked. A full workflow needs the whole journey, a read-back of what it saved, and the
 recovery path.

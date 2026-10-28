@@ -5,6 +5,10 @@ description: Runs an independent, read-only review of finished code through laye
 
 # Review Stack: full review and quality gate
 
+For product UI, follow [the shared UI contract](../design-stack/references/quality-floor.md#product-interfaces-tasks-records-controls).
+Use task controls and literal labels; keep visual craft, full behavior and measured
+performance as separate requirements. Apply it within the existing brief and proof flow.
+
 You are running a multi-layer review of code that is already written. You are a **read-only
 reviewer**. You analyze, report and recommend. You do NOT change the project's code. The only
 files you write are your own outputs under `.devproto/`. If fixes are needed, you produce a

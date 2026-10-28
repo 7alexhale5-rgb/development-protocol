@@ -105,28 +105,26 @@ ignores content priority.
 
 ### 4. Content test
 
-Read every visible string as the user. Does the screen tell one coherent story? Could a real
-person be looking at exactly this data? Incoherent content breaks the illusion faster than any
-visual flaw.
+Read every visible string as the user. For product UI, follow
+[the shared UI contract](quality-floor.md#product-interfaces-tasks-records-controls).
+Check whether labels name real records and actions. Keep useful context, uncertainty,
+validation, source details and recovery. Remove decorative narration, repeated facts
+and build commentary. Marketing and quoted content keep their own purpose.
 
-Look for: lorem ipsum, "Button", "Click here", placeholder names; tone that clashes with the
-audience (casual on enterprise, jargon on consumer); numbers that do not add up, 1970 timestamps;
-copy that says what instead of why the user cares; missing context (an empty chart with no helper
-text, a bare form).
-
-- HIGH: placeholder text is visible, or the tone clashes with the persona
-- MEDIUM: generic but not wrong
-- LOW: tone slightly off
+- HIGH: misleading facts, missing essential context or unusable action labels
+- MEDIUM: unnecessary narrative, repeated facts or unclear terminology
+- LOW: a local wording issue that does not block the task
 
 ### 5. Structure test (needs source)
 
-Find the CSS lies: negative margins undoing a parent's padding, `calc()` workarounds, absolute
-positioning to escape the layout flow, `!important` stacks, magic numbers. The right answer is
-almost always simpler than the hack.
+Inspect the actual responsive structure. Negative spacing, calc, absolute positioning
+and other CSS techniques are tools, not defects by name. Judge whether the result
+keeps its hierarchy, focus order, readable content and working controls across the
+required viewports. Reuse existing components where compatible; explain any bypass.
 
-- HIGH: layout only works because of a hack that breaks at another viewport
-- MEDIUM: a workaround that should be a layout primitive
-- LOW: a stray magic number
+- HIGH: lost or inaccessible work, broken controls or a layout that fails a required viewport
+- MEDIUM: fragile structure with an observed usability or maintenance cost
+- LOW: a bounded cleanup with no task regression
 
 After each test, ask: "If someone said this lacks craft, what would they point to?" Fix that
 first.
@@ -162,8 +160,9 @@ first.
 - Confidence: {50 to 99}%
 ```
 
-If the report says "passes 5/5 craft tests, no findings", the critique step is done. That is a
-statement about craft only; Step 7's functional proof still stands on its own.
+A no-findings report describes only the inspected revision and cases. Compare the actual
+render with the accepted reference; test counts cannot establish quality. Keep Step 7's
+functional and performance proof separate. An owner-rejected screen remains a failed outcome.
 
 ## Acting on findings
 

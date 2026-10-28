@@ -5,6 +5,10 @@ description: Runs UI and UX design work through one pipeline, from intent interv
 
 # Design Stack
 
+For product UI, follow [the shared UI contract](references/quality-floor.md#product-interfaces-tasks-records-controls).
+Use task controls and literal labels; keep visual craft, full behavior and measured
+performance as separate requirements. Apply it within the existing brief and proof flow.
+
 Before implementation or resumed execution, follow **Working plan before execution** in
 `../development-protocol/reference.md`: show the current plan on the supported host surface,
 preserve saved edits and read them before each phase. This applies to every work task.
@@ -319,7 +323,7 @@ verifier and explain each non-applicable runtime check. Do not use it for a work
 
 The report must include these dimension labels (case-insensitive): `source-to-build trace`,
 `code and build`, `configuration and service contracts`, `data`, `primary journey and recovery`,
-and `visual quality, accessibility, performance, contrast and types`. When DESIGN.md exists,
+`visual quality`, `accessibility and contrast`, `performance`, and `types`. When DESIGN.md exists,
 also include `DESIGN.md lint: pass - <lint evidence>`. Additional dimensions are allowed;
 any failed or unverified dimension fails the check. Missing, malformed, duplicate, or empty
 entries fail too. Runtime reports require all three screenshots. This checks report completeness;

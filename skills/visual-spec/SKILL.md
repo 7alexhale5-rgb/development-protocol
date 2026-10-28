@@ -5,6 +5,10 @@ description: Produces a Visual Spec Pack before any UI is built, by interviewing
 
 # Visual Spec
 
+For product UI, follow [the shared UI contract](../design-stack/references/quality-floor.md#product-interfaces-tasks-records-controls).
+Use task controls and literal labels; keep visual craft, full behavior and measured
+performance as separate requirements. Apply it within the existing brief and proof flow.
+
 A Visual Spec Pack shows, before any pixel or component exists, what the people do today, what
 each screen will be, what it may show and to whom, and how the screens connect. It is the
 planning and pre-fabrication standard for every design, UI/UX, page or application build.

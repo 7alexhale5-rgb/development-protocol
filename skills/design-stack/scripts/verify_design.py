@@ -8,7 +8,7 @@ from pathlib import Path
 DIMENSIONS = (
     'source-to-build trace', 'code and build', 'configuration and service contracts',
     'data', 'primary journey and recovery',
-    'visual quality, accessibility, performance, contrast and types',
+    'visual quality', 'accessibility and contrast', 'performance', 'types',
 )
 
 
@@ -40,7 +40,8 @@ def verify_report(project: Path, report: Path, non_runtime=False):
     if 'design.md lint' in required:
         always_pass.add('design.md lint')
     if not non_runtime:
-        always_pass.update(('primary journey and recovery', DIMENSIONS[-1]))
+        always_pass.update(('primary journey and recovery', 'visual quality',
+                            'accessibility and contrast', 'performance'))
     if any(dimensions[key] != 'pass' for key in always_pass):
         raise ValueError('required dimension cannot be n/a')
     if not non_runtime:

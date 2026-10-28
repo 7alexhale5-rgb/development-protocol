@@ -5,6 +5,10 @@ description: Builds a deep, confirmable implementation plan by interviewing the 
 
 # Planning Stack
 
+For product UI, follow [the shared UI contract](../design-stack/references/quality-floor.md#product-interfaces-tasks-records-controls).
+Use task controls and literal labels; keep visual craft, full behavior and measured
+performance as separate requirements. Apply it within the existing brief and proof flow.
+
 Before implementation or resumed execution, follow **Working plan before execution** in
 `../development-protocol/reference.md`: show the current plan on the supported host surface,
 preserve saved edits and read them before each phase. This applies to every work task.
