@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.7.0 - 2026-10-28
+
+- Product UI uses working controls, literal labels and useful context, without required
+  storytelling or promotional headings. Keep each project's creative direction open.
+- Design, build, review, specification and orchestration routes share one bundled contract.
+  Native-size reference comparison, saved-result behavior and measured performance stay
+  separate. A passing copy check is not visual acceptance.
+- The existing design report now records visual quality, accessibility and contrast,
+  performance, and types separately. Old blended reports need those distinct results.
+- Critique judges CSS techniques by observed behavior. Runtime budgets belong to the task;
+  lab timing, field responsiveness and human completion time are distinct evidence.
+
 ## 2.6.1 - 2026-10-26
 
 - `/development-protocol` sends multi-stream and chief-of-staff work to a chief of staff who directs

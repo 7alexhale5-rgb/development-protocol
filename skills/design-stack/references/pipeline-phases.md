@@ -263,6 +263,11 @@ leaves the section without a board; say which.
 
 ## Step 5: Design decisions
 
+For product screens, apply [the shared UI contract](quality-floor.md#product-interfaces-tasks-records-controls).
+Choose the working composition and actual component sources. Freeze which tasks and
+actions must remain visible together, plus relevant performance budgets. No universal
+density ratio or hero requirement applies.
+
 Define the usable outcome and the material failures before building (see "Measure outcomes" in
 `references/quality-floor.md`). For a substantive comparison, keep a baseline and freeze the
 criteria before seeing candidates; otherwise label the evidence prospective-only. Keep it
@@ -367,7 +372,10 @@ that applies, with the executed evidence linked and its result:
 3. Configuration and service contracts.
 4. Data.
 5. Primary journey and recovery.
-6. Visual quality, accessibility, performance, contrast and types.
+6. Visual quality, compared with the accepted native-size reference.
+7. Accessibility and contrast, including keyboard behavior.
+8. Performance, against the declared budget with the measurement method.
+9. Types, when the implementation uses a type checker.
 
 Mark missing proof unverified. Explain genuinely non-applicable checks. Do not invent another
 mandatory receipt format.
@@ -401,7 +409,8 @@ from screenshots or static checks alone.
   not claim verified completion.
 - axe finds violations: critical and serious ones block; moderate and minor are warnings for style
   work.
-- Lighthouse times out (30 second budget): skip the performance check and say so.
+- Lighthouse times out: retain performance as unverified, use another suitable
+  measurement if available, and do not claim a passing runtime report without proof.
 - `tsc` errors: surface them. They are real bugs, not style.
 
 **Batch:** run independent static and visual checks together. Keep journey actions and saved-state

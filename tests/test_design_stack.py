@@ -189,6 +189,28 @@ class ReportAndAssetTest(unittest.TestCase):
                 (proof.parent / f'design-{width}.png').write_bytes(b'fixture')
             verify.verify_report(root, proof)
 
+    def test_blended_quality_row_cannot_hide_missing_performance(self):
+        import verify_design as verify
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            proof = root / 'verification.md'
+            lines = ['- ' + key + ': pass - fixture evidence' for key in verify.DIMENSIONS]
+            for width in (390, 768, 1440):
+                (root / f'design-{width}.png').write_bytes(b'fixture')
+            proof.write_text('## Verify report\n' + '\n'.join(lines))
+            verify.verify_report(root, proof)
+            for dimension in ('visual quality', 'accessibility and contrast', 'performance'):
+                proof.write_text('## Verify report\n' + '\n'.join(
+                    line.replace(': pass -', ': unverified -') if line.startswith('- ' + dimension + ':') else line
+                    for line in lines))
+                with self.assertRaisesRegex(ValueError, 'unproven dimension'):
+                    verify.verify_report(root, proof)
+            blended = [line for line in lines if not any(line.startswith('- ' + key + ':') for key in ('visual quality', 'accessibility and contrast', 'performance', 'types'))]
+            blended.append('- visual quality, accessibility, performance, contrast and types: pass - old report')
+            proof.write_text('## Verify report\n' + '\n'.join(blended))
+            with self.assertRaisesRegex(ValueError, 'missing dimensions'):
+                verify.verify_report(root, proof)
+
     def test_asset_manifest_expected_slots_and_actual_usage_are_required(self):
         import verify_design as verify
         with tempfile.TemporaryDirectory() as folder:

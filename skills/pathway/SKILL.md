@@ -5,6 +5,10 @@ description: Tells a project which engineering pathway to run next (govern, rese
 
 # Pathway: the next best move for a project
 
+For product UI, follow [the shared UI contract](../design-stack/references/quality-floor.md#product-interfaces-tasks-records-controls).
+Use task controls and literal labels; keep visual craft, full behavior and measured
+performance as separate requirements. Apply it within the existing brief and proof flow.
+
 The single front door to the pathway router and its itinerary. The user should never have to
 remember command flags. You run them. Keep all output in plain English: names of real things, no
 jargon, no status icons.

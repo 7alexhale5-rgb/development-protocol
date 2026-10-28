@@ -5,6 +5,10 @@ description: Applies Andrej Karpathy's three-layer method for agentic work (Spec
 
 # Karpathy Method
 
+For product UI, follow [the shared UI contract](../design-stack/references/quality-floor.md#product-interfaces-tasks-records-controls).
+Use task controls and literal labels; keep visual craft, full behavior and measured
+performance as separate requirements. Apply it within the existing brief and proof flow.
+
 Three layers from Andrej Karpathy's 2026 talk on agentic engineering. Each layer **routes to skills
 this bundle already has**. This skill makes the method explicit and centred on the goal. It does
 not re-teach what those skills and the team's hooks already enforce.

@@ -12,6 +12,8 @@ approval round, no scorecard and no new receipt format.
 
 - [The standard covers the whole working result](#the-standard-covers-the-whole-working-result)
 - [Measure outcomes and strength of proof](#measure-outcomes-and-strength-of-proof)
+- [Product interfaces: tasks, records, controls](#product-interfaces-tasks-records-controls)
+- [Craft and performance are separate acceptance requirements](#craft-and-performance-are-separate-acceptance-requirements)
 - [What makes this the floor](#what-makes-this-the-floor)
 - [Creative freedom is the default](#creative-freedom-is-the-default)
 - [How to work from here](#how-to-work-from-here)
@@ -126,6 +128,71 @@ case and the affected regressions, then check fresh cases. Once a held-out case 
 it is a development case; replace it before the next unbiased comparison. Keep failures on record
 as well as successes. Keep a fix only when the intended outcome improves without a material
 regression. Report the next most valuable repair, not a rising total score.
+
+## Product interfaces: tasks, records, controls
+
+This section applies to software screens, prototypes, dashboards and admin tools.
+It overrides storytelling and promotional copy defaults for operational UI. Marketing
+pages, documentation, source quotations and user content keep their own purpose.
+Classify each region by the user's task. Operator plans are not product scaffolding.
+
+- Identify the user, record, primary task, available actions and resulting state.
+- Inspect the project's real component inventory before writing custom controls.
+  Reuse or extend tables, forms, toolbars, tabs, dialogs, drawers and feedback where
+  they fit. Record the source in the existing brief. A library install is not proof
+  that its components were used. Do not add dependencies to meet a component count.
+- Put the working queue, record, editor or chart in the main work area. Keep related
+  evidence beside the task or in a reachable detail view. Avoid repeating facts in
+  oversized cards. A table is useful for comparisons; it is not every screen's layout.
+- Use headings that name destinations or records, and buttons that name actions.
+  Supporting subtitles are optional. Remove slogans, poetic headings, repeated benefit
+  claims and descriptions of how the screen was built. Replace excess prose with the
+  control the task needs. Shorter copy alone does not make a better interface.
+- Keep labels, useful context, clear uncertainty, warnings, validation and recovery.
+  Place optional background in contextual help. Do not hide essential warnings.
+  Show sample-data or disconnected-service status at its relevant persistent scope.
+- Define keyboard, focus, selection, filters, empty/loading/error states, permissions
+  and save feedback. Controls must work or show why they are unavailable. Preserve
+  drafts through failure and read saved results back from the intended store.
+
+## Craft and performance are separate acceptance requirements
+
+A screen can pass copy and accessibility checks and still miss the design floor.
+A rejected operational screen may have short labels but waste its space on a large
+status card. Keep that as a task regression case, not a universal card-size rule.
+Do not replace prose with empty boxes or reduce every workflow to a bare table.
+
+Before changing a screen family, freeze the user task, representative data, work that
+must be visible together, relevant viewports and failure cases. Measure a comparable
+baseline. Use the project's own accepted renders and actual component sources.
+Compare native-size renders at wide, normal application-panel and phone widths.
+Check hierarchy, useful space, typography, alignment, assets and control detail.
+Exercise long records, missing data and keyboard use. Fix the observed weak areas.
+A screenshot count, source lint or installed library cannot establish visual fidelity.
+
+Keep typography, color, gradients, depth, imagery, motion and layout open. Judge CSS
+techniques such as calc, negative spacing and absolute positioning by their behavior.
+Do not flatten the work to satisfy a font count, type ratio or palette detector.
+Do not add motion or components only to make a screen look complex. Existing tokens
+support a project's identity and may evolve during an authorized redesign.
+
+Choose relevant performance budgets in the existing brief before grading the candidate.
+Measure initial content, response to the main action, layout stability, asset transfer
+and time to the saved result where they matter. Record the revision, device, viewport,
+cache state, network and CPU settings, run count and failures. Compare like conditions.
+Include cold load, larger data and recovery when they affect the task. Optimize media,
+fonts, rendering and network work before sacrificing visual craft.
+
+Keep field measurements from real users separate from controlled lab tests. A browser
+harness click duration is not Interaction to Next Paint (INP), a responsiveness metric.
+Automated task time is not human completion time. Missing measurements remain unknown.
+Speed never cancels data loss, wrong results, inaccessible controls or an unusable screen.
+
+Use existing browser tests to check task-specific visible work, enabled actions and
+measured budgets. Include a rejected case and a useful case with different visual choices.
+Keep visual comparison, full task behavior, access/data proof and performance separate.
+Source checks prove only their declared assertions. Human usability still needs human
+observation. No new approval ritual, mandatory scorecard or aesthetic threshold is added.
 
 ## What makes this the floor
 
