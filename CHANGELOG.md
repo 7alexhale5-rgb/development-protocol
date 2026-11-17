@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.1 - 2026-11-16
+
+- `/relentless` reads as one plain page: list everything first, tick each item with proof, say
+  what is left. Same commands. The full detail moved word for word to
+  `skills/relentless/references/details.md`.
+
 ## 2.7.0 - 2026-10-28
 
 - Product UI uses working controls, literal labels and useful context, without required
