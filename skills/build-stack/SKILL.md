@@ -1,6 +1,6 @@
 ---
 name: build-stack
-description: Runs the build phase of an approved plan with small verified slices, per-batch checks, independent review perspectives and context management, then drives the work to a verified, committable state. Use after a plan exists and someone says "implement", "build this", "start coding", "execute the plan", "build the plan", or "/build-stack path/to/plan.md". Sizes the work (bug fix, small, medium, large), checks the plan approval first, and records the build row of the development-protocol checklist. Flags --no-verify, --large, --no-handoff, --review, --audit, --tdd.
+description: Runs the build phase of an approved plan with small verified slices, per-batch checks, independent review perspectives and context management, then drives the work to a verified, committable state. Use after a plan exists and someone says "implement", "build this", "start coding", "execute the plan", "build the plan", or "/build-stack path/to/plan.md". Sizes the work (bug fix, small, medium, large), checks the plan approval first, and records the build row of the development-protocol checklist. Flags --no-verify, --large, --no-handoff, --review, --audit, --tdd, --best-of.
 ---
 
 # Build Stack: build-phase orchestrator
@@ -100,6 +100,10 @@ From the user's input, extract:
   - `--tdd`: enforce test-driven development. Write tests first (red), implement to pass (green),
     then refactor. Sets `IS_TDD` to true. Detect tooling in Step 3; use an isolated executable
     regression check or retain a required-proof gap when a framework is absent.
+  - `--best-of <n>`: experimental and off by default. Build `n` candidates (default 3, minimum 2)
+    from one spec, gate them on hidden tests, and pick among the survivors with a blind judge.
+    Sets `BEST_OF` to `n`. Read `references/best-of-n.md` before use. Meant for behaviour-testable
+    work such as a pure function or a validator; not for UI work.
 - **PLAN SOURCE**: where the plan lives (found in Step 1).
 
 Keep GOAL and FLAGS for the whole run.
@@ -408,6 +412,21 @@ Workflow: write `PRD.md` and a checkbox `ROADMAP.md` (40 to 80 items). Set the c
 context. Review the diff before merging. Do not run both the goal loop and the helper fan-out for
 the same plan.
 
+### Best-of-N path (`--best-of <n>`)
+
+Only when `BEST_OF` is set. It replaces the single implementation in the path you chose, and
+everything after it (Full Verify, perspectives, independent review) runs on the winner.
+
+1. Read `references/best-of-n.md`. Write the spec as behaviour and the hidden tests from it, in a
+   directory outside every worktree. Stop if you cannot write behaviour tests.
+2. Run `bestofn.py init`, then build `BEST_OF` candidates in separate worktrees from the same
+   brief, then `register`, `isolation`, `gate`, `blind`, collect judge answers, `verdict`.
+3. Zero survivors is a stop: report it, do not lower the gate. One survivor wins by default.
+4. Apply the winner's diff, run Full Verify on it, and record the build row from that diff. Keep
+   `.devproto/bestofn/<run>/` as additional evidence.
+
+`bestofn.py` is in `scripts/` next to this file. It uses Python 3.9+ and the standard library only.
+
 ### TDD cycle
 
 Apply this cycle when `IS_TDD` is true, including features, behavior changes and bug fixes
@@ -683,6 +702,7 @@ it on the summary. If it fails, the tree summary stands. Skip this for BUGFIX an
 | TypeScript             | No `tsconfig.json`                    | Skip type checking                                      |
 | Test framework | No applicable test runner | Use meaningful isolated regression proof or keep required verification blocked. |
 | Helper agents          | Not supported, any classification              | Implement sequentially; independent review remains required       |
+| Separate sessions for judging | Not supported with `--best-of`   | Do not use `--best-of`; a judge that has seen the key or the builds is not blind |
 | Checklist tool         | `/development-protocol` not installed | Keep the evidence files anyway and report in chat       |
 | `/audit-setup`         | Not installed                         | Retain the required setup gap in Step 4.5. Note that `--audit` reviews will degrade |
 

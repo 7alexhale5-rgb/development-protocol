@@ -2,6 +2,13 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-11-17T08:07:57-06:00
+
+- skill:build-stack: added the opt-in `--best-of <n>` mode: a Step 0 flag, a short "Best-of-N path"
+  in Step 5, one graceful-degradation row, `references/best-of-n.md` and `scripts/bestofn.py` with
+  `tests/test_bestofn.py`. Public maintenance change, not a re-port: the source fingerprint is left
+  unchanged and the private source does not carry this mode. Plugin bumped to 2.8.0.
+
 ## 2026-10-28T12:10:53-05:00
 
 - skill:design-stack: selectively ported the product-interface and craft/performance

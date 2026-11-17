@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.8.0 - 2026-11-17
+
+- `/build-stack` gains an opt-in, experimental `--best-of <n>` mode. It builds several candidates
+  from one spec, drops any that fail tests the builders never saw, and picks among the rest with a
+  blind judge who sees only anonymous code. The ranking rule and the seeded bootstrap interval live
+  in a tested helper script, `skills/build-stack/scripts/bestofn.py`. Default `/build-stack`
+  behaviour is unchanged. The benefit is not yet measured, so the flag is documented as
+  experimental until a pre-registered experiment reports.
+
 ## 2.7.0 - 2026-10-28
 
 - Product UI uses working controls, literal labels and useful context, without required
