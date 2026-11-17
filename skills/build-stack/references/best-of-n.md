@@ -66,6 +66,14 @@ The hidden tests are the gate. Their value is that no builder can write to them.
 - This is separation plus instruction, not a sandbox. A builder with a shell and your home
   folder could look. For work where that matters, run builders in containers that cannot see the
   hidden path, and say so in the run record.
+- Pilot finding: on a shared filesystem, instruction alone is not enough. Your own session log
+  holds the hidden tests once you write them, and a builder started from a folder that has a
+  project instructions file above it can have that file loaded into its context without you
+  asking. Keep the hidden tests encrypted or off the machine until every builder has finished,
+  start builders from an empty folder, and read each builder's tool calls afterwards for any
+  path outside its own worktree.
+- A gate command that uses a glob such as `test/*.test.ts` needs a shell, so pass it as
+  `sh -c '...'`. The command is split without a shell.
 - For an experiment, split the hidden tests into a **gate set** that filters candidates and a
   **score set** that never selects anything. Only the score set can measure whether the delivered
   code is good, because every survivor passed the gate set.
