@@ -30,7 +30,9 @@ running it out of habit. This block is a fast-recall aid; `SKILL.md`'s "Invoke" 
 
 ## Working plan before execution
 
-Every work task starts or resumes with its current plan available for review. On a desktop
+Whether a task gets a working plan is the agent's call per task; scale the view to the task's
+size (see "The process is a toolbox" in `docs/STANDARD.md`). A task that has one starts or
+resumes with its current plan available for review. On a desktop
 host with embedded rendering, show it in that app's Browser or Preview pane and reuse the
 existing task tab. Small work uses a compact view. Do not launch an external browser or show
 HTML source as the planning surface.

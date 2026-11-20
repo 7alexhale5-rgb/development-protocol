@@ -11,7 +11,8 @@ performance as separate requirements. Apply it within the existing brief and pro
 
 Before implementation or resumed execution, follow **Working plan before execution** in
 `../development-protocol/reference.md`: show the current plan on the supported host surface,
-preserve saved edits and read them before each phase. This applies to every work task.
+preserve saved edits and read them before each phase. Whether to make one is your call per task;
+scale the view to the task's size.
 
 You are running a structured build phase. It takes a plan from any source, sequences the work in
 small slices, runs a check after each slice, and drives the result to a verified state that is

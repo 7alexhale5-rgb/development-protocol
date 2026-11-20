@@ -2,6 +2,22 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-11-20T11:32:46-05:00
+
+Ported the "process is a toolbox" rule that the 2.8.0 re-sync skipped. The maintainer chose to
+make it public. Release 2.9.0.
+
+- doc:STANDARD: new "The process is a toolbox, not a chain" section under the spine; the working
+  plan gate now reads "when the task calls for one". The fixed items (plan approval, the four
+  ask-first stops, proof on the real artifact) are written in public terms.
+- skill:development-protocol: the reference's working-plan section and the skill header say a
+  working plan is the agent's call per task. An enrolled checklist keeps its required rows.
+- skill:build-stack, skill:planning-stack, skill:design-stack: the header line "This applies to
+  every work task" now reads "Whether to make one is your call per task", as in the source.
+- Not ported: the source's companion rule against open-ended "wait and see" periods. It is a
+  separate personal rule, not part of the toolbox rule. No source fingerprint changed, so the
+  drift lock is unchanged.
+
 ## 2026-11-19T18:51:28-06:00
 
 Full re-sync of the 11 items the drift check flagged. Each private change since its recorded
