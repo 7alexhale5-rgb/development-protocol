@@ -242,11 +242,12 @@ Do not present a menu.
 3. Run:
    ```text
    PATHWAY --project <repo> start --goal "<goal>" --tier <tier>
-   DEVPROTO --project <repo> start --goal "<goal>" --id <work-id from the line above>
+   DEVPROTO --project <repo> start --goal "<goal>" --id <work-id from the line above> --json
    ```
    The second line enrolls the same work id in the development-protocol checklist, so the full
-   proof loop runs alongside the itinerary. Continue only if enrollment exits 0. Otherwise report
-   its error and do not run ASK: an itinerary with no checklist behind it cannot close honestly.
+   proof loop runs alongside the itinerary. Continue only if enrollment exits 0 and its JSON says
+   `"ok": true` for the same work id. Otherwise report its error and do not run ASK: an itinerary
+   with no checklist behind it cannot close honestly.
 4. Immediately run ASK with the new id pinned. Show the **seeded itinerary** in plain English:
    "this outcome needs 7 pathways: govern, data, and so on. I walk them in order, and it cannot
    close until each is proved on a real file or marked not applicable with a reason."

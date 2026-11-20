@@ -128,7 +128,8 @@ A change to billing, a price, a default, a threshold, or a filter that decides w
 count is a risky change. It runs at least the Normal lane even when the task looks Small, so the
 rows below carry work. Passing tests prove the code does what the tests say, not what the
 business needs: a filter can pass every test and switch off most of a feature on real data. A
-risky change adds four proofs to rows it already has. It adds no new row.
+risky change adds four proofs to rows it already has. It adds no new row, and the checklist tool
+does not detect a risky change: the agent records each proof as that row's evidence file.
 
 1. Spec (`/karpathy spec`): list each assumption the change rests on, each marked verified (its
    source was read this session) or not verified.
