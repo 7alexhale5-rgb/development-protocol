@@ -20,6 +20,9 @@ Add these to the Step 0.5 spine, merged with the topic's own sub-questions:
    and in AI answers, and why (content depth, links, schema, freshness)?
 3. **Technical health:** what blocks indexing or ranking on the target: Core Web Vitals,
    crawlability, structured-data validity, internal linking?
+4. **Page-set demand and risk** (only for runs before a programmatic build of many templated
+   pages): is there measured demand for the page set, and what is its doorway-page and
+   scaled-content risk?
 
 ## Tool stack
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.8.0 - 2026-11-19
+
+- Risky changes (billing, prices, defaults, thresholds, filters on real records) run at least
+  the Normal lane and add four proofs to existing rows: checked assumptions, a run on 10 to 20
+  real cases, the owner's approval on the before and after, and a traffic read before closeout.
+- `/design-stack` starts any new or changed look with three or four treatments that differ in
+  idea, each a working animated prototype, before tokens are written. A new motion reference
+  covers client-site films and footage edits. Product screens now map tasks to real components
+  before generating, and Step 7 gates on rendered labels, controls and save-and-reload.
+- `/pathway` stops if checklist enrollment fails instead of running an itinerary with no
+  checklist behind it.
+- The `seo` research lens asks about page-set demand and doorway risk before a programmatic build.
+
 ## 2.7.1 - 2026-11-16
 
 - `/relentless` reads as one plain page: list everything first, tick each item with proof, say

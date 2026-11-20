@@ -122,6 +122,34 @@ visible. The always-required rows cannot be made optional, so they carry work in
 lane can move up mid-task, never down: when it moves up, record the rows the new lane adds with
 real evidence (a row marked `na` can be recorded again with `--result pass`).
 
+### Risky changes: billing, prices, defaults, thresholds, data filters
+
+A change to billing, a price, a default, a threshold, or a filter that decides which real records
+count is a risky change. It runs at least the Normal lane even when the task looks Small, so the
+rows below carry work. Passing tests prove the code does what the tests say, not what the
+business needs: a filter can pass every test and switch off most of a feature on real data. A
+risky change adds four proofs to rows it already has. It adds no new row, and the checklist tool
+does not detect a risky change: the agent records each proof as that row's evidence file.
+
+1. Spec (`/karpathy spec`): list each assumption the change rests on, each marked verified (its
+   source was read this session) or not verified.
+2. Verify (`/karpathy verify`): run the change on 10 to 20 real cases on the live path (all of
+   them if fewer exist, and say so), with a read-only query or credential that the data owner
+   allows. The credential never enters the repo or the evidence. Save the result as an evidence
+   file: how many cases changed behavior, with the reason for each as a category. Counts and
+   opaque internal ids only: no names, emails, phone numbers, message text or amounts tied to a
+   person.
+3. Before merge: anything a customer sees or pays gets approval from the owner named at intake,
+   on the before and after from step 2. This is the one approval this section adds.
+4. Closeout: ship as usual, record a due time (release plus one day), and keep the closeout row
+   pending until a fresh read of real traffic is saved beside the step 2 file. Closeout is the
+   last row, so the work stays visibly open and nothing else waits on it. Too little traffic: say
+   so and extend the window. A result that disagrees with step 2 reopens the work.
+
+Lesson (2026-11-08): a check on call summaries tested every number and passed its tests. A read
+of the 33 real summaries showed it would drop 3 good ones, where the end of a phone number was
+said in words. It was narrowed to prices and times before merge.
+
 ## Permission mode
 
 If your agent has a classifier-based auto mode (Claude Code's auto mode reviews each action in

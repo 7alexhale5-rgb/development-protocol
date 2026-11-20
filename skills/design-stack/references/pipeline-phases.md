@@ -273,6 +273,11 @@ Define the usable outcome and the material failures before building (see "Measur
 criteria before seeing candidates; otherwise label the evidence prospective-only. Keep it
 proportional to the scope, inside the existing brief.
 
+For client-site motion, apply `client-motion-workflow.md` within this brief: user purpose, shot
+timings, settled reading holds, owned assets, desktop and phone composition, media budget and
+fallback states. Step 6 renders from its single-clock rules; Step 7 uses its frame, player and
+page-action checks.
+
 **Inputs:** `DESIGN_CONTEXT_FULL`, `INTENT_ANSWERS`, `REFERENCES`, `CHOSEN_VARIANT`, `BOARDS`.
 
 **Tools:** optional multi-model review with `--council` (see `references/critique.md`).
@@ -304,6 +309,10 @@ Ad-hoc runs flag and defer; they do not edit DESIGN.md mid-run.
 ## Step 6: Generate
 
 **Inputs:** `DESIGN_BRIEF`, `MODE`, `RUNTIME_FLAGS`.
+
+For software screens, map the primary tasks to the project's actual components and data before
+generating. Reuse the component runtime where practical and explain any export-only substitute.
+Start from records and actions, not a required hero, subtitle and card scaffold.
 
 Use the production trace from Step 4. Prove the hardest media, interaction or service dependency
 in a small working slice first, then expand with the real project assets and contracts. Keep
@@ -349,6 +358,13 @@ are in `references/image-assets.md`.
 no orphan file under `public/kit/`, and every file referenced from the screen.
 
 ## Step 7: Verify
+
+Product UI gate: apply [the shared UI contract](quality-floor.md#product-interfaces-tasks-records-controls).
+Capture the rendered changed routes and states in the project's existing browser tests and assert
+the visible labels and controls each task needs. Exercise the required controls, and test save
+and reload separately. A known copy regression, a missing control or an unresolved task failure
+blocks delivery. An exclusion needs a real region and purpose; there is no universal word or
+component count.
 
 Report quality separately from evidence strength, required unknowns separately from passes, and
 real outcome and repair measures where they apply (`references/quality-floor.md`). Critical
