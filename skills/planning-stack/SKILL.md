@@ -11,7 +11,8 @@ performance as separate requirements. Apply it within the existing brief and pro
 
 Before implementation or resumed execution, follow **Working plan before execution** in
 `../development-protocol/reference.md`: show the current plan on the supported host surface,
-preserve saved edits and read them before each phase. This applies to every work task.
+preserve saved edits and read them before each phase. Whether to make one is your call per task;
+scale the view to the task's size.
 
 A multi-phase planning pipeline. It combines the codebase, prior plans and decisions, research
 and best practices, and a board of critical perspectives into one plan that a person approves

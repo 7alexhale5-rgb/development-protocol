@@ -30,6 +30,19 @@ SPEC  ->  BUILD  ->  VERIFY  ->  CLOSE
 `/development-protocol` walks all four and keeps the checklist. `/pathway` starts each piece of
 work and picks the lane.
 
+### The process is a toolbox, not a chain
+
+Pick the planning, build, review and closeout skills a task needs. None of them is required, and
+no check should hold a turn just to enforce one. Whether to make a working plan, and whether to
+run the checklist, is your call per task; scale both to the task's size. Once you enroll a task
+in the checklist, its own rules apply, including the rows it marks always required. A few things
+stay fixed:
+
+- The owner approves a plan before work on it starts, and an approved plan runs to the end.
+- Ask a person first before you message anyone, destroy data, make a price, taste, scope or
+  sharing decision that is theirs, or need their password or second factor.
+- Prove the work on the real artifact. How you get there is yours.
+
 ## Step 1: classify the task (first match wins)
 
 | Size                | Looks like                                                                        |
@@ -122,7 +135,8 @@ written reason.
 
 ## Gates that apply to every lane above trivial
 
-- **A working plan before every task.** Before starting or resuming, show the current plan in
+- **A working plan when the task calls for one.** Whether to make one is your call (see the
+  toolbox rule above). When you do, before starting or resuming, show the current plan in
   the desktop app's rendered browser or the terminal-only Markdown fallback defined below.
   Requested rendered delivery remains incomplete without rendering. Small work uses a compact view. Preserve saved
   edits and read them before each phase. Follow the working-plan contract in

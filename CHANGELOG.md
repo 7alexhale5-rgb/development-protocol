@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.0 - 2026-11-20
+
+- The process is a toolbox, not a chain. Whether a task gets a working plan, and whether it runs
+  the 17-row checklist, is now the agent's call per task, scaled to its size. Once a task is
+  enrolled, the checklist's own required rows still apply. What stays fixed: the owner approves a
+  plan before work starts, a person is asked before messages, data loss, their decisions or their
+  credentials, and the work is proven on the real artifact.
+
 ## 2.8.0 - 2026-11-19
 
 - Risky changes (billing, prices, defaults, thresholds, filters on real records) run at least

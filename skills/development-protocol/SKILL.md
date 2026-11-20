@@ -11,7 +11,8 @@ performance as separate requirements. Apply it within the existing brief and pro
 
 Before implementation or resumed execution, follow **Working plan before execution** in
 `reference.md`: show the current plan on the supported host surface,
-preserve saved edits and read them before each phase. This applies to every work task.
+preserve saved edits and read them before each phase. Whether to make one is your call per task;
+scale the view to the task's size.
 
 One rule runs through every row: **a row is done when its result is readable, repeatable, and tied
 to the file or commit it claims to prove.** A plan is not proof. A command that ran is not proof. A
