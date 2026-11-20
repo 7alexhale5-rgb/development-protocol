@@ -63,6 +63,10 @@ Under-planning a big one costs a rewrite.
 
 ## Step 2: run the lane, start to finish
 
+The table is the default kit for each size, not a required chain (see the toolbox rule above).
+Swap or drop a skill when the task does not need it. A task enrolled in the checklist follows the
+rows that checklist requires instead.
+
 | Size                | Spec                                                                                     | Build                               | Verify                                          | Close                   |
 | ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ----------------------- |
 | Trivial             | skip                                                                                     | just edit                           | run it and look                                 | `/commit`               |
