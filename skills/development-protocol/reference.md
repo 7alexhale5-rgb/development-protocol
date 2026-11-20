@@ -133,15 +133,17 @@ risky change adds four proofs to rows it already has. It adds no new row.
 1. Spec (`/karpathy spec`): list each assumption the change rests on, each marked verified (its
    source was read this session) or not verified.
 2. Verify (`/karpathy verify`): run the change on 10 to 20 real cases on the live path (all of
-   them if fewer exist, and say so), with a read-only query or credential. Save the result as an
-   evidence file: how many cases changed behavior, with the reason for each as a category. Counts
-   and opaque internal ids only: no names, emails, phone numbers, message text or amounts tied to
-   a person.
+   them if fewer exist, and say so), with a read-only query or credential that the data owner
+   allows. The credential never enters the repo or the evidence. Save the result as an evidence
+   file: how many cases changed behavior, with the reason for each as a category. Counts and
+   opaque internal ids only: no names, emails, phone numbers, message text or amounts tied to a
+   person.
 3. Before merge: anything a customer sees or pays gets approval from the owner named at intake,
    on the before and after from step 2. This is the one approval this section adds.
-4. Closeout: record a due time (release plus one day) and keep the closeout row pending until a
-   fresh read of real traffic is saved beside the step 2 file. Too little traffic: say so and
-   extend the window. A result that disagrees with step 2 reopens the work.
+4. Closeout: ship as usual, record a due time (release plus one day), and keep the closeout row
+   pending until a fresh read of real traffic is saved beside the step 2 file. Closeout is the
+   last row, so the work stays visibly open and nothing else waits on it. Too little traffic: say
+   so and extend the window. A result that disagrees with step 2 reopens the work.
 
 Lesson (2026-11-08): a check on call summaries tested every number and passed its tests. A read
 of the 33 real summaries showed it would drop 3 good ones, where the end of a phone number was
