@@ -1,15 +1,15 @@
 {
   "doc:STANDARD": {
-    "sha256": "b29a793026374e8cb6c847882516800d675191104fe8cc0c2dd88a2fa787be95",
-    "recorded": "2026-10-20"
+    "sha256": "2ad61f50a2105c4f056b0279b4b42951267680a326cbf13dbec900827d05397e",
+    "recorded": "2026-11-19"
   },
   "doc:WORKFLOW": {
     "sha256": "213af8bf1328ff9f418701bf21cd057501fb358076389903053d4ad472ac0537",
     "recorded": "2026-09-29"
   },
   "skill:1pct": {
-    "sha256": "784a1cf23e41e024bb32e48ee6b14f0312db7bef23b81203c6da6e8d1d331506",
-    "recorded": "2026-10-20"
+    "sha256": "e6da2f11dddd50c0ac0bebf042479b0af00775cf2acbd26025e95f4c8927b077",
+    "recorded": "2026-11-19"
   },
   "skill:audit-setup": {
     "sha256": "4355d190c49849a81c62ed1da8dad0d04e172bcb4024488dddca201ad941091d",
@@ -20,8 +20,8 @@
     "recorded": "2026-10-04"
   },
   "skill:build-stack": {
-    "sha256": "4a24a7577cf3a06c5f0e3d360de4a6893688cfd4711ed509415e8b39c9741452",
-    "recorded": "2026-10-20"
+    "sha256": "015cd44e61e348e5de2f21f5aac1796056be52dbdc6c3e9ce8b69baf432db6e9",
+    "recorded": "2026-11-19"
   },
   "skill:closeout-stack": {
     "sha256": "dfbcf9cf2d1899f63bdf6d0a4662daf0b47925bfe0ecc71ca2525e7a557bb1c3",
@@ -36,12 +36,12 @@
     "recorded": "2026-10-20"
   },
   "skill:design-stack": {
-    "sha256": "f17324b046c975cfb6a63e61b55b7927bdf3455d7e7587819b4dccf9fe815186",
-    "recorded": "2026-10-20"
+    "sha256": "dba8d7a52bd638fb162fa67966d40269c332d167b5f114107edd436d03b8972c",
+    "recorded": "2026-11-19"
   },
   "skill:development-protocol": {
-    "sha256": "b0f91466b9931d3cd788fd0589c5f131e2ddb6a308fa0f9cda1513e956b423b0",
-    "recorded": "2026-10-20"
+    "sha256": "d2c923890ebc65923ea5e36cbe79cf433ae24fbcf6ec96505c415df3e340988c",
+    "recorded": "2026-11-19"
   },
   "skill:devilsadvocate": {
     "sha256": "963a90292307a9c2ac158cccc5dc15d81ddd257dfe182f34da92571a31dc1b07",
@@ -52,28 +52,28 @@
     "recorded": "2026-10-20"
   },
   "skill:karpathy": {
-    "sha256": "7a67cbd13dad7560645e4458421217ad73e928899094c55f4862d83d651b96f2",
-    "recorded": "2026-10-20"
+    "sha256": "2293d0b4e164932c67ac237b8379609f205bb47adf5fcb06e99cfb5a5369b912",
+    "recorded": "2026-11-19"
   },
   "skill:pathway": {
-    "sha256": "76c9d66ce479acbbb9fe4b3ebfd501f741001abbc2f135d04917ea817cd047d4",
-    "recorded": "2026-09-29"
+    "sha256": "14599ac2b245dc081af078a8cef85d6cc11356d83f360ae130e1467f156bb660",
+    "recorded": "2026-11-19"
   },
   "skill:planning-stack": {
-    "sha256": "a07bb0d7263d2a0270e43277544238f9938bf771b6646ca257acfd3b8619cccc",
-    "recorded": "2026-10-20"
+    "sha256": "9dd4a342791aca4d3857a2c8963cbcfe26465b792a0a31cf6bc630ecd4c6970b",
+    "recorded": "2026-11-19"
   },
   "skill:relentless": {
-    "sha256": "085fb2a1b223e2826b6f2af448260352ebd897846893f508d7cb638fac22342c",
-    "recorded": "2026-10-26"
+    "sha256": "b104bdb769156371c9bbfc6a105706f1e998c15359f4cf303f53cec11ec5ad49",
+    "recorded": "2026-11-19"
   },
   "skill:research-stack": {
-    "sha256": "fe2763ec737bed6a27a2644c1c62a93b694da8af85cacd6be6feade6ff0eeb99",
-    "recorded": "2026-10-20"
+    "sha256": "ca07767ec58e333fd22e627abec2483bc42f3e85530e708438977c86d4d2af3c",
+    "recorded": "2026-11-19"
   },
   "skill:review-stack": {
-    "sha256": "0b17ee526ab678ffefcb651265ba8a3e75079902c746c7e9e3bd1e5be3b2d63a",
-    "recorded": "2026-10-20"
+    "sha256": "2cb490310fe12d297ce8c62077ec376696f9fd6b729cfedefc08a4fdc468521b",
+    "recorded": "2026-11-19"
   },
   "skill:ship": {
     "sha256": "684477816ae4073acf5c84d328f994261dc2cced705777b6444d4ad111343653",
