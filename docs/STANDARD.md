@@ -83,6 +83,16 @@ Rows outside the lane are made optional at `start` and marked n/a with the reaso
 `lane: <name>`, so every row stays visible. The rows the checklist always requires (pathway,
 build, review, commit, ship, closeout) stay required in every lane.
 
+### Risky changes: billing, prices, defaults, thresholds, data filters
+
+A change to billing, a price, a default, a threshold, or a filter that decides which real records
+count runs at least the Normal lane, however small it looks. Tests prove the code does what the
+tests say, not what the business needs. It adds four proofs to existing rows and no new row:
+assumptions marked verified or not at spec; a run on 10 to 20 real cases at verify, saved as
+counts and reasons only; the owner's approval on that before and after for anything a customer
+sees or pays; and a fresh read of real traffic before closeout passes. The full routine and its
+dated lesson are in `skills/development-protocol/reference.md`.
+
 ## The checklist
 
 `/development-protocol` records every piece of work as 17 rows in `.devproto/` inside the repo.

@@ -183,6 +183,41 @@ references. Step 0.5 adds project-specific tokens on top. If nothing matches, sa
 `> Taste prime: no reference match; using first principles from the quality floor` rather than
 skipping silently.
 
+### Treatments before tokens
+
+Lesson (2026-11-10): a design pack drew one safe look and two palette swaps of it, and the
+owner's verdict was that every design looked the same and looked like the planning document.
+They asked for real options: cinematic, animated, top of the line.
+
+Any run that sets or changes a look (`--new`, `--system`, or a `--refactor` that restyles) starts
+with treatments, whatever the product is. An internal tool or a two-screen utility is not exempt;
+calling it "a utility" is how the safe path gets chosen.
+
+1. Pull technique references as above: motion-led and cinematic sites, scroll films, type-led
+   pages, interaction studies. A reference that was judged wrong for another client's motion
+   limits is not a verdict for this project.
+2. Draft **three or four treatments that differ in idea**. Each has a logline, a five-second
+   feeling, one signature moment, and a lane (live 3D, scroll film, code film, type,
+   interaction). A change of palette, font or radius on the same layout is one treatment, not two.
+3. Build each treatment's signature moment as a **working, animated prototype on the project's
+   real data**, at the owner's working width, and watch it run. If your agent supports
+   subagents, one builder per treatment keeps the hands different. A still image or a token table
+   is not an option to choose from.
+4. Show them side by side and let the owner pick or mix. Tokens, `DESIGN.md` and the visual spec
+   pack are written **after** the pick, from the chosen treatment.
+5. Sameness check before showing: no treatment may share its type faces, ground color or main
+   layout device with another treatment, with the last project shipped, or with the team's own
+   planning and report pages.
+
+Data honesty, access, accessibility and task-completion rules still bind every treatment. They
+limit what a number may say, not how bold the idea is.
+
+### Client-site motion
+
+For a hero film, product explanation, case-study clip or footage edit, read
+`references/client-motion-workflow.md`. It joins the existing brief, generation, verification and
+handoff steps; it is not a separate pipeline.
+
 ---
 
 ## Steps 0.5 to 9
@@ -342,6 +377,7 @@ it does not substitute for executing the checks or reviewing their linked eviden
 | `references/style-query-guide.md`  | `--style` with a style database or the free fallback                                     |
 | `references/variant-generation.md` | `--variants N` (HTML mocks or an image service), ranking, failure matrix, DTCG template  |
 | `references/image-assets.md`       | `--boards` and `--assets`: prompts, spend log, asset check                               |
+| `references/client-motion-workflow.md` | Client-site films and footage edits: lanes, storyboard fields, render and page checks |
 | `scripts/extract_design_md.py`     | `--system-to-design-md` extractor (Python 3.9+, standard library)                        |
 
 ## Working with other skills

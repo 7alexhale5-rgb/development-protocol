@@ -2,6 +2,35 @@
 
 Every re-port, source baseline, and public maintenance change, newest first.
 
+## 2026-11-19T18:51:28-06:00
+
+Full re-sync of the 11 items the drift check flagged. Each private change since its recorded
+fingerprint was found by hashing the source history against `sync/sources.lock.json`, then read
+and either ported or skipped with the reason below. Release 2.8.0. The drift check re-recorded
+all 11 fingerprints after the suite and the private scan passed.
+
+- doc:STANDARD, skill:development-protocol: ported the risky-change routine (billing, prices,
+  defaults, thresholds, data filters) with its 2026-11-08 lesson, in full in the protocol
+  reference and summarized in `docs/STANDARD.md`. Skipped: the source's "working plan and
+  checklist are your call per task" wording, a personal process rule of the maintainer (the
+  public standard keeps its gate); a proposed factory blueprint that is not turned on and cites
+  private sources; an uncommitted re-apply of a lane-scope change to the private checklist script
+  that was reverted in its history (the public tool already handles lanes with `--optional`).
+- skill:design-stack: ported "treatments before tokens" with its 2026-11-10 lesson, the
+  client-site motion workflow as `references/client-motion-workflow.md` (method, brief fields and
+  acceptance checks), and the Step 5, 6 and 7 product and motion lines. Skipped: the source's
+  render templates (npm with native canvas binaries breaks the standard-library-only rule), pilot
+  file paths, brand names and private research notes.
+- skill:pathway: ported "continue only if checklist enrollment succeeds".
+- skill:research-stack: ported the `seo` lens question on page-set demand and doorway risk,
+  without its pointer to a private skill. The canonical research-stack repo does not have it yet.
+- skill:1pct: nothing to port. The change is a note that the maintainer's own hook runs log-only;
+  the public hook already defaults to log-only.
+- skill:build-stack, skill:karpathy, skill:planning-stack, skill:review-stack: nothing new to
+  port. Their product UI pointer was ported in 2.7.0; the working-plan wording is the personal
+  rule skipped above.
+- skill:relentless: nothing new to port. The source's one-page rewrite shipped in 2.7.1.
+
 ## 2026-10-28T12:10:53-05:00
 
 - skill:design-stack: selectively ported the product-interface and craft/performance

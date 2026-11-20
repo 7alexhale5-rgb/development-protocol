@@ -245,7 +245,8 @@ Do not present a menu.
    DEVPROTO --project <repo> start --goal "<goal>" --id <work-id from the line above>
    ```
    The second line enrolls the same work id in the development-protocol checklist, so the full
-   proof loop runs alongside the itinerary.
+   proof loop runs alongside the itinerary. Continue only if enrollment exits 0. Otherwise report
+   its error and do not run ASK: an itinerary with no checklist behind it cannot close honestly.
 4. Immediately run ASK with the new id pinned. Show the **seeded itinerary** in plain English:
    "this outcome needs 7 pathways: govern, data, and so on. I walk them in order, and it cannot
    close until each is proved on a real file or marked not applicable with a reason."
